@@ -1,0 +1,100 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg: #0F0F23;
+  --card: #1A1A35;
+  --border: #2D2D4E;
+  --text-primary: #E2E8F0;
+  --text-secondary: #94A3B8;
+  --primary: #7C3AED;
+  --primary-hover: #6D28D9;
+  --green: #22C55E;
+  --yellow: #EAB308;
+  --red: #EF4444;
+  --orange: #F97316;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  background-color: var(--bg);
+  color: var(--text-primary);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen,
+    Ubuntu, Cantarell, "Fira Sans", "Droid Sans", "Helvetica Neue", sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Wallet adapter button override */
+.wallet-adapter-button {
+  background-color: var(--primary) !important;
+  font-family: inherit !important;
+  font-size: 0.875rem !important;
+  font-weight: 600 !important;
+  border-radius: 0.5rem !important;
+  height: 2.25rem !important;
+  padding: 0 1rem !important;
+  transition: background-color 0.15s ease !important;
+}
+
+.wallet-adapter-button:hover:not([disabled]) {
+  background-color: var(--primary-hover) !important;
+}
+
+.wallet-adapter-button-trigger {
+  background-color: var(--primary) !important;
+}
+
+.wallet-adapter-modal-wrapper {
+  background-color: var(--card) !important;
+  border: 1px solid var(--border) !important;
+}
+
+.wallet-adapter-modal-title {
+  color: var(--text-primary) !important;
+}
+
+.wallet-adapter-modal-list li {
+  background-color: transparent !important;
+}
+
+.wallet-adapter-modal-list-more {
+  color: var(--text-secondary) !important;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: var(--card);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #3d3d60;
+}
+
+/* Stat card gradient borders */
+.gradient-border {
+  background: linear-gradient(var(--card), var(--card)) padding-box,
+    linear-gradient(135deg, var(--primary), transparent) border-box;
+  border: 1px solid transparent;
+}
+
+/* Utility */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}

@@ -1,0 +1,30 @@
+.anchor
+.DS_Store
+target
+**/*.rs.bk
+node_modules
+test-ledger
+.yarn
+
+# Next.js
+app/.next/
+app/out/
+app/.vercel/
+app/.tsbuildinfo
+
+# Environment files
+.env
+.env.local
+app/.env
+app/.env.local
+app/.env*.local
+
+# Demo keypairs / deployment artifacts (contain private keys)
+scripts/demo-peers-*.json
+scripts/wallet.json
+*.keypair.json
+scripts/demo-deployment.json
+scripts/demo-mints.json
+
+# Logs
+*.log
