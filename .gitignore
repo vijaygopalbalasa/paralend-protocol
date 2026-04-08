@@ -26,5 +26,8 @@ scripts/wallet.json
 scripts/demo-deployment.json
 scripts/demo-mints.json
 
+# TypeScript incremental build info
+*.tsbuildinfo
+
 # Logs
 *.log

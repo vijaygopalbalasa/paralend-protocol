@@ -115,12 +115,14 @@ export function usePositions(pollMs = 15_000) {
           let healthFactor = Infinity;
           let collateralMint = "";
           let loanMint = "";
+          let marketPdaStr = "";
 
           try {
             const [marketPda] = PublicKey.findProgramAddressSync(
               [Buffer.from("nucleus"), Buffer.from("market"), marketIdBuf],
               program.programId
             );
+            marketPdaStr = marketPda.toBase58();
             const market = await program.account.market.fetch(marketPda);
             collateralMint = market.collateralMint.toBase58();
             loanMint = market.loanMint.toBase58();
@@ -130,9 +132,9 @@ export function usePositions(pollMs = 15_000) {
             const totalBorrow = BigInt(market.totalBorrowAssets.toString());
             const totalBorrowShares = BigInt(market.totalBorrowShares.toString());
 
-            // Supply value (shares → assets)
-            const LOAN_DECIMALS = 6;
-            const COLL_DECIMALS = 9;
+            // Use actual decimals from the on-chain market account
+            const LOAN_DECIMALS = market.loanDecimals ?? 6;
+            const COLL_DECIMALS = market.collateralDecimals ?? 9;
 
             const supplyShares = BigInt(pos.supplyShares.toString());
             if (supplyShares > 0n) {
@@ -147,13 +149,15 @@ export function usePositions(pollMs = 15_000) {
             }
 
             const collateral = BigInt(pos.collateral.toString());
-            // Use WAD-scaled price: for SOL at $165 with 9 decimals → 165e18/1e9 = 165e9
-            // We approximate: $165 per SOL base unit = 165e9 WAD
-            const colPriceWad = 165n * (WAD / 1_000_000_000n);
-            const loanPriceWad = WAD / 1_000_000n;
-            collateralValueUsd = Number((collateral * colPriceWad) / WAD) / 1;
-            // Rough: collateral * price / 1e9 = USD
-            collateralValueUsd = (Number(collateral) / 10 ** COLL_DECIMALS) * 165;
+            // Use actual decimals from the market account
+            const LOAN_DECIMALS_ACTUAL = market.loanDecimals ?? 6;
+            const COLL_DECIMALS_ACTUAL = market.collateralDecimals ?? 9;
+            // WAD-scaled price per base unit: $165/SOL with 9 decimals → 165 * 1e18 / 1e9 = 165e9 WAD
+            // TODO: replace with live StaticOracle/Pyth price once oracles are deployed on devnet
+            const SOL_PRICE_USD = 165;
+            const colPriceWad = BigInt(SOL_PRICE_USD) * (WAD / BigInt(10 ** COLL_DECIMALS_ACTUAL));
+            const loanPriceWad = WAD / BigInt(10 ** LOAN_DECIMALS_ACTUAL);
+            collateralValueUsd = (Number(collateral) / 10 ** COLL_DECIMALS_ACTUAL) * SOL_PRICE_USD;
 
             healthFactor = calcHealthFactor(
               collateral,
@@ -170,7 +174,7 @@ export function usePositions(pollMs = 15_000) {
 
           return {
             publicKey: p.publicKey.toBase58(),
-            marketPubkey: "",
+            marketPubkey: marketPdaStr,
             collateralMint,
             loanMint,
             supplyShares: BigInt(pos.supplyShares.toString()),

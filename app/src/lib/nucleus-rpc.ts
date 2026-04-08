@@ -7,13 +7,11 @@
  * All RPC calls are independent; we use Promise.all per `async-parallel`.
  */
 
-import { Connection, Keypair, PublicKey } from "@solana/web3.js";
+import { Connection, Keypair } from "@solana/web3.js";
 import { AnchorProvider, Program } from "@coral-xyz/anchor";
 import type { Nucleus } from "./nucleus-idl-types";
 import IDL from "./nucleus-idl.json";
 import { BPS, RPC_ENDPOINT, SECONDS_PER_YEAR, WAD } from "./constants";
-
-const PROGRAM_ID = new PublicKey("BDZo1obAjSPufJsRqJmBy82whgQfedDXnTDipdA2nCVn");
 
 // ─── Read-only provider (no wallet needed for reads) ─────────────────────────
 
@@ -131,8 +129,8 @@ export async function getAllMarkets(): Promise<MarketView[]> {
           // IRM fetch failed — show 0%
         }
 
-        // Rough USD TVL using 6-decimal USDC assumption for loan tokens
-        const LOAN_DECIMALS = 6;
+        // Use actual decimals from on-chain market account
+        const LOAN_DECIMALS = m.loanDecimals ?? 6;
         const tvlUsd = Number(totalSupply) / 10 ** LOAN_DECIMALS;
         const borrowedUsd = Number(totalBorrow) / 10 ** LOAN_DECIMALS;
 

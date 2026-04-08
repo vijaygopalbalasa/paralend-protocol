@@ -127,25 +127,23 @@ export class NucleusClient {
 
   /**
    * Fetch all Market accounts from the program.
-   * Returns an array of { marketId, market } pairs.
+   *
+   * Returns `{ publicKey, marketId, market }` triples.
+   *
+   * NOTE: The Market account does NOT store the market ID in its data — the ID
+   * is in the PDA seeds (keccak hash of params). We cannot recover it from the
+   * account alone. `marketId` is therefore returned as a 32-byte zero buffer as
+   * a placeholder. Callers that need the real ID should use `computeMarketId()`
+   * with the market's params, or use `publicKey` as an opaque identifier.
    */
-  async getAllMarkets(): Promise<{ marketId: Buffer; market: MarketState }[]> {
+  async getAllMarkets(): Promise<
+    { publicKey: PublicKey; marketId: Buffer; market: MarketState }[]
+  > {
     const accounts = await this.program.account.market.all();
     return accounts.map((a) => ({
-      // Reconstruct the market ID from the PDA address by fetching it from
-      // the decoded account (stored in market_id field of every Position, but
-      // Market itself doesn't store the ID — we return the PDA key instead).
-      // The canonical market ID is derived from params; here we expose the
-      // account data plus its pubkey for callers to index however they like.
-      marketId: Buffer.from(
-        // market_id is not stored in the Market account itself; return a
-        // placeholder zero buffer — callers should use computeMarketId() from
-        // params when they need the canonical ID.
-        new Uint8Array(32)
-      ),
+      publicKey: a.publicKey,
+      marketId: Buffer.from(new Uint8Array(32)),
       market: decodeMarket(a.account),
-      // attach pubkey for reference
-      ...(a as unknown as { publicKey: PublicKey }),
     }));
   }
 

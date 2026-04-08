@@ -95,7 +95,7 @@ async function fetchAllMarkets(
         // IRM not accessible
       }
 
-      const LOAN_DECIMALS = 6;
+      const LOAN_DECIMALS = m.loanDecimals ?? 6;
       const tvlUsd = Number(totalSupply) / 10 ** LOAN_DECIMALS;
       const borrowedUsd = Number(totalBorrow) / 10 ** LOAN_DECIMALS;
 
