@@ -6,6 +6,21 @@ Colosseum Frontier hackathon (Apr 6 – May 11, 2026). DeFi track. $25K prize + 
 
 ---
 
+## Current Status (Apr 8, 2026)
+
+| Layer | Status | Notes |
+|-------|--------|-------|
+| Anchor program | ✅ Complete | 19/19 integration tests passing |
+| Rust unit tests | ✅ 28/28 passing | math, shares, IRM |
+| TypeScript SDK | ✅ Complete | NucleusClient, PDA helpers, math utils |
+| Next.js frontend | ✅ Built + deployed | Live on Vercel |
+| Demo scripts | ✅ Written | setup-demo-markets, fund-demo, liquidation-bot |
+| GitHub repo | ✅ Private | github.com/vijaygopalbalasa/nucleus-protocol |
+| Vercel deploy | ✅ Live | nucleus-frontend-cuu50kx4x-vijaygopal-balasas-projects.vercel.app |
+| Devnet program | ⏳ Blocked | Needs 4.25 SOL; get from https://faucet.helius.dev |
+
+---
+
 ## Toolchain
 
 ```bash
@@ -31,11 +46,20 @@ rustup default stable
 # Build program
 anchor build
 
-# Run unit tests (math, state)
+# Run unit tests (math, state) — 28/28 passing
 cargo test --manifest-path programs/nucleus/Cargo.toml
 
-# Run integration tests (localnet)
+# Run integration tests (localnet) — 19/19 passing
 anchor test
+
+# Type-check SDK and scripts (not tests — ts-mocha handles those)
+npx tsc --noEmit --project tsconfig.json
+
+# Type-check frontend
+cd app && npx tsc --noEmit
+
+# Build frontend
+cd app && npm run build
 
 # Deploy to devnet
 anchor deploy --provider.cluster devnet
@@ -52,6 +76,7 @@ anchor build --idl
 colosseum-frontier/
   Anchor.toml
   Cargo.toml                        # workspace
+  tsconfig.json                     # covers sdk/ + scripts/ only (NOT app/ or tests/)
   programs/nucleus/
     Cargo.toml                      # no solana-program direct dep (zeroize conflict)
     src/
@@ -76,15 +101,65 @@ colosseum-frontier/
         admin.rs                    # initialize_protocol, enable_lltv, enable_irm, set_fee
         market.rs                   # create_irm, create_market (+ vault init)
         position.rs                 # create_position
-        supply.rs                   # supply, withdraw         [TODO Day 4]
-        collateral.rs               # supply_collateral, withdraw_collateral [TODO Day 3]
-        borrow.rs                   # borrow, repay            [TODO Day 5]
-        liquidate.rs                # liquidate                [TODO Day 6]
+        supply.rs                   # supply, withdraw
+        collateral.rs               # supply_collateral, withdraw_collateral
+        borrow.rs                   # borrow, repay
+        liquidate.rs                # liquidate (LIF calc, bad debt socialization)
         utils.rs                    # accrue_interest_ix, claim_fees
-        flash_loan.rs               # flash_loan_start/end     [TODO Week 4]
+        flash_loan.rs               # flash_loan_start/end (same-tx atomic)
       interfaces/
-        oracle.rs                   # Pyth PriceUpdateV2 + StaticOracle fallback
+        oracle.rs                   # StaticOracle (localnet) + get_loan_price helpers
+  sdk/src/
+    constants.ts                    # WAD, BPS, seeds, PROGRAM_ID
+    pdas.ts                         # 7 derive*PDA functions (findProgramAddressSync)
+    math.ts                         # computeMarketId, shares math, APY, health factor, IRM
+    types.ts                        # MarketState, PositionState, IrmState, etc.
+    client.ts                       # NucleusClient class — fetch + instruction builders
+    index.ts                        # barrel re-export
+  scripts/
+    setup-demo-markets.ts           # creates 3 demo markets + oracles on devnet
+    fund-demo.ts                    # mints tokens, supplies liquidity, creates positions
+    liquidation-bot.ts              # polls positions, liquidates unhealthy ones
+  app/
+    src/
+      app/                          # Next.js App Router pages
+        page.tsx                    # landing — hero, stats, comparison table
+        markets/page.tsx            # markets table (live chain data via useMarkets hook)
+        markets/[id]/page.tsx       # supply/borrow/collateral tabs, market params
+        create/page.tsx             # 5-field market creation form + LLTV slider
+        positions/page.tsx          # user positions with health factors (usePositions hook)
+      hooks/
+        useMarkets.ts               # polls program.account.market.all() every 30s
+        usePositions.ts             # memcmp filter on owner field, computes health factor
+      lib/
+        constants.ts                # PROGRAM_ID, WAD, BPS, DEMO_MARKETS, TOKEN_META
+        nucleus-idl.json            # copy of target/idl/nucleus.json for Next.js
+        nucleus-idl-types.ts        # copy of target/types/nucleus.ts
+        nucleus-rpc.ts              # server-side getAllMarkets, getProtocolStats
+        utils.ts                    # cn(), formatUSD(), formatAPY(), formatHealthFactor()
+      components/
+        WalletProvider.tsx          # Phantom+Solflare adapters, autoConnect
+        Navbar.tsx                  # sticky nav, WalletMultiButton
+        ui/                         # button, card, input, badge, stat primitives
+  tests/
+    nucleus.ts                      # 19 integration tests (run via anchor test / ts-mocha)
 ```
+
+---
+
+## Known TypeScript Gotchas
+
+### Root tsconfig scope
+The root `tsconfig.json` covers **only** `sdk/src/`, `scripts/`, and `migrations/`. It deliberately **excludes** `tests/` and `app/`:
+
+- `tests/` is compiled by ts-mocha at runtime via `anchor test`. Anchor 0.31's `.accounts()` type uses discriminated unions — TypeScript rejects multi-key objects but they work correctly at runtime.
+- `app/` has its own `tsconfig.json` with `jsx: preserve`, `dom` lib, path aliases.
+
+### Anchor 0.31 `.accounts()` typing
+In Anchor 0.31, `.accounts()` expects discriminated unions (one key at a time) for strict type safety. Tests use `.accounts()` multi-key which works at runtime but triggers TS2353. Tests pass 19/19. If you add new tests, either use `.accountsPartial()` (accepts partial objects) or add `// @ts-ignore`.
+
+### getAllMarkets() and market IDs
+`NucleusClient.getAllMarkets()` returns `publicKey` (the account address) but `marketId` is a 32-byte zero buffer because the `Market` account doesn't store its own ID. Use `computeMarketId(params)` to get the real ID from known params.
 
 ---
 
@@ -95,7 +170,7 @@ colosseum-frontier/
 seeds = [b"nucleus", b"protocol_state"]
 
 // Market
-// market_id = keccak256(collateral_mint, loan_mint, collateral_oracle_feed_id, loan_oracle_feed_id, irm, lltv_le_bytes)
+// market_id = keccak256(collateral_mint || loan_mint || collateral_oracle_feed_id || loan_oracle_feed_id || irm || lltv.to_le_bytes())
 seeds = [b"nucleus", b"market", &market_id]
 
 // Vault token accounts (owned by Market PDA via CPI)
@@ -103,6 +178,7 @@ seeds = [b"nucleus", b"collateral_vault", &market_id]
 seeds = [b"nucleus", b"loan_vault", &market_id]
 
 // Position (per user per market)
+// memcmp filter for owner: offset = 8 (disc) + 1 (bump) + 32 (market_id) = 41
 seeds = [b"nucleus", b"position", &market_id, owner.as_ref()]
 
 // LinearIrm
@@ -155,7 +231,7 @@ Interest accrual is **lazy** — happens on every instruction that touches a mar
 
 - **Production:** Pyth pull oracle (`PriceUpdateV2`). Staleness: 60 seconds. Confidence: reject if `conf > price * 5%`.
 - **Localnet/Testing:** `StaticOracle` PDA — admin-updatable price, lets us stage liquidations.
-- Markets store `collateral_oracle_feed_id: [u8; 32]` and `loan_oracle_feed_id: [u8; 32]`. All-zeros loan feed = assume $1 (stablecoin shortcut).
+- Markets store `collateral_oracle_feed_id: [u8; 32]` and `loan_oracle_feed_id: [u8; 32]`. All-zeros loan feed = assume $1/token (stablecoin shortcut, handles decimals via `WAD / 10^decimals`).
 
 ---
 
@@ -192,28 +268,28 @@ anchor-spl = "0.31.1"
 
 | Week | Focus | Status |
 |------|-------|--------|
-| 1 | Core Anchor program | In progress (Day 1 done) |
-| 2 | Polish + devnet deploy | Pending |
-| 3 | TypeScript SDK + Next.js frontend | Pending |
-| 4 | Flash loans + liquidation bot + demo prep | Pending |
+| 1 | Core Anchor program | ✅ Complete (19/19 tests) |
+| 2 | SDK + frontend + devnet deploy | ✅ SDK+frontend done; devnet pending SOL |
+| 3 | Polish, real oracle integration | Pending |
+| 4 | Flash loans demo, liquidation bot live | Partially done (code written) |
 | 5 | Demo video + submit | Pending |
 
-### Day-by-Day (Week 1)
-
-- [x] **Day 1** — Math (wad, shares, interest), state structs, admin + market + position instructions, `anchor build` green
+### Week 1 — Done
+- [x] **Day 1** — Math (wad, shares, interest), state structs, admin + market + position instructions
 - [x] **Day 2** — supply_collateral, withdraw_collateral, StaticOracle (localnet)
 - [x] **Day 3** — supply, withdraw (lender), share accounting, accrue_interest crank
 - [x] **Day 4** — borrow, repay (with health check via StaticOracle)
 - [x] **Day 5** — liquidate (LIF calc, bad debt socialization), full instruction surface complete
 - [x] **Day 6** — 19/19 integration tests passing (full flow + flash loans + liquidation)
 
-### Week 2 Progress
-
-- [x] TypeScript SDK (`sdk/src/`) — NucleusClient, PDA helpers, math utils, APY calculations
+### Week 2 — Done
+- [x] TypeScript SDK (`sdk/src/`) — NucleusClient, PDA helpers, math utils, APY calculations, zero tsc errors
 - [x] Demo scripts (`scripts/`) — setup-demo-markets.ts, fund-demo.ts, liquidation-bot.ts
 - [x] Next.js frontend (`app/`) — markets, positions, create, home pages with live chain data hooks
-- [ ] Devnet deployment — needs disk space freed first (disk at 99%)
-- [ ] Vercel deployment — after devnet deploy
+- [x] GitHub repo — private, at github.com/vijaygopalbalasa/nucleus-protocol
+- [x] Vercel deployment — live at nucleus-frontend-cuu50kx4x-vijaygopal-balasas-projects.vercel.app
+- [x] Detective audit — 6 bugs fixed (see commit e910cb4)
+- [ ] Devnet program deploy — blocked on 4.25 SOL (faucet rate-limited)
 
 ---
 
@@ -249,67 +325,47 @@ BDZo1obAjSPufJsRqJmBy82whgQfedDXnTDipdA2nCVn  (devnet placeholder — regenerate
 
 ---
 
-## Deployment Checklist
+## Devnet Deploy (One Remaining Step)
 
-### Step 1: Free disk space (disk is at 99%)
-
+### Get SOL
 ```bash
-# Check what's large
-du -sh ~/Library/Caches ~/Library/Developer/Xcode ~/Downloads 2>/dev/null | sort -rh | head -10
-# Remove Xcode caches if not needed
-rm -rf ~/Library/Developer/Xcode/DerivedData
+# Devnet faucet is rate-limited (2 req / 8h). Use Helius instead:
+# Go to https://faucet.helius.dev → request 5 SOL → paste your keypair pubkey
+solana address  # shows your keypair address
 ```
 
-### Step 2: Install app dependencies
-
+### Deploy
 ```bash
-cd app && npm install
-```
-
-### Step 3: Deploy program to devnet
-
-```bash
-# Generate a new keypair for devnet (one-time)
-solana-keygen new --outfile ~/.config/solana/id.json
-# Fund with devnet SOL
-solana airdrop 5 --url devnet
-
-# Build + deploy
 export PATH="$HOME/.local/share/solana/install/active_release/bin:$PATH"
 ~/.cargo/bin/anchor build
 ~/.cargo/bin/anchor deploy --provider.cluster devnet
 ```
 
-**After deploy:** Update `declare_id!()` in `programs/nucleus/src/lib.rs` and `PROGRAM_ID` in:
-- `sdk/src/constants.ts`
-- `app/src/lib/constants.ts`
-- `Anchor.toml` `[programs.devnet]`
-
-### Step 4: Create demo markets
-
+### After deploy — update Program ID in 4 places
 ```bash
-export HELIUS_RPC_URL="your_helius_rpc_key_here"
+# 1. programs/nucleus/src/lib.rs — declare_id!("NEW_ID")
+# 2. Anchor.toml — [programs.devnet] nucleus = "NEW_ID"
+# 3. sdk/src/constants.ts — PROGRAM_ID = new PublicKey("NEW_ID")
+# 4. app/src/lib/constants.ts — PROGRAM_ID = "NEW_ID"
+```
+
+### Create demo markets
+```bash
+export HELIUS_RPC_URL="https://devnet.helius-rpc.com/?api-key=YOUR_KEY"
 npx ts-node --project tsconfig.json scripts/setup-demo-markets.ts --cluster=devnet
 npx ts-node --project tsconfig.json scripts/fund-demo.ts --cluster=devnet
 ```
 
-### Step 5: Deploy frontend to Vercel
-
+### Update Vercel env and redeploy
 ```bash
 cd app
-# Set env var for Helius RPC
-echo "NEXT_PUBLIC_RPC_URL=https://devnet.helius-rpc.com/?api-key=YOUR_KEY" > .env.local
-
-# Build locally to verify
-npm run build
-
-# Deploy
-npx vercel --prod
+vercel env add NEXT_PUBLIC_RPC_URL production
+# Enter: https://devnet.helius-rpc.com/?api-key=YOUR_KEY
+vercel --prod
 ```
 
-### Step 6: Start liquidation bot
-
+### Start liquidation bot
 ```bash
-# Run in background to keep positions healthy for demo
+# Keep running in background for demo — liquidates unhealthy positions
 npx ts-node --project tsconfig.json scripts/liquidation-bot.ts --cluster=devnet &
 ```
