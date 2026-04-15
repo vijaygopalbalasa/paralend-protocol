@@ -25,9 +25,18 @@ scripts/wallet.json
 *.keypair.json
 scripts/demo-deployment.json
 scripts/demo-mints.json
+scripts/demo-wallets.json
 
 # TypeScript incremental build info
 *.tsbuildinfo
 
 # Logs
 *.log
+
+# AI assistant files (not part of submission)
+CLAUDE.md
+AGENTS.md
+.claude/
+.cursor/
+.aider*
+copilot-*

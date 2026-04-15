@@ -5,6 +5,7 @@
     "lint": "prettier */*.js \"*/**/*{.js,.ts}\" --check",
     "setup-demo": "npx ts-node --project tsconfig.json scripts/setup-demo-markets.ts",
     "fund-demo": "npx ts-node --project tsconfig.json scripts/fund-demo.ts",
+    "stage-liquidation": "npx ts-node --project tsconfig.json scripts/stage-liquidation.ts",
     "liquidation-bot": "npx ts-node --project tsconfig.json scripts/liquidation-bot.ts"
   },
   "dependencies": {

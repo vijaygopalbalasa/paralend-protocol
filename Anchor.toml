@@ -6,17 +6,17 @@ resolution = true
 skip-lint = false
 
 [programs.localnet]
-nucleus = "BDZo1obAjSPufJsRqJmBy82whgQfedDXnTDipdA2nCVn"
+nucleus = "ForUjmX3VzE5EsRfzktF529LToK7vyzx6czH5o1dUTY8"
 
 [programs.devnet]
-nucleus = "BDZo1obAjSPufJsRqJmBy82whgQfedDXnTDipdA2nCVn"
+nucleus = "ForUjmX3VzE5EsRfzktF529LToK7vyzx6czH5o1dUTY8"
 
 [registry]
 url = "https://api.apr.dev"
 
 [provider]
 cluster = "localnet"
-wallet = "~/.config/solana/id.json"
+wallet = "~/.config/solana/honorary-position-devnet.json"
 
 [scripts]
 test = "npx ts-mocha -p ./tsconfig.json -t 1000000 tests/**/*.ts"

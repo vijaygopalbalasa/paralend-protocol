@@ -10,15 +10,15 @@ const config: Config = {
     extend: {
       colors: {
         nucleus: {
-          primary: "#7C3AED",
-          "primary-hover": "#6D28D9",
-          bg: "#0F0F23",
-          card: "#1A1A35",
-          border: "#2D2D4E",
-          "text-primary": "#E2E8F0",
-          "text-secondary": "#94A3B8",
-          green: "#22C55E",
-          yellow: "#EAB308",
+          primary: "#000000",
+          "primary-hover": "#333333",
+          bg: "#FAFAFA",
+          card: "#FFFFFF",
+          border: "#E5E7EB",
+          "text-primary": "#030712",
+          "text-secondary": "#4B5563",
+          green: "#10B981",
+          yellow: "#F59E0B",
           red: "#EF4444",
           orange: "#F97316",
         },
@@ -28,14 +28,21 @@ const config: Config = {
         "gradient-conic":
           "conic-gradient(from 180deg at 50% 50%, var(--tw-gradient-stops))",
         "hero-glow":
-          "radial-gradient(ellipse 80% 50% at 50% -20%, rgba(124,58,237,0.3), transparent)",
+          "radial-gradient(ellipse 80% 50% at 50% -20%, rgba(0, 0, 0, 0.05), transparent)",
       },
       fontFamily: {
         mono: ["'JetBrains Mono'", "ui-monospace", "SFMono-Regular", "Menlo", "monospace"],
       },
       animation: {
         "pulse-slow": "pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite",
+        "float": "float 6s ease-in-out infinite",
       },
+      keyframes: {
+        float: {
+          "0%, 100%": { transform: "translateY(0)" },
+          "50%": { transform: "translateY(-10px)" },
+        }
+      }
     },
   },
   plugins: [],
