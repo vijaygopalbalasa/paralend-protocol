@@ -88,4 +88,10 @@ pub enum NucleusError {
 
     #[msg("Oracle feed ID does not match market configuration")]
     OracleFeedMismatch, // 6026
+
+    #[msg("Flash loan caller does not match the starter")]
+    FlashLoanCallerMismatch, // 6027
+
+    #[msg("Flash loan repayment amount does not match the borrowed principal")]
+    FlashLoanAmountMismatch, // 6028
 }

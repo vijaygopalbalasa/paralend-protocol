@@ -63,8 +63,14 @@ pub struct Market {
     /// Flash loan reentrancy lock (0=unlocked, 1=locked)
     pub flash_loan_lock: u8,
 
+    /// Amount borrowed in the active flash loan, if any
+    pub flash_loan_amount: u64,
+
+    /// Caller that initiated the active flash loan
+    pub flash_loan_caller: Pubkey,
+
     /// Reserved for future use
-    pub reserved: [u8; 64],
+    pub reserved: [u8; 24],
 }
 
 impl Market {
@@ -89,11 +95,20 @@ impl Market {
         + 8  // last_update
         + 1  // paused
         + 1  // flash_loan_lock
-        + 64; // reserved
+        + 8  // flash_loan_amount
+        + 32 // flash_loan_caller
+        + 24; // reserved
 
     /// Check if the market has available liquidity for borrowing/withdrawal
     pub fn available_liquidity(&self) -> u128 {
         self.total_supply_assets.saturating_sub(self.total_borrow_assets)
+    }
+
+    /// Clear all flash-loan state after a successful repayment.
+    pub fn clear_flash_loan_state(&mut self) {
+        self.flash_loan_lock = 0;
+        self.flash_loan_amount = 0;
+        self.flash_loan_caller = Pubkey::default();
     }
 }
 

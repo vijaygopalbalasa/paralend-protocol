@@ -94,3 +94,10 @@ pub struct InterestAccrued {
     pub interest: u128,
     pub fee_shares: u128,
 }
+
+#[event]
+pub struct FeesClaimed {
+    pub market_id: [u8; 32],
+    pub fee_recipient: Pubkey,
+    pub shares: u128,
+}

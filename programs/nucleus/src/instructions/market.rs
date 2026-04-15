@@ -77,8 +77,10 @@ pub struct CreateMarket<'info> {
     pub collateral_mint: Box<Account<'info, Mint>>,
     pub loan_mint: Box<Account<'info, Mint>>,
 
-    /// CHECK: IRM account, verified against protocol whitelist
-    pub irm_account: UncheckedAccount<'info>,
+    #[account(
+        constraint = irm_account.key() == irm_key @ NucleusError::IrmNotEnabled,
+    )]
+    pub irm_account: Box<Account<'info, LinearIrm>>,
 
     #[account(
         init,
@@ -122,28 +124,20 @@ pub fn handle_create_market(
     lltv: u64,
     fee: u64,
 ) -> Result<()> {
-    let protocol_state = &ctx.accounts.protocol_state;
-
-    // Verify LLTV is enabled
-    require!(
-        protocol_state.is_lltv_enabled(lltv),
-        NucleusError::LltvNotEnabled
-    );
-
-    // Verify IRM is enabled
-    require!(
-        protocol_state.is_irm_enabled(&irm_key),
-        NucleusError::IrmNotEnabled
-    );
-
-    // Verify IRM account matches the key
-    require!(
-        ctx.accounts.irm_account.key() == irm_key,
-        NucleusError::IrmNotEnabled
-    );
+    require!(lltv > 0 && lltv < BPS, NucleusError::InvalidLltv);
 
     // Verify fee is within bounds
     require!(fee <= MAX_FEE_BPS, NucleusError::FeeExceedsMax);
+
+    // Verify LLTV and IRM are enabled in protocol state
+    require!(
+        ctx.accounts.protocol_state.is_lltv_enabled(lltv),
+        NucleusError::LltvNotEnabled
+    );
+    require!(
+        ctx.accounts.protocol_state.is_irm_enabled(&irm_key),
+        NucleusError::IrmNotEnabled
+    );
 
     // Verify the client-supplied market_id matches what we'd compute
     let expected_market_id = compute_market_id(
@@ -177,7 +171,9 @@ pub fn handle_create_market(
     market.last_update = Clock::get()?.unix_timestamp;
     market.paused = false;
     market.flash_loan_lock = 0;
-    market.reserved = [0u8; 64];
+    market.flash_loan_amount = 0;
+    market.flash_loan_caller = Pubkey::default();
+    market.reserved = [0u8; 24];
 
     // Increment market count
     let protocol_state = &mut ctx.accounts.protocol_state;

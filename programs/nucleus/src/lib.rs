@@ -18,7 +18,7 @@ use instructions::position::*;
 use instructions::supply::*;
 use instructions::utils::*;
 
-declare_id!("BDZo1obAjSPufJsRqJmBy82whgQfedDXnTDipdA2nCVn");
+declare_id!("ForUjmX3VzE5EsRfzktF529LToK7vyzx6czH5o1dUTY8");
 
 #[program]
 pub mod nucleus {
@@ -42,10 +42,6 @@ pub mod nucleus {
         instructions::admin::handle_enable_irm(ctx, irm)
     }
 
-    pub fn set_fee(ctx: Context<SetFee>, fee: u64) -> Result<()> {
-        instructions::admin::handle_set_fee(ctx, fee)
-    }
-
     pub fn create_static_oracle(
         ctx: Context<CreateStaticOracle>,
         feed_id: [u8; 32],
@@ -59,6 +55,10 @@ pub mod nucleus {
         new_price_wad: u128,
     ) -> Result<()> {
         instructions::admin::handle_set_static_oracle_price(ctx, new_price_wad)
+    }
+
+    pub fn set_fee(ctx: Context<SetFee>, market_id: [u8; 32], fee: u64) -> Result<()> {
+        instructions::admin::handle_set_fee(ctx, market_id, fee)
     }
 
     // ─── Market ──────────────────────────────────────────────
@@ -126,6 +126,12 @@ pub mod nucleus {
         market_id: [u8; 32],
     ) -> Result<()> {
         instructions::utils::handle_accrue_interest(ctx, market_id)
+    }
+
+    // ─── Claim Fees ─────────────────────────────────────────
+
+    pub fn claim_fees(ctx: Context<ClaimFees>, market_id: [u8; 32]) -> Result<()> {
+        instructions::utils::handle_claim_fees(ctx, market_id)
     }
 
     // ─── Collateral ─────────────────────────────────────────
