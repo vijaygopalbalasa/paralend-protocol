@@ -10,7 +10,6 @@ test-ledger
 app/.next/
 app/out/
 app/.vercel/
-app/.tsbuildinfo
 
 # Environment files
 .env
@@ -40,4 +39,3 @@ AGENTS.md
 .cursor/
 .aider*
 copilot-*
-*.tsbuildinfo
