@@ -1,4 +1,4 @@
-use crate::constants::{BPS, WAD};
+use crate::constants::{BPS, MAX_ORACLE_AGE, WAD};
 use crate::errors::NucleusError;
 use crate::math::shares::to_assets_up;
 use crate::math::wad::{mul_div_down, mul_div_up};
@@ -8,7 +8,7 @@ use anchor_lang::prelude::*;
 
 /// Read price from a StaticOracle account.
 /// Returns price_wad: USD per base unit, WAD-scaled.
-/// Validates that the oracle's feed_id matches the expected feed.
+/// Validates that the oracle's feed_id matches the expected feed and price is not stale.
 pub fn read_static_oracle_price(
     oracle: &Account<StaticOracle>,
     expected_feed_id: &[u8; 32],
@@ -18,6 +18,18 @@ pub fn read_static_oracle_price(
         NucleusError::OracleFeedMismatch
     );
     require!(oracle.price_wad > 0, NucleusError::OraclePriceNonPositive);
+
+    // Check staleness
+    let current_time = Clock::get()?.unix_timestamp;
+    let age = current_time
+        .checked_sub(oracle.last_update)
+        .ok_or_else(|| error!(NucleusError::MathOverflow))?;
+    require!(age >= 0, NucleusError::OraclePriceStale);
+    require!(
+        (age as u64) <= MAX_ORACLE_AGE,
+        NucleusError::OraclePriceStale
+    );
+
     Ok(oracle.price_wad)
 }
 

@@ -1,4 +1,4 @@
-use crate::constants::{BPS, SECONDS_PER_YEAR, WAD};
+use crate::constants::{BPS, MAX_INTEREST_ACCRUAL_SECONDS, SECONDS_PER_YEAR, WAD};
 use crate::errors::NucleusError;
 use crate::math::shares::to_shares_down;
 use crate::math::wad::{mul_div_down, w_taylor_compounded, wad_mul_down};
@@ -48,7 +48,9 @@ pub fn accrue_interest_on_market(
         });
     }
 
-    let elapsed_u128 = elapsed as u128;
+    // Cap elapsed time to prevent overflow in Taylor expansion
+    // After MAX_INTEREST_ACCRUAL_SECONDS, accrue iteratively if needed
+    let elapsed_u128 = (elapsed as u128).min(MAX_INTEREST_ACCRUAL_SECONDS);
 
     // Compute borrow rate per second from IRM
     let borrow_rate_per_second = compute_borrow_rate(irm, market)?;
@@ -156,7 +158,9 @@ mod tests {
             last_update: 0,
             paused: false,
             flash_loan_lock: 0,
-            reserved: [0u8; 64],
+            flash_loan_amount: 0,
+            flash_loan_caller: Pubkey::default(),
+            reserved: [0u8; 24],
         }
     }
 

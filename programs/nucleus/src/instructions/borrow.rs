@@ -12,6 +12,7 @@ use crate::state::irm::LinearIrm;
 use crate::state::market::Market;
 use crate::state::oracle::StaticOracle;
 use crate::state::position::Position;
+use crate::state::protocol::ProtocolState;
 
 // ─── Borrow ──────────────────────────────────────────────────────────────────
 
@@ -26,10 +27,18 @@ pub struct Borrow<'info> {
     pub borrower: Signer<'info>,
 
     #[account(
+        seeds = [SEED_PREFIX, SEED_PROTOCOL],
+        bump = protocol_state.bump,
+        constraint = !protocol_state.paused @ NucleusError::ProtocolPaused,
+    )]
+    pub protocol_state: Box<Account<'info, ProtocolState>>,
+
+    #[account(
         mut,
         seeds = [SEED_PREFIX, SEED_MARKET, &market_id],
         bump = market.bump,
         constraint = !market.paused @ NucleusError::MarketPaused,
+        constraint = market.flash_loan_lock == 0 @ NucleusError::FlashLoanLocked,
     )]
     pub market: Box<Account<'info, Market>>,
 
@@ -186,6 +195,7 @@ pub struct Repay<'info> {
         mut,
         seeds = [SEED_PREFIX, SEED_MARKET, &market_id],
         bump = market.bump,
+        constraint = market.flash_loan_lock == 0 @ NucleusError::FlashLoanLocked,
     )]
     pub market: Box<Account<'info, Market>>,
 

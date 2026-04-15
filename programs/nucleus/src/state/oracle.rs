@@ -25,6 +25,9 @@ pub struct StaticOracle {
 
     /// Only this account can update the price
     pub admin: Pubkey,
+
+    /// Unix timestamp of last price update (for staleness checks)
+    pub last_update: i64,
 }
 
 impl StaticOracle {
@@ -32,5 +35,6 @@ impl StaticOracle {
         + 1   // bump
         + 32  // feed_id
         + 16  // price_wad
-        + 32; // admin
+        + 32  // admin
+        + 8;  // last_update
 }

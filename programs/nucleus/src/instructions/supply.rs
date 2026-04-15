@@ -10,6 +10,7 @@ use crate::math::safe_math::safe_u128_to_u64;
 use crate::state::irm::LinearIrm;
 use crate::state::market::Market;
 use crate::state::position::Position;
+use crate::state::protocol::ProtocolState;
 
 // ─── Supply (lender deposits loan tokens) ────────────────────────────────────
 
@@ -20,10 +21,18 @@ pub struct Supply<'info> {
     pub supplier: Signer<'info>,
 
     #[account(
+        seeds = [SEED_PREFIX, SEED_PROTOCOL],
+        bump = protocol_state.bump,
+        constraint = !protocol_state.paused @ NucleusError::ProtocolPaused,
+    )]
+    pub protocol_state: Box<Account<'info, ProtocolState>>,
+
+    #[account(
         mut,
         seeds = [SEED_PREFIX, SEED_MARKET, &market_id],
         bump = market.bump,
         constraint = !market.paused @ NucleusError::MarketPaused,
+        constraint = market.flash_loan_lock == 0 @ NucleusError::FlashLoanLocked,
     )]
     pub market: Box<Account<'info, Market>>,
 
@@ -143,6 +152,7 @@ pub struct Withdraw<'info> {
         mut,
         seeds = [SEED_PREFIX, SEED_MARKET, &market_id],
         bump = market.bump,
+        constraint = market.flash_loan_lock == 0 @ NucleusError::FlashLoanLocked,
     )]
     pub market: Box<Account<'info, Market>>,
 

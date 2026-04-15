@@ -122,6 +122,7 @@ pub fn handle_enable_irm(ctx: Context<EnableIrm>, irm: Pubkey) -> Result<()> {
 
 /// Set the protocol fee for a market (owner only)
 #[derive(Accounts)]
+#[instruction(market_id: [u8; 32], fee: u64)]
 pub struct SetFee<'info> {
     pub owner: Signer<'info>,
 
@@ -132,11 +133,15 @@ pub struct SetFee<'info> {
     )]
     pub protocol_state: Account<'info, ProtocolState>,
 
-    #[account(mut)]
+    #[account(
+        mut,
+        seeds = [SEED_PREFIX, SEED_MARKET, &market_id],
+        bump = market.bump,
+    )]
     pub market: Account<'info, crate::state::market::Market>,
 }
 
-pub fn handle_set_fee(ctx: Context<SetFee>, fee: u64) -> Result<()> {
+pub fn handle_set_fee(ctx: Context<SetFee>, _market_id: [u8; 32], fee: u64) -> Result<()> {
     require!(fee <= MAX_FEE_BPS, NucleusError::FeeExceedsMax);
     ctx.accounts.market.fee = fee;
     Ok(())
@@ -177,6 +182,7 @@ pub fn handle_create_static_oracle(
     oracle.feed_id = feed_id;
     oracle.price_wad = initial_price_wad;
     oracle.admin = ctx.accounts.payer.key();
+    oracle.last_update = Clock::get()?.unix_timestamp;
 
     Ok(())
 }
@@ -198,6 +204,8 @@ pub fn handle_set_static_oracle_price(
     new_price_wad: u128,
 ) -> Result<()> {
     require!(new_price_wad > 0, NucleusError::OraclePriceNonPositive);
-    ctx.accounts.oracle.price_wad = new_price_wad;
+    let oracle = &mut ctx.accounts.oracle;
+    oracle.price_wad = new_price_wad;
+    oracle.last_update = Clock::get()?.unix_timestamp;
     Ok(())
 }

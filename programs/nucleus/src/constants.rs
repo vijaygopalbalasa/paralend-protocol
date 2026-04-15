@@ -14,6 +14,9 @@ pub const VIRTUAL_ASSETS: u128 = 1;
 /// Seconds per year for APY calculations
 pub const SECONDS_PER_YEAR: u128 = 31_536_000;
 
+/// Maximum interest accrual period (7 days) to prevent overflow in Taylor expansion
+pub const MAX_INTEREST_ACCRUAL_SECONDS: u128 = 604_800;
+
 /// Flash loan fee: 0.05%
 pub const FLASH_LOAN_FEE_BPS: u64 = 5;
 

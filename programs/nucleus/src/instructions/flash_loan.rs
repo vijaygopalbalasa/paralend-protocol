@@ -6,6 +6,7 @@ use crate::errors::NucleusError;
 use crate::math::safe_math::safe_u128_to_u64;
 use crate::math::wad::mul_div_up;
 use crate::state::market::Market;
+use crate::state::protocol::ProtocolState;
 
 // ─── Flash Loan ───────────────────────────────────────────────────────────────
 //
@@ -18,8 +19,8 @@ use crate::state::market::Market;
 //   }
 //
 // If flash_loan_end is not included or repayment is insufficient, the entire
-// transaction is reverted. The flash_loan_lock prevents other market operations
-// from executing between start and end.
+// transaction is reverted. While a flash loan is active, all other stateful
+// operations on the same market are blocked.
 //
 // Fee: FLASH_LOAN_FEE_BPS (0.05%). Goes to loan vault (benefits lenders).
 
@@ -30,6 +31,13 @@ use crate::state::market::Market;
 pub struct FlashLoanStart<'info> {
     /// CHECK: anyone can initiate a flash loan
     pub caller: Signer<'info>,
+
+    #[account(
+        seeds = [SEED_PREFIX, SEED_PROTOCOL],
+        bump = protocol_state.bump,
+        constraint = !protocol_state.paused @ NucleusError::ProtocolPaused,
+    )]
+    pub protocol_state: Box<Account<'info, ProtocolState>>,
 
     #[account(
         mut,
@@ -69,8 +77,10 @@ pub fn handle_flash_loan_start(
         NucleusError::InsufficientLiquidity
     );
 
-    // Lock the market — blocks all other instructions until flash_loan_end
+    // Lock the market and store the principal/caller for validation at end.
     ctx.accounts.market.flash_loan_lock = 1;
+    ctx.accounts.market.flash_loan_amount = amount;
+    ctx.accounts.market.flash_loan_caller = ctx.accounts.caller.key();
 
     // Transfer tokens to recipient — market PDA signs
     let bump = ctx.accounts.market.bump;
@@ -97,7 +107,7 @@ pub fn handle_flash_loan_start(
 #[derive(Accounts)]
 #[instruction(market_id: [u8; 32], amount: u64)]
 pub struct FlashLoanEnd<'info> {
-    /// CHECK: must match the caller from flash_loan_start (enforced via lock pattern)
+    /// CHECK: must match the caller from flash_loan_start
     pub caller: Signer<'info>,
 
     #[account(
@@ -132,6 +142,15 @@ pub fn handle_flash_loan_end(
     _market_id: [u8; 32],
     amount: u64,
 ) -> Result<()> {
+    require!(
+        ctx.accounts.market.flash_loan_caller == ctx.accounts.caller.key(),
+        NucleusError::FlashLoanCallerMismatch
+    );
+    require!(
+        ctx.accounts.market.flash_loan_amount == amount,
+        NucleusError::FlashLoanAmountMismatch
+    );
+
     // Compute required repayment: amount + fee (round UP on fee — protocol-favorable)
     let fee = mul_div_up(amount as u128, FLASH_LOAN_FEE_BPS as u128, BPS as u128)?;
     let repay_total = (amount as u128)
@@ -152,12 +171,19 @@ pub fn handle_flash_loan_end(
         repay_amount,
     )?;
 
-    // Fee accrues directly to the vault, increasing available_liquidity.
-    // This benefits lenders through increased share value on next interest accrual.
-    // (No separate fee accounting needed for flash loans.)
+    // Update total_supply_assets to reflect the fee income.
+    // This ensures share accounting remains accurate — without this update,
+    // the vault balance would exceed total_supply_assets, creating a discrepancy.
+    let fee_u64 = crate::math::safe_math::safe_u128_to_u64(fee)?;
+    ctx.accounts.market.total_supply_assets = ctx
+        .accounts
+        .market
+        .total_supply_assets
+        .checked_add(fee_u64 as u128)
+        .ok_or_else(|| error!(NucleusError::MathOverflow))?;
 
     // Unlock market
-    ctx.accounts.market.flash_loan_lock = 0;
+    ctx.accounts.market.clear_flash_loan_state();
 
     Ok(())
 }
