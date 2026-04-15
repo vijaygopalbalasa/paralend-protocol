@@ -8,6 +8,7 @@ import {
   type AccountMeta,
   PublicKey,
   SystemProgram,
+  Transaction,
   type TransactionInstruction,
 } from "@solana/web3.js";
 import {
@@ -21,12 +22,15 @@ import IDL from "../../target/idl/nucleus.json";
 import { PROGRAM_ID } from "./constants";
 import {
   deriveCollateralVaultPDA,
+  deriveLinearIrmPDA,
   deriveLoanVaultPDA,
   deriveMarketPDA,
   derivePositionPDA,
   deriveProtocolStatePDA,
+  deriveStaticOraclePDA,
 } from "./pdas";
 import type { MarketState, PositionState } from "./types";
+import { computeMarketId } from "./math";
 
 // ─── Internal helpers ─────────────────────────────────────────────────────────
 
@@ -71,6 +75,8 @@ function decodeMarket(raw: IdlAccounts<Nucleus>["market"]): MarketState {
     lastUpdate: bnToBigInt(raw.lastUpdate),
     paused: raw.paused,
     flashLoanLock: raw.flashLoanLock,
+    flashLoanAmount: bnToBigInt(raw.flashLoanAmount),
+    flashLoanCaller: raw.flashLoanCaller,
   };
 }
 
@@ -98,8 +104,13 @@ export class NucleusClient {
 
   constructor(provider: AnchorProvider, programId: PublicKey = PROGRAM_ID) {
     this.provider = provider;
+    const idl = {
+      // Anchor 0.31 reads the program id from the IDL address field.
+      ...(IDL as Record<string, unknown>),
+      address: programId.toBase58(),
+    };
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    this.program = new Program<Nucleus>(IDL as any, provider);
+    this.program = new Program<Nucleus>(idl as any, provider);
   }
 
   // ─── Account Fetchers ──────────────────────────────────────────────────────
@@ -130,11 +141,8 @@ export class NucleusClient {
    *
    * Returns `{ publicKey, marketId, market }` triples.
    *
-   * NOTE: The Market account does NOT store the market ID in its data — the ID
-   * is in the PDA seeds (keccak hash of params). We cannot recover it from the
-   * account alone. `marketId` is therefore returned as a 32-byte zero buffer as
-   * a placeholder. Callers that need the real ID should use `computeMarketId()`
-   * with the market's params, or use `publicKey` as an opaque identifier.
+   * The Market account stores all five market-defining parameters, so we can
+   * recover the deterministic market ID client-side.
    */
   async getAllMarkets(): Promise<
     { publicKey: PublicKey; marketId: Buffer; market: MarketState }[]
@@ -142,15 +150,161 @@ export class NucleusClient {
     const accounts = await this.program.account.market.all();
     return accounts.map((a) => ({
       publicKey: a.publicKey,
-      marketId: Buffer.from(new Uint8Array(32)),
+      marketId: computeMarketId({
+        collateralMint: a.account.collateralMint,
+        loanMint: a.account.loanMint,
+        collateralOracleFeedId: Buffer.from(a.account.collateralOracleFeedId),
+        loanOracleFeedId: Buffer.from(a.account.loanOracleFeedId),
+        irm: a.account.irm,
+        lltv: bnToBigInt(a.account.lltv),
+      }),
       market: decodeMarket(a.account),
     }));
+  }
+
+  /**
+   * Fetch and decode a Market account by its address.
+   */
+  async getMarketByAddress(address: PublicKey): Promise<{
+    publicKey: PublicKey;
+    marketId: Buffer;
+    market: MarketState;
+  }> {
+    const raw = await this.program.account.market.fetch(address);
+    const market = decodeMarket(raw);
+    const marketId = computeMarketId({
+      collateralMint: market.collateralMint,
+      loanMint: market.loanMint,
+      collateralOracleFeedId: Buffer.from(market.collateralOracleFeedId),
+      loanOracleFeedId: Buffer.from(market.loanOracleFeedId),
+      irm: market.irm,
+      lltv: market.lltv,
+    });
+
+    return { publicKey: address, marketId, market };
+  }
+
+  /**
+   * Fetch the protocol singleton.
+   */
+  async getProtocolState() {
+    const [protocolState] = deriveProtocolStatePDA(this.program.programId);
+    return this.program.account.protocolState.fetch(protocolState);
   }
 
   // ─── Instruction Builders ─────────────────────────────────────────────────
   //
   // All builders return a TransactionInstruction so callers can compose them
   // into larger transactions (e.g. createPosition + supply in one tx).
+
+  /**
+   * Build a `createPosition` instruction.
+   */
+  async createPositionIx(params: {
+    marketId: Buffer;
+    owner: PublicKey;
+    payer?: PublicKey;
+  }): Promise<TransactionInstruction> {
+    const { marketId, owner, payer = owner } = params;
+    const [marketPda] = deriveMarketPDA(marketId, this.program.programId);
+    const [positionPda] = derivePositionPDA(
+      marketId,
+      owner,
+      this.program.programId
+    );
+
+    return this.program.methods
+      .createPosition(
+        Array.from(marketId) as unknown as number[] & { length: 32 }
+      )
+      .accountsPartial({
+        payer,
+        owner,
+        market: marketPda,
+        position: positionPda,
+        systemProgram: SystemProgram.programId,
+      })
+      .instruction();
+  }
+
+  /**
+   * Build a `createMarket` instruction and return its derived addresses.
+   */
+  async createMarketIx(params: {
+    collateralMint: PublicKey;
+    loanMint: PublicKey;
+    collateralOracleFeedId: Buffer;
+    loanOracleFeedId: Buffer;
+    irm: PublicKey;
+    lltv: bigint;
+    fee: bigint;
+    payer: PublicKey;
+  }): Promise<{
+    marketId: Buffer;
+    marketAddress: PublicKey;
+    collateralVault: PublicKey;
+    loanVault: PublicKey;
+    instruction: TransactionInstruction;
+  }> {
+    const {
+      collateralMint,
+      loanMint,
+      collateralOracleFeedId,
+      loanOracleFeedId,
+      irm,
+      lltv,
+      fee,
+      payer,
+    } = params;
+    const marketId = computeMarketId({
+      collateralMint,
+      loanMint,
+      collateralOracleFeedId,
+      loanOracleFeedId,
+      irm,
+      lltv,
+    });
+    const [protocolState] = deriveProtocolStatePDA(this.program.programId);
+    const [marketAddress] = deriveMarketPDA(marketId, this.program.programId);
+    const [collateralVault] = deriveCollateralVaultPDA(
+      marketId,
+      this.program.programId
+    );
+    const [loanVault] = deriveLoanVaultPDA(marketId, this.program.programId);
+
+    const instruction = await this.program.methods
+      .createMarket(
+        Array.from(marketId) as unknown as number[] & { length: 32 },
+        Array.from(collateralOracleFeedId) as unknown as number[] & {
+          length: 32;
+        },
+        Array.from(loanOracleFeedId) as unknown as number[] & { length: 32 },
+        irm,
+        bigIntToBN(lltv),
+        bigIntToBN(fee)
+      )
+      .accountsPartial({
+        payer,
+        protocolState,
+        collateralMint,
+        loanMint,
+        irmAccount: irm,
+        market: marketAddress,
+        collateralVault,
+        loanVault,
+        tokenProgram: TOKEN_PROGRAM_ID,
+        systemProgram: SystemProgram.programId,
+      })
+      .instruction();
+
+    return {
+      marketId,
+      marketAddress,
+      collateralVault,
+      loanVault,
+      instruction,
+    };
+  }
 
   /**
    * Build a `supply` instruction.
@@ -433,6 +587,355 @@ export class NucleusClient {
       .instruction();
   }
 
+  /**
+   * Build an `accrueInterest` instruction.
+   */
+  async accrueInterestIx(params: {
+    marketId: Buffer;
+  }): Promise<TransactionInstruction> {
+    const { marketId } = params;
+    const [marketPda] = deriveMarketPDA(marketId, this.program.programId);
+    const market = await this.getMarket(marketId);
+
+    return this.program.methods
+      .accrueInterest(
+        Array.from(marketId) as unknown as number[] & { length: 32 }
+      )
+      .accountsPartial({
+        market: marketPda,
+        irm: market.irm,
+      })
+      .instruction();
+  }
+
+  /**
+   * Build a `liquidate` instruction.
+   */
+  async liquidateIx(params: {
+    marketId: Buffer;
+    seizedCollateral: bigint;
+    liquidator: PublicKey;
+    borrower: PublicKey;
+    collateralOracle: PublicKey;
+    loanOracle: PublicKey;
+  }): Promise<TransactionInstruction> {
+    const {
+      marketId,
+      seizedCollateral,
+      liquidator,
+      borrower,
+      collateralOracle,
+      loanOracle,
+    } = params;
+    const [marketPda] = deriveMarketPDA(marketId, this.program.programId);
+    const [positionPda] = derivePositionPDA(
+      marketId,
+      borrower,
+      this.program.programId
+    );
+    const [loanVaultPda] = deriveLoanVaultPDA(marketId, this.program.programId);
+    const [collateralVaultPda] = deriveCollateralVaultPDA(
+      marketId,
+      this.program.programId
+    );
+    const market = await this.getMarket(marketId);
+    const liquidatorLoanAta = getAssociatedTokenAddressSync(
+      market.loanMint,
+      liquidator
+    );
+    const liquidatorCollateralAta = getAssociatedTokenAddressSync(
+      market.collateralMint,
+      liquidator
+    );
+
+    return this.program.methods
+      .liquidate(
+        Array.from(marketId) as unknown as number[] & { length: 32 },
+        bigIntToBN(seizedCollateral)
+      )
+      .accountsPartial({
+        liquidator,
+        market: marketPda,
+        irm: market.irm,
+        borrowerPosition: positionPda,
+        borrower,
+        liquidatorLoanAta,
+        loanVault: loanVaultPda,
+        collateralVault: collateralVaultPda,
+        liquidatorCollateralAta,
+        collateralOracle,
+        loanOracle,
+        tokenProgram: TOKEN_PROGRAM_ID,
+      })
+      .instruction();
+  }
+
+  /**
+   * Build a `flashLoanStart` instruction.
+   */
+  async flashLoanStartIx(params: {
+    marketId: Buffer;
+    amount: bigint;
+    caller: PublicKey;
+    recipient: PublicKey;
+  }): Promise<TransactionInstruction> {
+    const { marketId, amount, caller, recipient } = params;
+    const [marketPda] = deriveMarketPDA(marketId, this.program.programId);
+    const [loanVaultPda] = deriveLoanVaultPDA(marketId, this.program.programId);
+    const market = await this.getMarket(marketId);
+    const recipientLoanAta = getAssociatedTokenAddressSync(
+      market.loanMint,
+      recipient
+    );
+
+    return this.program.methods
+      .flashLoanStart(
+        Array.from(marketId) as unknown as number[] & { length: 32 },
+        bigIntToBN(amount)
+      )
+      .accountsPartial({
+        caller,
+        market: marketPda,
+        loanVault: loanVaultPda,
+        recipientLoanAta,
+        tokenProgram: TOKEN_PROGRAM_ID,
+      })
+      .instruction();
+  }
+
+  /**
+   * Build a `flashLoanEnd` instruction.
+   */
+  async flashLoanEndIx(params: {
+    marketId: Buffer;
+    amount: bigint;
+    caller: PublicKey;
+    repayer: PublicKey;
+  }): Promise<TransactionInstruction> {
+    const { marketId, amount, caller, repayer } = params;
+    const [marketPda] = deriveMarketPDA(marketId, this.program.programId);
+    const [loanVaultPda] = deriveLoanVaultPDA(marketId, this.program.programId);
+    const market = await this.getMarket(marketId);
+    const repayerLoanAta = getAssociatedTokenAddressSync(
+      market.loanMint,
+      repayer
+    );
+
+    return this.program.methods
+      .flashLoanEnd(
+        Array.from(marketId) as unknown as number[] & { length: 32 },
+        bigIntToBN(amount)
+      )
+      .accountsPartial({
+        caller,
+        market: marketPda,
+        loanVault: loanVaultPda,
+        repayerLoanAta,
+        tokenProgram: TOKEN_PROGRAM_ID,
+      })
+      .instruction();
+  }
+
+  // ─── Admin Instructions ─────────────────────────────────────────────────────
+
+  /**
+   * Build an `initializeProtocol` instruction.
+   * Only callable once to create the protocol singleton.
+   */
+  async initializeProtocolIx(params: {
+    payer: PublicKey;
+    owner: PublicKey;
+    feeRecipient: PublicKey;
+  }): Promise<TransactionInstruction> {
+    const { payer, owner, feeRecipient } = params;
+    const [protocolState] = deriveProtocolStatePDA(this.program.programId);
+
+    return this.program.methods
+      .initializeProtocol(owner, feeRecipient)
+      .accountsPartial({
+        payer,
+        protocolState,
+        systemProgram: SystemProgram.programId,
+      })
+      .instruction();
+  }
+
+  /**
+   * Build an `enableLltv` instruction.
+   * Only callable by protocol owner.
+   */
+  async enableLltvIx(params: {
+    owner: PublicKey;
+    lltv: bigint;
+  }): Promise<TransactionInstruction> {
+    const { owner, lltv } = params;
+    const [protocolState] = deriveProtocolStatePDA(this.program.programId);
+
+    return this.program.methods
+      .enableLltv(bigIntToBN(lltv))
+      .accountsPartial({
+        owner,
+        protocolState,
+      })
+      .instruction();
+  }
+
+  /**
+   * Build an `enableIrm` instruction.
+   * Only callable by protocol owner.
+   */
+  async enableIrmIx(params: {
+    owner: PublicKey;
+    irm: PublicKey;
+  }): Promise<TransactionInstruction> {
+    const { owner, irm } = params;
+    const [protocolState] = deriveProtocolStatePDA(this.program.programId);
+
+    return this.program.methods
+      .enableIrm(irm)
+      .accountsPartial({
+        owner,
+        protocolState,
+      })
+      .instruction();
+  }
+
+  /**
+   * Build a `createIrm` instruction.
+   * Creates a new LinearIrm PDA.
+   */
+  async createIrmIx(params: {
+    payer: PublicKey;
+    baseRate: bigint;
+    slope1: bigint;
+    slope2: bigint;
+    kink: bigint;
+    nonce: bigint;
+  }): Promise<{ instruction: TransactionInstruction; irmPda: PublicKey }> {
+    const { payer, baseRate, slope1, slope2, kink, nonce } = params;
+    const [irmPda] = deriveLinearIrmPDA(payer, nonce, this.program.programId);
+
+    const instruction = await this.program.methods
+      .createIrm(
+        bigIntToBN(baseRate),
+        bigIntToBN(slope1),
+        bigIntToBN(slope2),
+        bigIntToBN(kink),
+        bigIntToBN(nonce)
+      )
+      .accountsPartial({
+        payer,
+        irm: irmPda,
+        systemProgram: SystemProgram.programId,
+      })
+      .instruction();
+
+    return { instruction, irmPda };
+  }
+
+  /**
+   * Build a `createStaticOracle` instruction.
+   * Creates a StaticOracle PDA for testing.
+   */
+  async createStaticOracleIx(params: {
+    payer: PublicKey;
+    feedId: Buffer;
+    initialPriceWad: bigint;
+  }): Promise<{ instruction: TransactionInstruction; oraclePda: PublicKey }> {
+    const { payer, feedId, initialPriceWad } = params;
+    const [oraclePda] = deriveStaticOraclePDA(feedId, this.program.programId);
+
+    const instruction = await this.program.methods
+      .createStaticOracle(
+        Array.from(feedId) as unknown as number[] & { length: 32 },
+        bigIntToBN(initialPriceWad)
+      )
+      .accountsPartial({
+        payer,
+        oracle: oraclePda,
+        systemProgram: SystemProgram.programId,
+      })
+      .instruction();
+
+    return { instruction, oraclePda };
+  }
+
+  /**
+   * Build a `setStaticOraclePrice` instruction.
+   * Only callable by oracle admin.
+   */
+  async setStaticOraclePriceIx(params: {
+    admin: PublicKey;
+    feedId: Buffer;
+    newPriceWad: bigint;
+  }): Promise<TransactionInstruction> {
+    const { admin, feedId, newPriceWad } = params;
+    const [oraclePda] = deriveStaticOraclePDA(feedId, this.program.programId);
+
+    return this.program.methods
+      .setStaticOraclePrice(bigIntToBN(newPriceWad))
+      .accountsPartial({
+        admin,
+        oracle: oraclePda,
+      })
+      .instruction();
+  }
+
+  /**
+   * Build a `setFee` instruction.
+   * Only callable by protocol owner.
+   */
+  async setFeeIx(params: {
+    owner: PublicKey;
+    marketId: Buffer;
+    fee: bigint;
+  }): Promise<TransactionInstruction> {
+    const { owner, marketId, fee } = params;
+    const [protocolState] = deriveProtocolStatePDA(this.program.programId);
+    const [marketPda] = deriveMarketPDA(marketId, this.program.programId);
+
+    return this.program.methods
+      .setFee(
+        Array.from(marketId) as unknown as number[] & { length: 32 },
+        bigIntToBN(fee)
+      )
+      .accountsPartial({
+        owner,
+        protocolState,
+        market: marketPda,
+      })
+      .instruction();
+  }
+
+  /**
+   * Build a `claimFees` instruction.
+   * Only callable by fee_recipient from protocol state.
+   * Fee recipient must have a Position in the market first.
+   */
+  async claimFeesIx(params: {
+    feeRecipient: PublicKey;
+    marketId: Buffer;
+  }): Promise<TransactionInstruction> {
+    const { feeRecipient, marketId } = params;
+    const [protocolState] = deriveProtocolStatePDA(this.program.programId);
+    const [marketPda] = deriveMarketPDA(marketId, this.program.programId);
+    const [positionPda] = derivePositionPDA(
+      marketId,
+      feeRecipient,
+      this.program.programId
+    );
+
+    return this.program.methods
+      .claimFees(Array.from(marketId) as unknown as number[] & { length: 32 })
+      .accountsPartial({
+        feeRecipient,
+        protocolState,
+        market: marketPda,
+        position: positionPda,
+      })
+      .instruction();
+  }
+
   // ─── Convenience Helpers ──────────────────────────────────────────────────
 
   /**
@@ -469,5 +972,29 @@ export class NucleusClient {
     const pda = this.derivePositionAddress(marketId, owner);
     const info = await this.provider.connection.getAccountInfo(pda);
     return info !== null && info.data.length > 0;
+  }
+
+  /**
+   * Send and confirm a transaction or instruction list with the provider wallet.
+   */
+  async sendAndConfirm(
+    instructions:
+      | Transaction
+      | TransactionInstruction
+      | TransactionInstruction[],
+    signers: Parameters<AnchorProvider["sendAndConfirm"]>[1] = []
+  ): Promise<string> {
+    let tx: Transaction;
+    if (instructions instanceof Transaction) {
+      tx = instructions;
+    } else {
+      tx = new Transaction();
+      const ixs = Array.isArray(instructions) ? instructions : [instructions];
+      for (const ix of ixs) {
+        tx.add(ix);
+      }
+    }
+
+    return this.provider.sendAndConfirm(tx, signers);
   }
 }

@@ -2,7 +2,7 @@ import { PublicKey } from "@solana/web3.js";
 
 // Program address
 export const PROGRAM_ID = new PublicKey(
-  "BDZo1obAjSPufJsRqJmBy82whgQfedDXnTDipdA2nCVn"
+  "ForUjmX3VzE5EsRfzktF529LToK7vyzx6czH5o1dUTY8"
 );
 
 // Fixed-point arithmetic constants

@@ -69,6 +69,10 @@ export interface MarketState {
   paused: boolean;
   /** Flash loan reentrancy lock (0 = unlocked, 1 = locked) */
   flashLoanLock: number;
+  /** Active flash-loan principal */
+  flashLoanAmount: bigint;
+  /** Active flash-loan caller */
+  flashLoanCaller: PublicKey;
 }
 
 /**
@@ -130,11 +134,22 @@ export interface StaticOracleState {
  */
 export interface ProtocolState {
   bump: number;
+  /** Protocol admin who can enable LLTVs, IRMs, set fees, pause */
   owner: PublicKey;
+  /** Address for two-step ownership transfer */
+  pendingOwner: PublicKey;
+  /** Address that receives protocol fee shares */
   feeRecipient: PublicKey;
-  /** Enabled LLTV values in BPS */
-  enabledLltvs: bigint[];
-  /** Enabled IRM account public keys */
-  enabledIrms: PublicKey[];
+  /** Global pause flag */
   paused: boolean;
+  /** Number of enabled LLTV values */
+  lltvCount: number;
+  /** Whitelisted LLTV values in BPS (e.g. 8600 = 86%) */
+  enabledLltvs: bigint[];
+  /** Number of enabled IRM accounts */
+  irmCount: number;
+  /** Whitelisted IRM account public keys */
+  enabledIrms: PublicKey[];
+  /** Total number of markets created */
+  marketCount: bigint;
 }
