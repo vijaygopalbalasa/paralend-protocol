@@ -40,3 +40,4 @@ AGENTS.md
 .cursor/
 .aider*
 copilot-*
+*.tsbuildinfo
