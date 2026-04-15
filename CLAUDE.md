@@ -6,18 +6,52 @@ Colosseum Frontier hackathon (Apr 6 – May 11, 2026). DeFi track. $25K prize + 
 
 ---
 
-## Current Status (Apr 8, 2026)
+## CRITICAL RULES FOR CLAUDE
+
+**These rules are mandatory. Violating them causes bugs and wasted time.**
+
+### Rule 1: Read Before Write
+**ALWAYS read the full context of any file before modifying it.**
+- Read related files that import/use the code being changed
+- Search for usages of functions/structs being modified
+- Check tests that exercise the code path
+- Understand the purpose, not just the syntax
+
+### Rule 2: Update All Consumers
+When changing instruction signatures (adding/removing accounts or args):
+1. Update the program instruction
+2. Rebuild IDL: `anchor build`
+3. Sync IDL to frontend: `cp target/idl/nucleus.json app/src/lib/nucleus-idl.json`
+4. Sync types: `cp target/types/nucleus.ts app/src/lib/nucleus-idl-types.ts`
+5. Update ALL tests that call the instruction
+6. Update SDK client methods
+7. Update frontend calls
+8. Run full test suite: `anchor test`
+
+### Rule 3: Test Everything Before Deploy
+- `cargo test` must pass 100%
+- `anchor test` must pass 100%
+- Review all TODO/FIXME comments
+- Deployment is expensive (2+ SOL) — only deploy when ready
+
+### Rule 4: Document Mistakes
+Add to MISTAKES.md when errors occur. Learn from them.
+
+---
+
+## Current Status (Apr 16, 2026)
 
 | Layer | Status | Notes |
 |-------|--------|-------|
-| Anchor program | ✅ Complete | 19/19 integration tests passing |
+| Anchor program | ✅ Complete | 20/20 integration tests passing |
 | Rust unit tests | ✅ 28/28 passing | math, shares, IRM |
 | TypeScript SDK | ✅ Complete | NucleusClient, PDA helpers, math utils |
 | Next.js frontend | ✅ Built + deployed | Live on Vercel |
-| Demo scripts | ✅ Written | setup-demo-markets, fund-demo, liquidation-bot |
+| Demo scripts | ✅ Working | setup-demo-markets, fund-demo, liquidation-bot |
 | GitHub repo | ✅ Private | github.com/vijaygopalbalasa/nucleus-protocol |
-| Vercel deploy | ✅ Live | nucleus-frontend-cuu50kx4x-vijaygopal-balasas-projects.vercel.app |
-| Devnet program | ⏳ Blocked | Needs 4.25 SOL; get from https://faucet.helius.dev |
+| Vercel deploy | ✅ Live | nucleus-frontend-67t0tqgai-vijaygopal-balasas-projects.vercel.app |
+| Devnet program | ✅ Deployed | ForUjmX3VzE5EsRfzktF529LToK7vyzx6czH5o1dUTY8 |
+| Demo markets | ✅ Live | wSOL/USDC, JitoSOL/USDC, JUP/USDC with liquidity |
 
 ---
 
@@ -320,21 +354,21 @@ anchor-spl = "0.31.1"
 ## Program ID
 
 ```
-BDZo1obAjSPufJsRqJmBy82whgQfedDXnTDipdA2nCVn  (devnet placeholder — regenerate before deploy)
+ForUjmX3VzE5EsRfzktF529LToK7vyzx6czH5o1dUTY8  (devnet — deployed Apr 16, 2026)
 ```
 
 ---
 
-## Devnet Deploy (One Remaining Step)
+## Devnet Deployment (Complete)
 
-### Get SOL
-```bash
-# Devnet faucet is rate-limited (2 req / 8h). Use Helius instead:
-# Go to https://faucet.helius.dev → request 5 SOL → paste your keypair pubkey
-solana address  # shows your keypair address
-```
+**Live demo markets:**
+- wSOL / USDC — 25k USDC supplied, 3k borrowed
+- JitoSOL / USDC — 25k USDC supplied  
+- JUP / USDC — created, needs liquidity
 
-### Deploy
+**Frontend:** https://nucleus-frontend-67t0tqgai-vijaygopal-balasas-projects.vercel.app
+
+### Redeploy (if needed)
 ```bash
 export PATH="$HOME/.local/share/solana/install/active_release/bin:$PATH"
 ~/.cargo/bin/anchor build
@@ -369,3 +403,49 @@ vercel --prod
 # Keep running in background for demo — liquidates unhealthy positions
 npx ts-node --project tsconfig.json scripts/liquidation-bot.ts --cluster=devnet &
 ```
+
+---
+
+## Known Limitations (Intentionally Deferred)
+
+These features are documented but not implemented. They are acceptable for hackathon demo but should be added for production:
+
+### 1. Position Closure (Low Priority)
+- **What:** Add `close_position` instruction to reclaim rent when position is empty
+- **Why deferred:** Rent is ~0.002 SOL. Not critical for demo.
+- **Risk:** Users accumulate small locked rent over many positions.
+- **TODO location:** `programs/nucleus/src/instructions/position.rs`
+
+### 2. Fee-on-Transfer Token Support (Medium Priority)
+- **What:** Detect and handle tokens that take fees on transfer (e.g., some rebasing tokens)
+- **Why deferred:** Demo uses standard SPL tokens. Complex to implement correctly.
+- **Risk:** Accounting mismatch if fee-on-transfer token is used as loan/collateral.
+- **TODO location:** `programs/nucleus/src/instructions/supply.rs`, `collateral.rs`
+
+### 3. Cross-Market Flash Loan Isolation (Low Priority)
+- **What:** Prevent flash loans from being used to manipulate other markets
+- **Why deferred:** Single-market demo. Attacker would need significant capital anyway.
+- **Risk:** Sophisticated attacker could manipulate oracle prices across markets.
+- **TODO location:** `programs/nucleus/src/instructions/flash_loan.rs`
+
+---
+
+## Test Requirements
+
+Every instruction MUST have:
+1. **Happy path test** — successful execution with valid inputs
+2. **Error case tests** — verify each possible error condition
+3. **Access control test** — unauthorized callers are rejected
+4. **Edge case tests** — zero amounts, max values, boundary conditions
+
+Test file structure:
+```
+tests/
+  nucleus.ts           # Main integration tests (happy paths)
+  security.ts          # Security-focused tests (pause, staleness, access)
+  errors.ts            # Negative tests (all error codes)
+  edge-cases.ts        # Boundary conditions, precision, overflow
+```
+
+Run all tests: `anchor test`
+Run specific file: `anchor test -- --grep "security"`

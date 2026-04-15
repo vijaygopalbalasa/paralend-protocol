@@ -184,7 +184,7 @@ function MarketDetailPageInner() {
       if (maybeCreatePosition) tx.add(maybeCreatePosition);
       tx.add(
         await methods
-          .supply(Array.from(market.marketId), new BN(amount.toString()))
+          .supply(Array.from(market.marketId), new BN(amount.toString()), new BN(0))
           .accountsPartial({
             supplier: owner,
             market: market.publicKey,
@@ -224,6 +224,8 @@ function MarketDetailPageInner() {
           .withdraw(
             Array.from(market.marketId),
             new BN(amount.toString()),
+            new BN(0),
+            new BN(0),
             new BN(0)
           )
           .accountsPartial({
@@ -271,7 +273,7 @@ function MarketDetailPageInner() {
       if (maybeCreatePosition) tx.add(maybeCreatePosition);
       tx.add(
         await methods
-          .borrow(Array.from(market.marketId), new BN(amount.toString()))
+          .borrow(Array.from(market.marketId), new BN(amount.toString()), new BN(0))
           .accountsPartial({
             borrower: owner,
             market: market.publicKey,

@@ -106,8 +106,9 @@ pub mod nucleus {
         ctx: Context<Supply>,
         market_id: [u8; 32],
         assets: u64,
+        min_shares: u128,
     ) -> Result<()> {
-        instructions::supply::handle_supply(ctx, market_id, assets)
+        instructions::supply::handle_supply(ctx, market_id, assets, min_shares)
     }
 
     pub fn withdraw(
@@ -115,8 +116,10 @@ pub mod nucleus {
         market_id: [u8; 32],
         assets: u64,
         shares: u128,
+        max_shares_burn: u128,
+        min_assets_out: u128,
     ) -> Result<()> {
-        instructions::supply::handle_withdraw(ctx, market_id, assets, shares)
+        instructions::supply::handle_withdraw(ctx, market_id, assets, shares, max_shares_burn, min_assets_out)
     }
 
     // ─── Accrue Interest (permissionless crank) ──────────────
@@ -158,8 +161,9 @@ pub mod nucleus {
         ctx: Context<Borrow>,
         market_id: [u8; 32],
         assets: u64,
+        max_shares: u128,
     ) -> Result<()> {
-        instructions::borrow::handle_borrow(ctx, market_id, assets)
+        instructions::borrow::handle_borrow(ctx, market_id, assets, max_shares)
     }
 
     pub fn repay(

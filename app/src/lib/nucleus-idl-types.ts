@@ -290,6 +290,10 @@ export type Nucleus = {
         {
           "name": "assets",
           "type": "u64"
+        },
+        {
+          "name": "maxShares",
+          "type": "u128"
         }
       ]
     },
@@ -2198,6 +2202,10 @@ export type Nucleus = {
         {
           "name": "assets",
           "type": "u64"
+        },
+        {
+          "name": "minShares",
+          "type": "u128"
         }
       ]
     },
@@ -2542,6 +2550,14 @@ export type Nucleus = {
         },
         {
           "name": "shares",
+          "type": "u128"
+        },
+        {
+          "name": "maxSharesBurn",
+          "type": "u128"
+        },
+        {
+          "name": "minAssetsOut",
           "type": "u128"
         }
       ]

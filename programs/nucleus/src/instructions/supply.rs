@@ -15,7 +15,7 @@ use crate::state::protocol::ProtocolState;
 // ─── Supply (lender deposits loan tokens) ────────────────────────────────────
 
 #[derive(Accounts)]
-#[instruction(market_id: [u8; 32], assets: u64)]
+#[instruction(market_id: [u8; 32], assets: u64, min_shares: u128)]
 pub struct Supply<'info> {
     #[account(mut)]
     pub supplier: Signer<'info>,
@@ -73,6 +73,7 @@ pub fn handle_supply(
     ctx: Context<Supply>,
     _market_id: [u8; 32],
     assets: u64,
+    min_shares: u128,
 ) -> Result<()> {
     require!(assets > 0, NucleusError::ZeroAmount);
 
@@ -92,6 +93,9 @@ pub fn handle_supply(
         market.total_supply_assets,
         market.total_supply_shares,
     )?;
+
+    // Slippage protection: ensure user gets at least min_shares
+    require!(shares >= min_shares, NucleusError::SlippageExceeded);
 
     // Update market totals
     market.total_supply_assets = market
@@ -144,7 +148,7 @@ pub fn handle_supply(
 /// - `assets > 0`: withdraw exactly `assets` tokens, burns `to_shares_up(assets)` shares
 /// - `shares > 0`: burn exactly `shares`, receive `to_assets_down(shares)` tokens
 #[derive(Accounts)]
-#[instruction(market_id: [u8; 32], assets: u64, shares: u128)]
+#[instruction(market_id: [u8; 32], assets: u64, shares: u128, max_shares_burn: u128, min_assets_out: u128)]
 pub struct Withdraw<'info> {
     pub owner: Signer<'info>,
 
@@ -193,6 +197,8 @@ pub fn handle_withdraw(
     market_id: [u8; 32],
     assets: u64,
     shares: u128,
+    max_shares_burn: u128,
+    min_assets_out: u128,
 ) -> Result<()> {
     // Exactly one of assets or shares must be non-zero
     require!(
@@ -230,6 +236,16 @@ pub fn handle_withdraw(
     };
 
     require!(final_assets > 0, NucleusError::ZeroAmount);
+
+    // Slippage protection (0 = no protection, backwards compatible)
+    // When withdrawing by assets: ensure user doesn't burn more shares than expected
+    if assets > 0 && max_shares_burn > 0 {
+        require!(final_shares <= max_shares_burn, NucleusError::SlippageExceeded);
+    }
+    // When withdrawing by shares: ensure user gets at least min_assets
+    if shares > 0 && min_assets_out > 0 {
+        require!(final_assets >= min_assets_out, NucleusError::SlippageExceeded);
+    }
 
     // Check position has enough shares to burn
     let position = &ctx.accounts.position;

@@ -316,13 +316,15 @@ export class NucleusClient {
    * @param marketId   32-byte market ID
    * @param assets     Amount of loan tokens (in base units, u64)
    * @param supplier   Signer — must own the position and the ATA
+   * @param minShares  Minimum shares to receive (slippage protection, default 0n = no check)
    */
   async supplyIx(params: {
     marketId: Buffer;
     assets: bigint;
     supplier: PublicKey;
+    minShares?: bigint;
   }): Promise<TransactionInstruction> {
-    const { marketId, assets, supplier } = params;
+    const { marketId, assets, supplier, minShares = 0n } = params;
     const [marketPda] = deriveMarketPDA(marketId);
     const [positionPda] = derivePositionPDA(marketId, supplier);
     const [loanVaultPda] = deriveLoanVaultPDA(marketId);
@@ -337,7 +339,8 @@ export class NucleusClient {
     return this.program.methods
       .supply(
         Array.from(marketId) as unknown as number[] & { length: 32 },
-        new BN(assets.toString())
+        new BN(assets.toString()),
+        bigIntToBN(minShares)
       )
       .accountsPartial({
         supplier,
@@ -358,8 +361,10 @@ export class NucleusClient {
    * - `assets > 0`: withdraw exactly that many tokens, burns the required shares
    * - `shares > 0`: burn exactly that many shares, receive the resulting tokens
    *
-   * @param owner    Signer — owner of the position
-   * @param receiver Public key of the ATA that will receive the loan tokens
+   * @param owner          Signer — owner of the position
+   * @param receiver       Public key of the ATA that will receive the loan tokens
+   * @param maxSharesBurn  When withdrawing by assets, max shares willing to burn (slippage protection, default 0n = no check)
+   * @param minAssetsOut   When withdrawing by shares, min assets to receive (slippage protection, default 0n = no check)
    */
   async withdrawIx(params: {
     marketId: Buffer;
@@ -367,8 +372,10 @@ export class NucleusClient {
     shares: bigint;
     owner: PublicKey;
     receiver: PublicKey;
+    maxSharesBurn?: bigint;
+    minAssetsOut?: bigint;
   }): Promise<TransactionInstruction> {
-    const { marketId, assets, shares, owner, receiver } = params;
+    const { marketId, assets, shares, owner, receiver, maxSharesBurn = 0n, minAssetsOut = 0n } = params;
     const [marketPda] = deriveMarketPDA(marketId);
     const [positionPda] = derivePositionPDA(marketId, owner);
     const [loanVaultPda] = deriveLoanVaultPDA(marketId);
@@ -383,7 +390,9 @@ export class NucleusClient {
       .withdraw(
         Array.from(marketId) as unknown as number[] & { length: 32 },
         new BN(assets.toString()),
-        bigIntToBN(shares)
+        bigIntToBN(shares),
+        bigIntToBN(maxSharesBurn),
+        bigIntToBN(minAssetsOut)
       )
       .accountsPartial({
         owner,
@@ -499,6 +508,7 @@ export class NucleusClient {
    * @param receiver            Destination for borrowed tokens
    * @param collateralOracle    Oracle PDA for collateral price
    * @param loanOracle          Oracle PDA for loan price
+   * @param maxShares           Max debt shares willing to take on (slippage protection, default 0n = no check)
    */
   async borrowIx(params: {
     marketId: Buffer;
@@ -507,8 +517,9 @@ export class NucleusClient {
     receiver: PublicKey;
     collateralOracle: PublicKey;
     loanOracle: PublicKey;
+    maxShares?: bigint;
   }): Promise<TransactionInstruction> {
-    const { marketId, assets, borrower, receiver, collateralOracle, loanOracle } =
+    const { marketId, assets, borrower, receiver, collateralOracle, loanOracle, maxShares = 0n } =
       params;
     const [marketPda] = deriveMarketPDA(marketId);
     const [positionPda] = derivePositionPDA(marketId, borrower);
@@ -523,7 +534,8 @@ export class NucleusClient {
     return this.program.methods
       .borrow(
         Array.from(marketId) as unknown as number[] & { length: 32 },
-        new BN(assets.toString())
+        new BN(assets.toString()),
+        bigIntToBN(maxShares)
       )
       .accountsPartial({
         borrower,

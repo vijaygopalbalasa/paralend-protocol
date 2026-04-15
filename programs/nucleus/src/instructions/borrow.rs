@@ -22,7 +22,7 @@ use crate::state::protocol::ProtocolState;
 /// Debt is tracked in shares (round UP — borrower owes more).
 /// Health check is performed AFTER updating state (post-borrow health must pass).
 #[derive(Accounts)]
-#[instruction(market_id: [u8; 32], assets: u64)]
+#[instruction(market_id: [u8; 32], assets: u64, max_shares: u128)]
 pub struct Borrow<'info> {
     pub borrower: Signer<'info>,
 
@@ -86,6 +86,7 @@ pub fn handle_borrow(
     ctx: Context<Borrow>,
     market_id: [u8; 32],
     assets: u64,
+    max_shares: u128,
 ) -> Result<()> {
     require!(assets > 0, NucleusError::ZeroAmount);
 
@@ -111,6 +112,12 @@ pub fn handle_borrow(
         market.total_borrow_assets,
         market.total_borrow_shares,
     )?;
+
+    // Slippage protection: ensure user doesn't take on more debt shares than expected
+    // max_shares = 0 means no slippage protection (backwards compatible)
+    if max_shares > 0 {
+        require!(new_shares <= max_shares, NucleusError::SlippageExceeded);
+    }
 
     // Update market totals
     market.total_borrow_assets = market

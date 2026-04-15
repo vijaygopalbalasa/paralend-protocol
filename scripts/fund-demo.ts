@@ -140,7 +140,7 @@ async function seedSupply(params: {
   });
 
   await methods
-    .supply(Array.from(marketId), new BN(amount.toString()))
+    .supply(Array.from(marketId), new BN(amount.toString()), new BN(0))
     .accountsPartial({
       supplier: actor.publicKey,
       market: new PublicKey(market.market),
@@ -209,7 +209,7 @@ async function seedCollateralAndBorrow(params: {
   const refreshedPosition = await program.account.position.fetch(position);
   if (BigInt(refreshedPosition.borrowShares.toString()) === 0n) {
     await methods
-      .borrow(Array.from(marketId), new BN(borrowAmount.toString()))
+      .borrow(Array.from(marketId), new BN(borrowAmount.toString()), new BN(0))
       .accountsPartial({
         borrower: actor.publicKey,
         market: marketPk,

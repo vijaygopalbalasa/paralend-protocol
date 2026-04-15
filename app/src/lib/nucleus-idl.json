@@ -284,6 +284,10 @@
         {
           "name": "assets",
           "type": "u64"
+        },
+        {
+          "name": "max_shares",
+          "type": "u128"
         }
       ]
     },
@@ -2192,6 +2196,10 @@
         {
           "name": "assets",
           "type": "u64"
+        },
+        {
+          "name": "min_shares",
+          "type": "u128"
         }
       ]
     },
@@ -2536,6 +2544,14 @@
         },
         {
           "name": "shares",
+          "type": "u128"
+        },
+        {
+          "name": "max_shares_burn",
+          "type": "u128"
+        },
+        {
+          "name": "min_assets_out",
           "type": "u128"
         }
       ]
