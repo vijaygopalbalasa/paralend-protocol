@@ -1,5 +1,5 @@
 {
-  "address": "BDZo1obAjSPufJsRqJmBy82whgQfedDXnTDipdA2nCVn",
+  "address": "ForUjmX3VzE5EsRfzktF529LToK7vyzx6czH5o1dUTY8",
   "metadata": {
     "name": "nucleus",
     "version": "0.1.0",
@@ -87,6 +87,44 @@
         {
           "name": "borrower",
           "signer": true
+        },
+        {
+          "name": "protocol_state",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  110,
+                  117,
+                  99,
+                  108,
+                  101,
+                  117,
+                  115
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  114,
+                  111,
+                  116,
+                  111,
+                  99,
+                  111,
+                  108,
+                  95,
+                  115,
+                  116,
+                  97,
+                  116,
+                  101
+                ]
+              }
+            ]
+          }
         },
         {
           "name": "market",
@@ -246,6 +284,155 @@
         {
           "name": "assets",
           "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "claim_fees",
+      "discriminator": [
+        82,
+        251,
+        233,
+        156,
+        12,
+        52,
+        184,
+        202
+      ],
+      "accounts": [
+        {
+          "name": "fee_recipient",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "protocol_state",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  110,
+                  117,
+                  99,
+                  108,
+                  101,
+                  117,
+                  115
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  114,
+                  111,
+                  116,
+                  111,
+                  99,
+                  111,
+                  108,
+                  95,
+                  115,
+                  116,
+                  97,
+                  116,
+                  101
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "market",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  110,
+                  117,
+                  99,
+                  108,
+                  101,
+                  117,
+                  115
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  97,
+                  114,
+                  107,
+                  101,
+                  116
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "market_id"
+              }
+            ]
+          }
+        },
+        {
+          "name": "position",
+          "docs": [
+            "The fee_recipient's position in this market.",
+            "If it doesn't exist, the caller must create it first via create_position."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  110,
+                  117,
+                  99,
+                  108,
+                  101,
+                  117,
+                  115
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  111,
+                  115,
+                  105,
+                  116,
+                  105,
+                  111,
+                  110
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "market_id"
+              },
+              {
+                "kind": "account",
+                "path": "fee_recipient"
+              }
+            ]
+          }
+        }
+      ],
+      "args": [
+        {
+          "name": "market_id",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
         }
       ]
     },
@@ -1036,6 +1223,44 @@
           "signer": true
         },
         {
+          "name": "protocol_state",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  110,
+                  117,
+                  99,
+                  108,
+                  101,
+                  117,
+                  115
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  114,
+                  111,
+                  116,
+                  111,
+                  99,
+                  111,
+                  108,
+                  95,
+                  115,
+                  116,
+                  97,
+                  116,
+                  101
+                ]
+              }
+            ]
+          }
+        },
+        {
           "name": "market",
           "writable": true,
           "pda": {
@@ -1686,10 +1911,50 @@
         },
         {
           "name": "market",
-          "writable": true
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  110,
+                  117,
+                  99,
+                  108,
+                  101,
+                  117,
+                  115
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  97,
+                  114,
+                  107,
+                  101,
+                  116
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "market_id"
+              }
+            ]
+          }
         }
       ],
       "args": [
+        {
+          "name": "market_id",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
         {
           "name": "fee",
           "type": "u64"
@@ -1742,6 +2007,44 @@
           "name": "supplier",
           "writable": true,
           "signer": true
+        },
+        {
+          "name": "protocol_state",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  110,
+                  117,
+                  99,
+                  108,
+                  101,
+                  117,
+                  115
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  114,
+                  111,
+                  116,
+                  111,
+                  99,
+                  111,
+                  108,
+                  95,
+                  115,
+                  116,
+                  97,
+                  116,
+                  101
+                ]
+              }
+            ]
+          }
         },
         {
           "name": "market",
@@ -2542,6 +2845,19 @@
       ]
     },
     {
+      "name": "FeesClaimed",
+      "discriminator": [
+        22,
+        104,
+        110,
+        222,
+        38,
+        157,
+        14,
+        62
+      ]
+    },
+    {
       "name": "InterestAccrued",
       "discriminator": [
         79,
@@ -2794,6 +3110,16 @@
       "code": 6026,
       "name": "OracleFeedMismatch",
       "msg": "Oracle feed ID does not match market configuration"
+    },
+    {
+      "code": 6027,
+      "name": "FlashLoanCallerMismatch",
+      "msg": "Flash loan caller does not match the starter"
+    },
+    {
+      "code": 6028,
+      "name": "FlashLoanAmountMismatch",
+      "msg": "Flash loan repayment amount does not match the borrowed principal"
     }
   ],
   "types": [
@@ -2883,6 +3209,31 @@
           },
           {
             "name": "amount",
+            "type": "u128"
+          }
+        ]
+      }
+    },
+    {
+      "name": "FeesClaimed",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "market_id",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "fee_recipient",
+            "type": "pubkey"
+          },
+          {
+            "name": "shares",
             "type": "u128"
           }
         ]
@@ -3196,6 +3547,20 @@
             "type": "u8"
           },
           {
+            "name": "flash_loan_amount",
+            "docs": [
+              "Amount borrowed in the active flash loan, if any"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "flash_loan_caller",
+            "docs": [
+              "Caller that initiated the active flash loan"
+            ],
+            "type": "pubkey"
+          },
+          {
             "name": "reserved",
             "docs": [
               "Reserved for future use"
@@ -3203,7 +3568,7 @@
             "type": {
               "array": [
                 "u8",
-                64
+                24
               ]
             }
           }
@@ -3510,6 +3875,13 @@
               "Only this account can update the price"
             ],
             "type": "pubkey"
+          },
+          {
+            "name": "last_update",
+            "docs": [
+              "Unix timestamp of last price update (for staleness checks)"
+            ],
+            "type": "i64"
           }
         ]
       }

@@ -5,7 +5,7 @@
  * IDL can be found at `target/idl/nucleus.json`.
  */
 export type Nucleus = {
-  "address": "BDZo1obAjSPufJsRqJmBy82whgQfedDXnTDipdA2nCVn",
+  "address": "ForUjmX3VzE5EsRfzktF529LToK7vyzx6czH5o1dUTY8",
   "metadata": {
     "name": "nucleus",
     "version": "0.1.0",
@@ -93,6 +93,44 @@ export type Nucleus = {
         {
           "name": "borrower",
           "signer": true
+        },
+        {
+          "name": "protocolState",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  110,
+                  117,
+                  99,
+                  108,
+                  101,
+                  117,
+                  115
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  114,
+                  111,
+                  116,
+                  111,
+                  99,
+                  111,
+                  108,
+                  95,
+                  115,
+                  116,
+                  97,
+                  116,
+                  101
+                ]
+              }
+            ]
+          }
         },
         {
           "name": "market",
@@ -252,6 +290,155 @@ export type Nucleus = {
         {
           "name": "assets",
           "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "claimFees",
+      "discriminator": [
+        82,
+        251,
+        233,
+        156,
+        12,
+        52,
+        184,
+        202
+      ],
+      "accounts": [
+        {
+          "name": "feeRecipient",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "protocolState",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  110,
+                  117,
+                  99,
+                  108,
+                  101,
+                  117,
+                  115
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  114,
+                  111,
+                  116,
+                  111,
+                  99,
+                  111,
+                  108,
+                  95,
+                  115,
+                  116,
+                  97,
+                  116,
+                  101
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "market",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  110,
+                  117,
+                  99,
+                  108,
+                  101,
+                  117,
+                  115
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  97,
+                  114,
+                  107,
+                  101,
+                  116
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "marketId"
+              }
+            ]
+          }
+        },
+        {
+          "name": "position",
+          "docs": [
+            "The fee_recipient's position in this market.",
+            "If it doesn't exist, the caller must create it first via create_position."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  110,
+                  117,
+                  99,
+                  108,
+                  101,
+                  117,
+                  115
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  111,
+                  115,
+                  105,
+                  116,
+                  105,
+                  111,
+                  110
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "marketId"
+              },
+              {
+                "kind": "account",
+                "path": "feeRecipient"
+              }
+            ]
+          }
+        }
+      ],
+      "args": [
+        {
+          "name": "marketId",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
         }
       ]
     },
@@ -1042,6 +1229,44 @@ export type Nucleus = {
           "signer": true
         },
         {
+          "name": "protocolState",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  110,
+                  117,
+                  99,
+                  108,
+                  101,
+                  117,
+                  115
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  114,
+                  111,
+                  116,
+                  111,
+                  99,
+                  111,
+                  108,
+                  95,
+                  115,
+                  116,
+                  97,
+                  116,
+                  101
+                ]
+              }
+            ]
+          }
+        },
+        {
           "name": "market",
           "writable": true,
           "pda": {
@@ -1692,10 +1917,50 @@ export type Nucleus = {
         },
         {
           "name": "market",
-          "writable": true
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  110,
+                  117,
+                  99,
+                  108,
+                  101,
+                  117,
+                  115
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  97,
+                  114,
+                  107,
+                  101,
+                  116
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "marketId"
+              }
+            ]
+          }
         }
       ],
       "args": [
+        {
+          "name": "marketId",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
         {
           "name": "fee",
           "type": "u64"
@@ -1748,6 +2013,44 @@ export type Nucleus = {
           "name": "supplier",
           "writable": true,
           "signer": true
+        },
+        {
+          "name": "protocolState",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  110,
+                  117,
+                  99,
+                  108,
+                  101,
+                  117,
+                  115
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  114,
+                  111,
+                  116,
+                  111,
+                  99,
+                  111,
+                  108,
+                  95,
+                  115,
+                  116,
+                  97,
+                  116,
+                  101
+                ]
+              }
+            ]
+          }
         },
         {
           "name": "market",
@@ -2548,6 +2851,19 @@ export type Nucleus = {
       ]
     },
     {
+      "name": "feesClaimed",
+      "discriminator": [
+        22,
+        104,
+        110,
+        222,
+        38,
+        157,
+        14,
+        62
+      ]
+    },
+    {
       "name": "interestAccrued",
       "discriminator": [
         79,
@@ -2800,6 +3116,16 @@ export type Nucleus = {
       "code": 6026,
       "name": "oracleFeedMismatch",
       "msg": "Oracle feed ID does not match market configuration"
+    },
+    {
+      "code": 6027,
+      "name": "flashLoanCallerMismatch",
+      "msg": "Flash loan caller does not match the starter"
+    },
+    {
+      "code": 6028,
+      "name": "flashLoanAmountMismatch",
+      "msg": "Flash loan repayment amount does not match the borrowed principal"
     }
   ],
   "types": [
@@ -2889,6 +3215,31 @@ export type Nucleus = {
           },
           {
             "name": "amount",
+            "type": "u128"
+          }
+        ]
+      }
+    },
+    {
+      "name": "feesClaimed",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "marketId",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "feeRecipient",
+            "type": "pubkey"
+          },
+          {
+            "name": "shares",
             "type": "u128"
           }
         ]
@@ -3202,6 +3553,20 @@ export type Nucleus = {
             "type": "u8"
           },
           {
+            "name": "flashLoanAmount",
+            "docs": [
+              "Amount borrowed in the active flash loan, if any"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "flashLoanCaller",
+            "docs": [
+              "Caller that initiated the active flash loan"
+            ],
+            "type": "pubkey"
+          },
+          {
             "name": "reserved",
             "docs": [
               "Reserved for future use"
@@ -3209,7 +3574,7 @@ export type Nucleus = {
             "type": {
               "array": [
                 "u8",
-                64
+                24
               ]
             }
           }
@@ -3516,6 +3881,13 @@ export type Nucleus = {
               "Only this account can update the price"
             ],
             "type": "pubkey"
+          },
+          {
+            "name": "lastUpdate",
+            "docs": [
+              "Unix timestamp of last price update (for staleness checks)"
+            ],
+            "type": "i64"
           }
         ]
       }
