@@ -228,6 +228,40 @@ export class NucleusClient {
   }
 
   /**
+   * Build a `closePosition` instruction.
+   *
+   * Closes an empty position and returns rent to the specified recipient.
+   * The position must have 0 supply shares, 0 borrow shares, and 0 collateral.
+   *
+   * @param marketId       32-byte market ID
+   * @param owner          Signer — must be the position owner
+   * @param rentRecipient  Account to receive the reclaimed rent (typically the owner)
+   */
+  async closePositionIx(params: {
+    marketId: Buffer;
+    owner: PublicKey;
+    rentRecipient?: PublicKey;
+  }): Promise<TransactionInstruction> {
+    const { marketId, owner, rentRecipient = owner } = params;
+    const [positionPda] = derivePositionPDA(
+      marketId,
+      owner,
+      this.program.programId
+    );
+
+    return this.program.methods
+      .closePosition(
+        Array.from(marketId) as unknown as number[] & { length: 32 }
+      )
+      .accountsPartial({
+        owner,
+        rentRecipient,
+        position: positionPda,
+      })
+      .instruction();
+  }
+
+  /**
    * Build a `createMarket` instruction and return its derived addresses.
    */
   async createMarketIx(params: {

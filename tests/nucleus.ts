@@ -655,7 +655,77 @@ describe("nucleus", () => {
     console.log(`  Lender received: ${Number(received) / 10 ** LOAN_DECIMALS} USDC (principal + interest)`);
   });
 
-  // ─── 16. Liquidation test ──────────────────────────────────────────────────
+  // ─── 16. Close empty position (reclaim rent) ───────────────────────────────
+
+  it("lender closes empty position and reclaims rent", async () => {
+    // Lender position should be empty after withdrawal
+    const posBefore = await program.account.position.fetch(lenderPosition);
+    assert.equal(posBefore.supplyShares.toString(), "0");
+    assert.equal(posBefore.borrowShares.toString(), "0");
+    assert.equal(posBefore.collateral.toString(), "0");
+
+    const lenderBalBefore = await connection.getBalance(lender.publicKey);
+
+    await program.methods
+      .closePosition(Array.from(marketId))
+      .accounts({
+        owner: lender.publicKey,
+        rentRecipient: lender.publicKey,
+        position: lenderPosition,
+      })
+      .signers([lender])
+      .rpc();
+
+    // Position account should no longer exist
+    const posAfter = await connection.getAccountInfo(lenderPosition);
+    assert.isNull(posAfter, "position account should be closed");
+
+    // Lender should have received rent back (~0.002 SOL)
+    const lenderBalAfter = await connection.getBalance(lender.publicKey);
+    const rentReceived = lenderBalAfter - lenderBalBefore;
+    assert.isTrue(rentReceived > 0, "lender should receive rent back");
+    console.log(`  Rent reclaimed: ${rentReceived / 1e9} SOL`);
+  });
+
+  it("rejects close_position on non-empty position", async () => {
+    // Borrower still has collateral, so position is not empty
+    const borrowerPos = await program.account.position.fetch(borrowerPosition);
+
+    // If borrower already has 0 collateral (from previous test), supply some first
+    if (BigInt(borrowerPos.collateral.toString()) === 0n) {
+      // Mint and supply a small amount of collateral
+      await mintTo(connection, payer, collateralMint, borrowerCollateralAta, payer, 1000);
+      await program.methods
+        .supplyCollateral(Array.from(marketId), new BN(1000))
+        .accounts({
+          depositor: borrower.publicKey,
+          market,
+          position: borrowerPosition,
+          depositorCollateralAta: borrowerCollateralAta,
+          collateralVault,
+          tokenProgram: TOKEN_PROGRAM_ID,
+        })
+        .signers([borrower])
+        .rpc();
+    }
+
+    try {
+      await program.methods
+        .closePosition(Array.from(marketId))
+        .accounts({
+          owner: borrower.publicKey,
+          rentRecipient: borrower.publicKey,
+          position: borrowerPosition,
+        })
+        .signers([borrower])
+        .rpc();
+      assert.fail("should have thrown PositionNotEmpty");
+    } catch (e: any) {
+      assert.include(e.logs?.join(" ") || e.message, "PositionNotEmpty");
+    }
+  });
+
+  // ─── 17. Liquidation test ──────────────────────────────────────────────────
 
   describe("liquidation", () => {
     // Fresh positions for liquidation test

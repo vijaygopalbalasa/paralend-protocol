@@ -410,19 +410,13 @@ npx ts-node --project tsconfig.json scripts/liquidation-bot.ts --cluster=devnet 
 
 These features are documented but not implemented. They are acceptable for hackathon demo but should be added for production:
 
-### 1. Position Closure (Low Priority)
-- **What:** Add `close_position` instruction to reclaim rent when position is empty
-- **Why deferred:** Rent is ~0.002 SOL. Not critical for demo.
-- **Risk:** Users accumulate small locked rent over many positions.
-- **TODO location:** `programs/nucleus/src/instructions/position.rs`
-
-### 2. Fee-on-Transfer Token Support (Medium Priority)
+### 1. Fee-on-Transfer Token Support (Medium Priority)
 - **What:** Detect and handle tokens that take fees on transfer (e.g., some rebasing tokens)
 - **Why deferred:** Demo uses standard SPL tokens. Complex to implement correctly.
 - **Risk:** Accounting mismatch if fee-on-transfer token is used as loan/collateral.
 - **TODO location:** `programs/nucleus/src/instructions/supply.rs`, `collateral.rs`
 
-### 3. Cross-Market Flash Loan Isolation (Low Priority)
+### 2. Cross-Market Flash Loan Isolation (Low Priority)
 - **What:** Prevent flash loans from being used to manipulate other markets
 - **Why deferred:** Single-market demo. Attacker would need significant capital anyway.
 - **Risk:** Sophisticated attacker could manipulate oracle prices across markets.

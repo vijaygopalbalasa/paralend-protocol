@@ -447,6 +447,87 @@ export type Nucleus = {
       ]
     },
     {
+      "name": "closePosition",
+      "discriminator": [
+        123,
+        134,
+        81,
+        0,
+        49,
+        68,
+        98,
+        98
+      ],
+      "accounts": [
+        {
+          "name": "owner",
+          "docs": [
+            "Position owner must sign to close"
+          ],
+          "signer": true
+        },
+        {
+          "name": "rentRecipient",
+          "docs": [
+            "Rent recipient — typically the owner, but can be different"
+          ],
+          "writable": true
+        },
+        {
+          "name": "position",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  110,
+                  117,
+                  99,
+                  108,
+                  101,
+                  117,
+                  115
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  111,
+                  115,
+                  105,
+                  116,
+                  105,
+                  111,
+                  110
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "marketId"
+              },
+              {
+                "kind": "account",
+                "path": "owner"
+              }
+            ]
+          }
+        }
+      ],
+      "args": [
+        {
+          "name": "marketId",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        }
+      ]
+    },
+    {
       "name": "createIrm",
       "discriminator": [
         250,
@@ -3142,6 +3223,11 @@ export type Nucleus = {
       "code": 6028,
       "name": "flashLoanAmountMismatch",
       "msg": "Flash loan repayment amount does not match the borrowed principal"
+    },
+    {
+      "code": 6029,
+      "name": "positionNotEmpty",
+      "msg": "Position is not empty and cannot be closed"
     }
   ],
   "types": [

@@ -100,6 +100,10 @@ pub mod nucleus {
         instructions::position::handle_create_position(ctx, market_id)
     }
 
+    pub fn close_position(ctx: Context<ClosePosition>, market_id: [u8; 32]) -> Result<()> {
+        instructions::position::handle_close_position(ctx, market_id)
+    }
+
     // ─── Supply / Withdraw (lender) ─────────────────────────
 
     pub fn supply(

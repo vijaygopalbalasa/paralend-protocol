@@ -94,4 +94,7 @@ pub enum NucleusError {
 
     #[msg("Flash loan repayment amount does not match the borrowed principal")]
     FlashLoanAmountMismatch, // 6028
+
+    #[msg("Position is not empty and cannot be closed")]
+    PositionNotEmpty, // 6029
 }
