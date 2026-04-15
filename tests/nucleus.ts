@@ -762,6 +762,7 @@ describe("nucleus", () => {
       // @ts-ignore
       .accountsStrict({
         supplier: flashLiqLender.publicKey,
+        protocolState,
         market,
         irm: irmPda,
         position: flashLiqPos,
@@ -792,6 +793,7 @@ describe("nucleus", () => {
       // @ts-ignore — accountsStrict = no auto-ATA creation
       .accountsStrict({
         caller: payer.publicKey,
+        protocolState,
         market,
         loanVault,
         recipientLoanAta: flashReceiverAta,
@@ -824,5 +826,65 @@ describe("nucleus", () => {
     // Verify market is unlocked after flash loan
     const mkt = await program.account.market.fetch(market);
     assert.equal(mkt.flashLoanLock, 0, "market unlocked after flash loan");
+  });
+
+  it("flash loan rejects mismatched repayment amount", async () => {
+    const flashAmount = 500 * 10 ** LOAN_DECIMALS;
+    const underpayAmount = 1 * 10 ** LOAN_DECIMALS;
+    const flashCaller = Keypair.generate();
+    const airdropSig = await connection.requestAirdrop(flashCaller.publicKey, 1 * 1e9);
+    await connection.confirmTransaction(airdropSig);
+    const flashReceiverAta = await createAccount(
+      connection,
+      payer,
+      loanMint,
+      flashCaller.publicKey
+    );
+    await mintTo(connection, payer, loanMint, flashReceiverAta, payer, underpayAmount);
+
+    const startIx = await program.methods
+      .flashLoanStart(Array.from(marketId), new BN(flashAmount))
+      // @ts-ignore
+      .accountsStrict({
+        caller: flashCaller.publicKey,
+        protocolState,
+        market,
+        loanVault,
+        recipientLoanAta: flashReceiverAta,
+        tokenProgram: TOKEN_PROGRAM_ID,
+      })
+      .instruction();
+
+    const endIx = await program.methods
+      .flashLoanEnd(Array.from(marketId), new BN(underpayAmount))
+      // @ts-ignore
+      .accountsStrict({
+        caller: flashCaller.publicKey,
+        market,
+        loanVault,
+        repayerLoanAta: flashReceiverAta,
+        tokenProgram: TOKEN_PROGRAM_ID,
+      })
+      .instruction();
+
+    let threw = false;
+    try {
+      await provider.sendAndConfirm(
+        new Transaction().add(startIx).add(endIx),
+        [flashCaller]
+      );
+    } catch {
+      threw = true;
+    }
+
+    assert.isTrue(threw, "mismatched flash-loan repayment should fail");
+
+    const mkt = await program.account.market.fetch(market);
+    assert.equal(mkt.flashLoanLock, 0, "market remains unlocked after reverted tx");
+    assert.equal(
+      mkt.flashLoanAmount?.toString?.() ?? "0",
+      "0",
+      "flash-loan principal is cleared after reverted tx"
+    );
   });
 });
