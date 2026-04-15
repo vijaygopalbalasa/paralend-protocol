@@ -21,27 +21,27 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className="dark">
-      <body className="min-h-screen bg-[#0F0F23] text-[#E2E8F0] antialiased">
+    <html lang="en">
+      <body className="min-h-screen bg-nucleus-bg text-nucleus-text-primary antialiased selection:bg-nucleus-primary/10">
         <SolanaWalletProvider>
           <Navbar />
-          <main className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-6">
+          <main className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-8 md:py-12">
             {children}
           </main>
-          <footer className="border-t border-nucleus-border mt-20">
-            <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-6 flex flex-col sm:flex-row items-center justify-between gap-3">
-              <span className="text-xs text-nucleus-text-secondary">
+          <footer className="border-t border-nucleus-border/60 bg-nucleus-bg mt-16 lg:mt-24">
+            <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-8 flex flex-col sm:flex-row items-center justify-between gap-4">
+              <span className="text-sm text-nucleus-text-secondary">
                 Built for{" "}
-                <span className="text-nucleus-primary font-semibold">
+                <span className="text-nucleus-primary font-bold tracking-tight">
                   Colosseum Frontier 2026
                 </span>
               </span>
-              <div className="flex items-center gap-4 text-xs text-nucleus-text-secondary">
+              <div className="flex items-center gap-6 text-sm font-medium text-nucleus-text-secondary">
                 <a
                   href="https://github.com"
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="hover:text-nucleus-text-primary transition-colors"
+                  className="hover:text-nucleus-primary transition-colors"
                 >
                   GitHub
                 </a>
@@ -49,11 +49,11 @@ export default function RootLayout({
                   href="https://docs.morpho.org"
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="hover:text-nucleus-text-primary transition-colors"
+                  className="hover:text-nucleus-primary transition-colors"
                 >
                   Docs
                 </a>
-                <span>devnet</span>
+                <span className="px-2.5 py-1 rounded-full bg-nucleus-border/50 text-xs text-nucleus-text-secondary font-mono">devnet</span>
               </div>
             </div>
           </footer>

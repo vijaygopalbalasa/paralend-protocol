@@ -39,10 +39,10 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
               "w-full bg-nucleus-bg border border-nucleus-border rounded-lg",
               "text-nucleus-text-primary text-sm placeholder:text-nucleus-text-secondary/50",
               "h-11 px-3",
-              "focus:outline-none focus:ring-2 focus:ring-violet-500/40 focus:border-violet-500/60",
+              "focus:outline-none focus:ring-2 focus:ring-nucleus-primary/20 focus:border-nucleus-primary/60",
               "transition-colors duration-150",
               "disabled:opacity-50 disabled:cursor-not-allowed",
-              error && "border-nucleus-red/60 focus:ring-nucleus-red/40 focus:border-nucleus-red/60",
+              error && "border-red-400 focus:ring-red-200 focus:border-red-400",
               prefix && "pl-8",
               (suffix || onMax) && "pr-20",
               className
@@ -59,7 +59,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
               <button
                 type="button"
                 onClick={onMax}
-                className="text-xs font-semibold text-nucleus-primary hover:text-violet-400 transition-colors"
+                className="text-xs font-semibold text-nucleus-primary hover:text-gray-600 transition-colors"
               >
                 MAX
               </button>

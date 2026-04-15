@@ -23,10 +23,10 @@ export function Navbar() {
             href="/"
             className="flex items-center gap-2 shrink-0 group"
           >
-            <span className="text-lg font-bold text-nucleus-primary group-hover:text-violet-400 transition-colors">
+            <span className="text-lg font-black tracking-tight text-nucleus-primary group-hover:text-gray-600 transition-colors">
               Nucleus
             </span>
-            <span className="hidden sm:inline-block text-[10px] font-semibold uppercase tracking-widest text-nucleus-text-secondary border border-nucleus-border rounded px-1.5 py-0.5">
+            <span className="hidden sm:inline-block text-[10px] font-bold uppercase tracking-widest text-nucleus-text-secondary border border-nucleus-border rounded px-1.5 py-0.5">
               devnet
             </span>
           </Link>
@@ -42,10 +42,10 @@ export function Navbar() {
                   key={link.href}
                   href={link.href}
                   className={cn(
-                    "px-3 py-1.5 rounded-md text-sm font-medium transition-colors",
+                    "px-3 py-1.5 rounded-md text-sm font-semibold transition-colors",
                     active
-                      ? "bg-nucleus-primary/10 text-violet-400"
-                      : "text-nucleus-text-secondary hover:text-nucleus-text-primary hover:bg-white/5"
+                      ? "bg-nucleus-primary text-white"
+                      : "text-nucleus-text-secondary hover:text-nucleus-primary hover:bg-gray-100"
                   )}
                 >
                   {link.label}
@@ -71,10 +71,10 @@ export function Navbar() {
                 key={link.href}
                 href={link.href}
                 className={cn(
-                  "shrink-0 px-3 py-1.5 rounded-md text-sm font-medium transition-colors",
+                  "shrink-0 px-3 py-1.5 rounded-md text-sm font-semibold transition-colors",
                   active
-                    ? "bg-nucleus-primary/10 text-violet-400"
-                    : "text-nucleus-text-secondary hover:text-nucleus-text-primary hover:bg-white/5"
+                    ? "bg-nucleus-primary text-white"
+                    : "text-nucleus-text-secondary hover:text-nucleus-primary hover:bg-gray-100"
                 )}
               >
                 {link.label}

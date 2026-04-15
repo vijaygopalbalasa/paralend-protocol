@@ -1,391 +1,506 @@
 "use client";
 
-import { useState } from "react";
 import Link from "next/link";
+import { BN } from "@coral-xyz/anchor";
+import { Buffer } from "buffer";
+import { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
+import { PublicKey, Transaction } from "@solana/web3.js";
+import { useConnection, useWallet } from "@solana/wallet-adapter-react";
+
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { DEMO_MARKETS, TOKEN_META, LLTV_PRESETS, MAX_FEE_BPS } from "@/lib/constants";
-import { cn, formatUSD, formatAPY } from "@/lib/utils";
+import { useMarkets } from "@/hooks/useMarkets";
+import { DEMO_CONFIG } from "@/lib/demo-config";
+import {
+  computeMarketId,
+  deriveCollateralVaultPDA,
+  deriveLoanVaultPDA,
+  deriveMarketPDA,
+  deriveProtocolStatePDA,
+  makeAnchorProvider,
+  makeProgram,
+  parseHex32,
+  toAnchorWallet,
+} from "@/lib/nucleus-program";
+import { LLTV_PRESETS, MAX_FEE_BPS } from "@/lib/constants";
+import { cn, formatUSD } from "@/lib/utils";
 
-// Well-known devnet addresses for convenience
-const KNOWN_MINTS: Record<string, { label: string; icon: string; address: string }> = {
-  USDC: {
-    label: "USDC",
-    icon: "$",
-    address: "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
-  },
-  SOL: {
-    label: "Wrapped SOL",
-    icon: "◎",
-    address: "So11111111111111111111111111111111111111112",
-  },
-  JUP: {
-    label: "Jupiter",
-    icon: "♃",
-    address: "JUPyiwrYJFskUPiHa7hkeR8VUtAeFoSYbKedZNsDvCN",
-  },
-};
+type Notice =
+  | { type: "success"; message: string }
+  | { type: "error"; message: string }
+  | null;
+
+function getErrorMessage(error: unknown): string {
+  if (error instanceof Error) return error.message;
+  return String(error);
+}
+
+function formatAddressPreview(value: string): string {
+  return value ? `${value.slice(0, 8)}...` : "—";
+}
 
 export default function CreateMarketPage() {
-  // Form state
-  const [collateralMint, setCollateralMint] = useState("");
-  const [loanMint, setLoanMint] = useState("");
-  const [collateralOracleFeedId, setCollateralOracleFeedId] = useState("");
-  const [irmAddress, setIrmAddress] = useState("");
-  const [lltv, setLltv] = useState(80);
-  const [feeBps, setFeeBps] = useState(1000);
+  const router = useRouter();
+  const { connection } = useConnection();
+  const wallet = useWallet();
+  const { markets } = useMarkets(30_000);
+
+  const seededMarkets = useMemo(() => Object.values(DEMO_CONFIG.markets), []);
+  const demoTokens = useMemo(
+    () => Object.entries(DEMO_CONFIG.tokens).map(([mint, token]) => ({ mint, ...token })),
+    []
+  );
+
+  const defaultTemplate = seededMarkets[0];
+  const [collateralMint, setCollateralMint] = useState(defaultTemplate?.collateralMint ?? "");
+  const [loanMint, setLoanMint] = useState(defaultTemplate?.loanMint ?? "");
+  const [collateralOracleFeedId, setCollateralOracleFeedId] = useState(
+    defaultTemplate?.collateralOracleFeedId ?? ""
+  );
+  const [irmAddress, setIrmAddress] = useState(defaultTemplate?.irm ?? "");
+  const [lltv, setLltv] = useState(defaultTemplate?.lltv ?? 80);
+  const [feeBps, setFeeBps] = useState(0);
 
   const [loading, setLoading] = useState(false);
+  const [notice, setNotice] = useState<Notice>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
-  // Basic validation
-  function validate() {
-    const errs: Record<string, string> = {};
-    if (!collateralMint.trim()) errs.collateralMint = "Collateral mint is required";
-    else if (collateralMint.length < 32) errs.collateralMint = "Enter a valid Solana address (32-44 chars)";
-    if (!loanMint.trim()) errs.loanMint = "Loan mint is required";
-    else if (loanMint.length < 32) errs.loanMint = "Enter a valid Solana address";
-    if (!irmAddress.trim()) errs.irmAddress = "LinearIRM address is required";
-    if (feeBps > MAX_FEE_BPS) errs.feeBps = `Max fee is ${MAX_FEE_BPS} BPS (25%)`;
-    return errs;
+  const parsedCollateralFeed = parseHex32(collateralOracleFeedId);
+
+  let marketIdHex = "";
+  try {
+    if (collateralMint && loanMint && irmAddress && parsedCollateralFeed) {
+      marketIdHex = computeMarketId({
+        collateralMint: new PublicKey(collateralMint),
+        loanMint: new PublicKey(loanMint),
+        collateralOracleFeedId: parsedCollateralFeed,
+        loanOracleFeedId: Buffer.alloc(32),
+        irm: new PublicKey(irmAddress),
+        lltv: BigInt(lltv) * 100n,
+      }).toString("hex");
+    }
+  } catch {
+    marketIdHex = "";
   }
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    const errs = validate();
-    if (Object.keys(errs).length > 0) {
-      setErrors(errs);
+  const validate = () => {
+    const nextErrors: Record<string, string> = {};
+    try {
+      new PublicKey(collateralMint);
+    } catch {
+      nextErrors.collateralMint = "Enter a valid collateral mint address.";
+    }
+    try {
+      new PublicKey(loanMint);
+    } catch {
+      nextErrors.loanMint = "Enter a valid loan mint address.";
+    }
+    if (!parsedCollateralFeed) {
+      nextErrors.collateralOracleFeedId = "Enter a 32-byte oracle feed id in hex.";
+    }
+    try {
+      new PublicKey(irmAddress);
+    } catch {
+      nextErrors.irmAddress = "Enter a valid IRM address.";
+    }
+    if (collateralMint && loanMint && collateralMint === loanMint) {
+      nextErrors.loanMint = "Collateral and loan mint must differ.";
+    }
+    if (lltv <= 0 || lltv >= 100) {
+      nextErrors.lltv = "LLTV must be between 1% and 99%.";
+    }
+    if (feeBps < 0 || feeBps > MAX_FEE_BPS) {
+      nextErrors.feeBps = `Fee must be between 0 and ${MAX_FEE_BPS} BPS.`;
+    }
+    return nextErrors;
+  };
+
+  const applyTemplate = (address: string) => {
+    const template = DEMO_CONFIG.markets[address];
+    if (!template) return;
+    setCollateralMint(template.collateralMint);
+    setLoanMint(template.loanMint);
+    setCollateralOracleFeedId(template.collateralOracleFeedId ?? "");
+    setIrmAddress(template.irm);
+    setLltv(template.lltv);
+    setFeeBps(0);
+    setErrors({});
+    setNotice(null);
+  };
+
+  const handleCreate = async (event: React.FormEvent) => {
+    event.preventDefault();
+    const nextErrors = validate();
+    setErrors(nextErrors);
+    if (Object.keys(nextErrors).length > 0) {
       return;
     }
-    setErrors({});
+
+    const anchorWallet = toAnchorWallet(wallet);
+    if (!anchorWallet || !parsedCollateralFeed) {
+      setNotice({
+        type: "error",
+        message: "Connect a wallet that supports transaction signing.",
+      });
+      return;
+    }
+
     setLoading(true);
+    setNotice(null);
 
-    // TODO: build and send create_market transaction via NucleusClient
-    // const client = new NucleusClient(connection, wallet);
-    // const tx = await client.createMarket({
-    //   collateralMint: new PublicKey(collateralMint),
-    //   loanMint: new PublicKey(loanMint),
-    //   collateralOracleFeedId: hexToBytes32(collateralOracleFeedId),
-    //   loanOracleFeedId: new Uint8Array(32), // zeros = assume $1 stablecoin
-    //   irm: new PublicKey(irmAddress),
-    //   lltv: BigInt(lltv) * 100n, // convert % to BPS
-    // });
-    // const sig = await client.sendAndConfirm(tx);
+    try {
+      const collateralMintPk = new PublicKey(collateralMint);
+      const loanMintPk = new PublicKey(loanMint);
+      const irmPk = new PublicKey(irmAddress);
+      const marketId = computeMarketId({
+        collateralMint: collateralMintPk,
+        loanMint: loanMintPk,
+        collateralOracleFeedId: parsedCollateralFeed,
+        loanOracleFeedId: Buffer.alloc(32),
+        irm: irmPk,
+        lltv: BigInt(lltv) * 100n,
+      });
 
-    await new Promise((r) => setTimeout(r, 1400));
-    setLoading(false);
-    alert("[MOCK] Market creation transaction submitted. Connect wallet and deploy program to create markets on-chain.");
-  }
+      const marketAddress = deriveMarketPDA(marketId);
+      const provider = makeAnchorProvider(connection, anchorWallet);
+      const program = makeProgram(connection, anchorWallet);
+      const methods = program.methods as any;
 
-  const feePct = (feeBps / 100).toFixed(2);
+      const tx = new Transaction().add(
+        await methods
+          .createMarket(
+            Array.from(marketId),
+            Array.from(parsedCollateralFeed),
+            Array.from(Buffer.alloc(32)),
+            irmPk,
+            new BN((BigInt(lltv) * 100n).toString()),
+            new BN(BigInt(feeBps).toString())
+          )
+          .accountsPartial({
+            payer: anchorWallet.publicKey,
+            protocolState: deriveProtocolStatePDA(),
+            collateralMint: collateralMintPk,
+            loanMint: loanMintPk,
+            irmAccount: irmPk,
+            market: marketAddress,
+            collateralVault: deriveCollateralVaultPDA(marketId),
+            loanVault: deriveLoanVaultPDA(marketId),
+          })
+          .instruction()
+      );
+
+      const signature = await provider.sendAndConfirm(tx, []);
+      setNotice({
+        type: "success",
+        message: `Market created: ${signature.slice(0, 12)}...`,
+      });
+      router.push(`/markets/${marketAddress.toBase58()}?tab=supply`);
+    } catch (createError) {
+      setNotice({ type: "error", message: getErrorMessage(createError) });
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
-    <div className="flex flex-col gap-8 max-w-3xl mx-auto">
-      {/* Page header */}
+    <div className="mx-auto flex max-w-5xl flex-col gap-8">
       <div>
         <h1 className="text-2xl font-bold text-nucleus-text-primary">Create a Market</h1>
-        <p className="text-sm text-nucleus-text-secondary mt-1">
-          Deploy a permissionless isolated lending market in one transaction.
-          The market address is deterministically derived from your 5 parameters — no admin required.
+        <p className="mt-1 text-sm text-nucleus-text-secondary">
+          One transaction. Deterministic market address. No listing committee.
         </p>
       </div>
 
-      {/* Cost + time callout */}
-      <div className="flex flex-col sm:flex-row gap-3">
-        <div className="flex-1 flex items-center gap-3 rounded-lg border border-nucleus-border bg-nucleus-card px-4 py-3">
-          <span className="text-xl">◎</span>
-          <div>
-            <div className="text-xs text-nucleus-text-secondary uppercase tracking-wide">Estimated Cost</div>
-            <div className="text-sm font-semibold text-nucleus-text-primary">~0.01 SOL</div>
-          </div>
+      {notice && (
+        <div
+          className={cn(
+            "rounded-xl border px-4 py-3 text-sm",
+            notice.type === "success"
+              ? "border-nucleus-green/30 bg-nucleus-green/10 text-nucleus-green"
+              : "border-nucleus-red/30 bg-nucleus-red/10 text-nucleus-red"
+          )}
+        >
+          {notice.message}
         </div>
-        <div className="flex-1 flex items-center gap-3 rounded-lg border border-nucleus-border bg-nucleus-card px-4 py-3">
-          <span className="text-xl">⚡</span>
-          <div>
-            <div className="text-xs text-nucleus-text-secondary uppercase tracking-wide">Confirmation Time</div>
-            <div className="text-sm font-semibold text-nucleus-text-primary">~400ms</div>
+      )}
+
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <div className="rounded-lg border border-nucleus-border bg-white p-4 shadow-sm">
+          <div className="text-[10px] font-bold uppercase tracking-wider text-nucleus-text-secondary mb-1">
+            Estimated Cost
           </div>
+          <div className="text-xl font-black text-nucleus-text-primary">~0.01 SOL</div>
         </div>
-        <div className="flex-1 flex items-center gap-3 rounded-lg border border-nucleus-border bg-nucleus-card px-4 py-3">
-          <span className="text-xl">🔒</span>
-          <div>
-            <div className="text-xs text-nucleus-text-secondary uppercase tracking-wide">Admin Required</div>
-            <div className="text-sm font-semibold text-nucleus-green">None</div>
+        <div className="rounded-lg border border-nucleus-border bg-white p-4 shadow-sm">
+          <div className="text-[10px] font-bold uppercase tracking-wider text-nucleus-text-secondary mb-1">
+            Confirmation
+          </div>
+          <div className="text-xl font-black text-nucleus-text-primary">~400ms</div>
+        </div>
+        <div className="rounded-lg border border-nucleus-border bg-white p-4 shadow-sm">
+          <div className="text-[10px] font-bold uppercase tracking-wider text-nucleus-text-secondary mb-1">
+            Protocol Fee
+          </div>
+          <div className="text-xl font-black text-nucleus-text-primary">
+            {(feeBps / 100).toFixed(2)}%
           </div>
         </div>
       </div>
 
-      {/* Form */}
-      <form onSubmit={handleSubmit} className="flex flex-col gap-6">
+      {seededMarkets.length > 0 && (
         <Card
           header={
             <CardHeader
-              title="Token Pair"
-              description="Choose which token is collateral and which is borrowed"
+              title="Seeded Templates"
+              description="Quick-fill the exact devnet mints, IRM, and oracle feeds generated by the demo scripts."
             />
           }
         >
-          <div className="flex flex-col gap-5">
-            {/* Quick-fill shortcuts */}
-            <div>
-              <div className="text-xs text-nucleus-text-secondary uppercase tracking-wide mb-2">
-                Quick fill — common tokens
-              </div>
-              <div className="flex flex-wrap gap-2">
-                {Object.entries(KNOWN_MINTS).map(([key, meta]) => (
-                  <button
-                    key={key}
-                    type="button"
-                    onClick={() => {
-                      if (!collateralMint) setCollateralMint(meta.address);
-                      else setLoanMint(meta.address);
-                    }}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-nucleus-border bg-nucleus-bg hover:border-nucleus-primary/40 hover:bg-nucleus-primary/5 text-xs font-medium text-nucleus-text-secondary hover:text-nucleus-text-primary transition-all"
-                  >
-                    <span>{meta.icon}</span>
-                    {meta.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <Input
-              label="Collateral Token Mint"
-              placeholder="So11111111111111111111111111111111111111112"
-              value={collateralMint}
-              onChange={(e) => setCollateralMint(e.target.value)}
-              error={errors.collateralMint}
-              hint="The token users will post as collateral (e.g. SOL, jitoSOL, JUP)"
-            />
-
-            <Input
-              label="Loan Token Mint"
-              placeholder="EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"
-              value={loanMint}
-              onChange={(e) => setLoanMint(e.target.value)}
-              error={errors.loanMint}
-              hint="The token users will borrow (e.g. USDC). Set loan oracle to all-zeros for $1 stablecoins."
-            />
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+            {seededMarkets.map((market) => (
+              <button
+                key={market.marketId}
+                type="button"
+                onClick={() => applyTemplate(Object.keys(DEMO_CONFIG.markets).find((key) => DEMO_CONFIG.markets[key].marketId === market.marketId) ?? "")}
+                className="rounded-xl border border-nucleus-border bg-gray-50 p-4 text-left transition-colors hover:border-gray-400 hover:bg-white hover:shadow-sm"
+              >
+                <div className="text-sm font-bold text-nucleus-text-primary tracking-tight">
+                  {market.name}
+                </div>
+                <div className="mt-1 text-xs font-medium text-nucleus-text-secondary">
+                  LLTV {market.lltv}% · IRM {formatAddressPreview(market.irm)}
+                </div>
+              </button>
+            ))}
           </div>
         </Card>
+      )}
 
-        <Card
-          header={
-            <CardHeader
-              title="Oracle"
-              description="Pyth price feed ID for the collateral. Loan oracle defaults to $1 (all-zeros = stablecoin shortcut)."
-            />
-          }
-        >
-          <div className="flex flex-col gap-5">
-            <Input
-              label="Collateral Oracle Feed ID (hex)"
-              placeholder="0xef0d8b6fda2ceba41da15d4095d1da392a0d2f8ed0c6c7bc0f4cfac8c280b56d"
-              value={collateralOracleFeedId}
-              onChange={(e) => setCollateralOracleFeedId(e.target.value)}
-              hint="32-byte Pyth price feed ID. Leave blank to use StaticOracle (localnet testing only)."
-            />
+      <form onSubmit={handleCreate} className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+        <div className="flex flex-col gap-6 lg:col-span-2">
+          <Card
+            header={
+              <CardHeader
+                title="Token Pair"
+                description="Choose the collateral token and the loan token."
+              />
+            }
+          >
+            <div className="flex flex-col gap-5">
+              {demoTokens.length > 0 && (
+                <div>
+                  <div className="mb-2 text-xs uppercase tracking-wide text-nucleus-text-secondary">
+                    Demo token shortcuts
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {demoTokens.map((token) => (
+                      <button
+                        key={token.mint}
+                        type="button"
+                        onClick={() => {
+                          if (!collateralMint) {
+                            setCollateralMint(token.mint);
+                            if (token.oracleFeedId) {
+                              setCollateralOracleFeedId(token.oracleFeedId);
+                            }
+                          } else {
+                            setLoanMint(token.mint);
+                          }
+                        }}
+                        className="rounded-lg border border-nucleus-border bg-nucleus-bg px-3 py-1.5 text-xs font-medium text-nucleus-text-secondary transition-colors hover:border-nucleus-primary/30 hover:text-nucleus-text-primary"
+                      >
+                        {token.icon} {token.symbol}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
 
-            <div className="rounded-lg border border-nucleus-border bg-nucleus-bg p-3 text-xs text-nucleus-text-secondary">
-              <span className="font-semibold text-nucleus-text-primary">Tip:</span> All-zeros loan feed ID = protocol assumes loan token is exactly $1.
-              Use this for USDC, USDT, and other USD stablecoins — avoids oracle dependency for the loan side.
-            </div>
-          </div>
-        </Card>
-
-        <Card
-          header={
-            <CardHeader
-              title="Interest Rate Model"
-              description="Address of a LinearIrm PDA created via create_irm instruction"
-            />
-          }
-        >
-          <div className="flex flex-col gap-5">
-            <Input
-              label="LinearIRM Account Address"
-              placeholder="LinearIrm PDA address..."
-              value={irmAddress}
-              onChange={(e) => setIrmAddress(e.target.value)}
-              error={errors.irmAddress}
-              hint="Create an IRM first via the protocol admin. The default kinked IRM: 0% at 0% util, ~4% at 80%, ~50% at 100%."
-            />
-
-            {/* IRM params preview */}
-            <div className="rounded-lg border border-nucleus-border bg-nucleus-bg p-4">
-              <div className="text-xs text-nucleus-text-secondary uppercase tracking-wide mb-3">
-                Default IRM curve
-              </div>
-              <div className="flex items-end gap-1 h-12">
-                {[0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100].map((util) => {
-                  // Approximate kinked IRM visualization
-                  const rate = util <= 80
-                    ? (util / 80) * 4
-                    : 4 + ((util - 80) / 20) * 46;
-                  const height = Math.min(100, (rate / 50) * 100);
-                  return (
-                    <div
-                      key={util}
-                      className="flex-1 rounded-sm bg-nucleus-primary/40"
-                      style={{ height: `${Math.max(4, height)}%` }}
-                      title={`${util}% util → ~${rate.toFixed(1)}% APY`}
-                    />
-                  );
-                })}
-              </div>
-              <div className="flex justify-between mt-1 text-[10px] text-nucleus-text-secondary">
-                <span>0%</span>
-                <span>Utilization</span>
-                <span>100%</span>
-              </div>
-            </div>
-          </div>
-        </Card>
-
-        <Card
-          header={
-            <CardHeader
-              title="Risk Parameters"
-              description="LLTV sets the max loan-to-value ratio. Lower = safer for lenders."
-            />
-          }
-        >
-          <div className="flex flex-col gap-6">
-            {/* LLTV slider */}
-            <div>
-              <div className="flex items-center justify-between mb-3">
-                <label className="text-xs font-medium text-nucleus-text-secondary uppercase tracking-wide">
-                  Max LTV (LLTV)
-                </label>
-                <span className="text-xl font-bold text-nucleus-text-primary tabular-nums">
-                  {lltv}%
-                </span>
-              </div>
-
-              <input
-                type="range"
-                min={50}
-                max={95}
-                step={1}
-                value={lltv}
-                onChange={(e) => setLltv(Number(e.target.value))}
-                className="w-full h-2 rounded-full appearance-none bg-nucleus-border cursor-pointer"
-                style={{
-                  background: `linear-gradient(to right, #7C3AED ${((lltv - 50) / 45) * 100}%, #2D2D4E ${((lltv - 50) / 45) * 100}%)`,
-                }}
+              <Input
+                label="Collateral Token Mint"
+                placeholder="Mint address"
+                value={collateralMint}
+                onChange={(event) => setCollateralMint(event.target.value.trim())}
+                error={errors.collateralMint}
+                hint="Example: JUP, wSOL, BONK. The collateral oracle feed must match this mint."
               />
 
-              <div className="flex justify-between mt-1 text-[10px] text-nucleus-text-secondary">
-                <span>50%</span>
-                <span>95%</span>
-              </div>
+              <Input
+                label="Loan Token Mint"
+                placeholder="Mint address"
+                value={loanMint}
+                onChange={(event) => setLoanMint(event.target.value.trim())}
+                error={errors.loanMint}
+                hint="Loan oracle is fixed to all-zero feed id for the demo stablecoin path."
+              />
+            </div>
+          </Card>
 
-              {/* LLTV presets */}
-              <div className="flex flex-wrap gap-2 mt-3">
-                {LLTV_PRESETS.map((preset) => (
-                  <button
-                    key={preset.label}
-                    type="button"
-                    onClick={() => setLltv(preset.lltv)}
-                    className={cn(
-                      "px-3 py-1.5 rounded-lg border text-xs font-medium transition-all",
-                      lltv === preset.lltv
-                        ? "bg-nucleus-primary/10 border-nucleus-primary/40 text-violet-400"
-                        : "border-nucleus-border bg-nucleus-bg text-nucleus-text-secondary hover:border-nucleus-primary/30 hover:text-nucleus-text-primary"
-                    )}
-                    title={preset.description}
-                  >
-                    {preset.label} — {preset.lltv}%
-                  </button>
-                ))}
+          <Card
+            header={
+              <CardHeader
+                title="Oracle"
+                description="For the current devnet demo the frontend uses seeded StaticOracle feed ids."
+              />
+            }
+          >
+            <div className="flex flex-col gap-5">
+              <Input
+                label="Collateral Oracle Feed ID"
+                placeholder="32-byte hex, without or with 0x prefix"
+                value={collateralOracleFeedId}
+                onChange={(event) => setCollateralOracleFeedId(event.target.value.trim())}
+                error={errors.collateralOracleFeedId}
+                hint="The scripts generate these feed ids automatically and write them into the demo manifest."
+              />
+              <div className="rounded-lg border border-nucleus-border bg-nucleus-bg p-3 text-xs text-nucleus-text-secondary">
+                Loan oracle feed is fixed to <code className="font-mono">0x00..00</code>, which
+                means the protocol prices the loan token at exactly $1 per token.
               </div>
             </div>
+          </Card>
 
-            {/* Fee BPS */}
-            <div>
+          <Card
+            header={
+              <CardHeader
+                title="Risk Parameters"
+                description="Pick the IRM, LLTV, and protocol fee."
+              />
+            }
+          >
+            <div className="flex flex-col gap-6">
+              <Input
+                label="Linear IRM Address"
+                placeholder="IRM PDA address"
+                value={irmAddress}
+                onChange={(event) => setIrmAddress(event.target.value.trim())}
+                error={errors.irmAddress}
+                hint="Use one of the IRMs generated by setup-demo-markets.ts or paste any valid LinearIrm PDA."
+              />
+
+              <div>
+                <div className="mb-3 flex items-center justify-between">
+                  <label className="text-xs font-medium uppercase tracking-wide text-nucleus-text-secondary">
+                    LLTV
+                  </label>
+                  <span className="text-xl font-bold tabular-nums text-nucleus-text-primary">
+                    {lltv}%
+                  </span>
+                </div>
+                <input
+                  type="range"
+                  min={50}
+                  max={95}
+                  step={1}
+                  value={lltv}
+                  onChange={(event) => setLltv(Number(event.target.value))}
+                  className="h-2 w-full cursor-pointer appearance-none rounded-full bg-nucleus-border"
+                  style={{
+                    background: `linear-gradient(to right, #000000 ${((lltv - 50) / 45) * 100}%, #E5E7EB ${((lltv - 50) / 45) * 100}%)`,
+                  }}
+                />
+                <div className="mt-1 flex justify-between text-[10px] text-nucleus-text-secondary">
+                  <span>50%</span>
+                  <span>95%</span>
+                </div>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {LLTV_PRESETS.map((preset) => (
+                    <button
+                      key={preset.label}
+                      type="button"
+                      onClick={() => setLltv(preset.lltv)}
+                      className={cn(
+                        "rounded-lg border px-3 py-1.5 text-xs font-bold transition-colors",
+                        lltv === preset.lltv
+                          ? "border-nucleus-primary bg-nucleus-primary text-white shadow-sm"
+                          : "border-nucleus-border bg-gray-50 text-nucleus-text-secondary hover:border-gray-400 hover:text-nucleus-text-primary"
+                      )}
+                      title={preset.description}
+                    >
+                      {preset.label} — {preset.lltv}%
+                    </button>
+                  ))}
+                </div>
+              </div>
+
               <Input
                 label="Protocol Fee (BPS)"
                 type="number"
                 min={0}
                 max={MAX_FEE_BPS}
                 value={feeBps}
-                onChange={(e) => setFeeBps(Number(e.target.value))}
+                onChange={(event) => setFeeBps(Number(event.target.value))}
                 error={errors.feeBps}
-                hint={`${feePct}% of interest goes to the protocol treasury. Max is 2500 BPS (25%).`}
+                hint="Keep this at 0 for the bootstrap demo flow unless you want to explicitly show protocol take-rate."
                 suffix="BPS"
               />
             </div>
-          </div>
-        </Card>
+          </Card>
+        </div>
 
-        {/* Summary + submit */}
-        <div className="rounded-xl border border-nucleus-border bg-nucleus-card p-5 flex flex-col gap-4">
-          <div className="text-sm font-semibold text-nucleus-text-primary">Market Summary</div>
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-sm">
-            {[
-              { label: "Collateral", value: collateralMint ? collateralMint.slice(0, 8) + "..." : "—" },
-              { label: "Loan Token", value: loanMint ? loanMint.slice(0, 8) + "..." : "—" },
-              { label: "LLTV", value: `${lltv}%` },
-              { label: "Protocol Fee", value: `${feePct}%` },
-              { label: "Oracle", value: collateralOracleFeedId ? "Pyth" : "Static (testnet)" },
-              { label: "IRM", value: irmAddress ? irmAddress.slice(0, 8) + "..." : "—" },
-            ].map((row) => (
-              <div key={row.label} className="flex flex-col gap-0.5">
-                <span className="text-xs text-nucleus-text-secondary">{row.label}</span>
-                <span className="font-medium text-nucleus-text-primary font-mono text-xs">{row.value}</span>
+        <div className="flex flex-col gap-6">
+          <div className="rounded-xl border border-nucleus-border bg-nucleus-card p-5">
+            <div className="text-sm font-semibold text-nucleus-text-primary">Market Summary</div>
+            <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
+              {[
+                { label: "Collateral", value: formatAddressPreview(collateralMint) },
+                { label: "Loan", value: formatAddressPreview(loanMint) },
+                { label: "Oracle Feed", value: formatAddressPreview(collateralOracleFeedId) },
+                { label: "IRM", value: formatAddressPreview(irmAddress) },
+                { label: "LLTV", value: `${lltv}%` },
+                { label: "Fee", value: `${(feeBps / 100).toFixed(2)}%` },
+              ].map((row) => (
+                <div key={row.label} className="flex flex-col gap-0.5">
+                  <span className="text-xs text-nucleus-text-secondary">{row.label}</span>
+                  <span className="font-mono text-xs font-medium text-nucleus-text-primary">
+                    {row.value}
+                  </span>
+                </div>
+              ))}
+            </div>
+            <div className="mt-4 border-t border-nucleus-border pt-4 text-xs text-nucleus-text-secondary">
+              Deterministic market id
+              <div className="mt-1 break-all font-mono text-[11px] text-nucleus-text-primary">
+                {marketIdHex || "Fill all fields to preview the market id"}
               </div>
-            ))}
+            </div>
+            <Button type="submit" variant="primary" size="lg" fullWidth loading={loading} className="mt-5">
+              Create Market
+            </Button>
           </div>
 
-          <div className="text-xs text-nucleus-text-secondary border-t border-nucleus-border pt-3">
-            Market ID is computed as{" "}
-            <code className="text-violet-400 font-mono">
-              keccak256(collateral_mint, loan_mint, col_oracle, loan_oracle, irm, lltv)
-            </code>
-            . It is immutable and deterministic — anyone can verify it.
-          </div>
-
-          <Button
-            type="submit"
-            variant="primary"
-            size="lg"
-            fullWidth
-            loading={loading}
+          <Card
+            header={
+              <CardHeader
+                title="Existing Markets"
+                description="Use live markets as a reference or verify the newly created market after submission."
+              />
+            }
           >
-            Create Market →
-          </Button>
+            <div className="flex flex-col gap-3">
+              {markets.length === 0 && (
+                <div className="text-sm text-nucleus-text-secondary">No markets found yet.</div>
+              )}
+              {markets.slice(0, 6).map((market) => (
+                <Link
+                  key={market.publicKey}
+                  href={`/markets/${market.publicKey}`}
+                  className="rounded-lg border border-nucleus-border bg-nucleus-bg p-3 transition-colors hover:border-nucleus-primary/40"
+                >
+                  <div className="text-sm font-semibold text-nucleus-text-primary">
+                    {market.collateralSymbol} / {market.loanSymbol}
+                  </div>
+                  <div className="mt-1 text-xs text-nucleus-text-secondary">
+                    LLTV {market.lltv}% · TVL {formatUSD(market.tvlUsd)}
+                  </div>
+                </Link>
+              ))}
+            </div>
+          </Card>
         </div>
       </form>
-
-      {/* Existing markets for inspiration */}
-      <div className="flex flex-col gap-4">
-        <h2 className="text-base font-semibold text-nucleus-text-primary">
-          Existing Markets — for reference
-        </h2>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-          {DEMO_MARKETS.map((market) => {
-            const colMeta = TOKEN_META[market.collateral];
-            return (
-              <Link
-                key={market.id}
-                href={`/markets/${market.id}`}
-                className="flex items-center gap-3 rounded-xl border border-nucleus-border bg-nucleus-card p-4 hover:border-nucleus-primary/40 transition-colors"
-              >
-                <span className="text-2xl">{colMeta?.icon ?? "?"}</span>
-                <div>
-                  <div className="text-sm font-semibold text-nucleus-text-primary">
-                    {market.collateral} / {market.loan}
-                  </div>
-                  <div className="text-xs text-nucleus-text-secondary">
-                    LLTV {market.lltv}% · TVL {formatUSD(market.tvl)}
-                  </div>
-                </div>
-              </Link>
-            );
-          })}
-        </div>
-      </div>
     </div>
   );
 }

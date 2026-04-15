@@ -1,23 +1,23 @@
 "use client";
 
-/**
- * useMarkets — client-side hook for live market data.
- *
- * Uses a simple SWR-like fetch-on-mount + polling pattern.
- * Deduplicates concurrent requests via a module-level cache (client-swr-dedup).
- * Falls back to DEMO_MARKETS if RPC is unavailable.
- */
-
 import { useEffect, useRef, useState } from "react";
+import { Buffer } from "buffer";
 import { useConnection } from "@solana/wallet-adapter-react";
-import { Keypair } from "@solana/web3.js";
-import { AnchorProvider, Program } from "@coral-xyz/anchor";
-import { WAD, BPS, SECONDS_PER_YEAR } from "@/lib/constants";
-import IDL from "@/lib/nucleus-idl.json";
-import type { Nucleus } from "@/lib/nucleus-idl-types";
+
+import { getDemoMarket, resolveTokenSymbol } from "@/lib/demo-config";
+import {
+  annualizedPercent,
+  bnToBigInt,
+  calculateUtilization,
+  computeMarketIdFromAccount,
+  irmBorrowRatePerSecond,
+  makeReadonlyProgram,
+} from "@/lib/nucleus-program";
+import { BPS, WAD } from "@/lib/constants";
 
 export interface MarketRow {
   publicKey: string;
+  marketIdHex: string;
   collateralMint: string;
   loanMint: string;
   lltv: number;
@@ -27,98 +27,90 @@ export interface MarketRow {
   tvlUsd: number;
   borrowedUsd: number;
   paused: boolean;
-  // Display helpers (resolved from mints if known, else shortened address)
+  feeBps: number;
   collateralSymbol: string;
   loanSymbol: string;
+  oracleLabel: string;
+  name: string;
   id: string;
 }
 
-// Module-level pending promise to deduplicate concurrent fetches
 let pendingFetch: Promise<MarketRow[]> | null = null;
-
-function irmBorrowRate(
-  util: bigint,
-  baseRate: bigint,
-  slope1: bigint,
-  slope2: bigint,
-  kink: bigint
-): bigint {
-  if (util <= kink) return baseRate + (slope1 * util) / WAD;
-  const below = (slope1 * kink) / WAD;
-  const above = (slope2 * (util - kink)) / WAD;
-  return baseRate + below + above;
-}
 
 async function fetchAllMarkets(
   connection: import("@solana/web3.js").Connection
 ): Promise<MarketRow[]> {
-  const dummyWallet = {
-    publicKey: Keypair.generate().publicKey,
-    signTransaction: async <T>(t: T) => t,
-    signAllTransactions: async <T>(ts: T[]) => ts,
-  };
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const provider = new AnchorProvider(connection, dummyWallet as any, {
-    commitment: "confirmed",
-  });
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const program = new Program<Nucleus>(IDL as any, provider);
-
+  const program = makeReadonlyProgram(connection);
   const rawMarkets = await program.account.market.all();
 
-  const rows = await Promise.all(
-    rawMarkets.map(async (a) => {
-      const m = a.account;
-      const totalSupply = BigInt(m.totalSupplyAssets.toString());
-      const totalBorrow = BigInt(m.totalBorrowAssets.toString());
-      const util =
-        totalSupply === 0n ? 0n : (totalBorrow * WAD) / totalSupply;
-      const utilPct = Number(util) / Number(WAD);
+  return Promise.all(
+    rawMarkets.map(async (entry) => {
+      const market = entry.account;
+      const publicKey = entry.publicKey.toBase58();
+      const marketId = computeMarketIdFromAccount(market);
+      const marketIdHex = marketId.toString("hex");
+      const totalSupply = bnToBigInt(market.totalSupplyAssets);
+      const totalBorrow = bnToBigInt(market.totalBorrowAssets);
+      const utilization = calculateUtilization(totalBorrow, totalSupply);
+      const utilizationPct = (Number(utilization) / Number(WAD)) * 100;
 
       let borrowApyPct = 0;
       let supplyApyPct = 0;
       try {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const irm = await (program.account as any).linearIrm.fetch(m.irm);
-        const rate = irmBorrowRate(
-          util,
-          BigInt(irm.baseRate.toString()),
-          BigInt(irm.slope1.toString()),
-          BigInt(irm.slope2.toString()),
-          BigInt(irm.kink.toString())
+        const irm = await (program.account as any).linearIrm.fetch(market.irm);
+        const borrowRate = irmBorrowRatePerSecond(
+          utilization,
+          bnToBigInt(irm.baseRate),
+          bnToBigInt(irm.slope1),
+          bnToBigInt(irm.slope2),
+          bnToBigInt(irm.kink)
         );
-        borrowApyPct =
-          (Number(rate) / Number(WAD)) * Number(SECONDS_PER_YEAR) * 100;
+        borrowApyPct = annualizedPercent(borrowRate);
         supplyApyPct =
-          borrowApyPct * utilPct * (1 - Number(m.fee) / Number(BPS));
+          borrowApyPct *
+          (Number(utilization) / Number(WAD)) *
+          (1 - Number(market.fee) / Number(BPS));
       } catch {
-        // IRM not accessible
+        // Leave rates at 0 on IRM lookup failure.
       }
 
-      const LOAN_DECIMALS = m.loanDecimals ?? 6;
-      const tvlUsd = Number(totalSupply) / 10 ** LOAN_DECIMALS;
-      const borrowedUsd = Number(totalBorrow) / 10 ** LOAN_DECIMALS;
+      const loanDecimals = market.loanDecimals ?? 6;
+      const tvlUsd = Number(totalSupply) / 10 ** loanDecimals;
+      const borrowedUsd = Number(totalBorrow) / 10 ** loanDecimals;
 
-      const pubkey = a.publicKey.toBase58();
+      const marketMeta = getDemoMarket(publicKey);
+      const collateralMint = market.collateralMint.toBase58();
+      const loanMint = market.loanMint.toBase58();
+      const collateralSymbol =
+        marketMeta?.collateralSymbol ?? resolveTokenSymbol(collateralMint);
+      const loanSymbol = marketMeta?.loanSymbol ?? resolveTokenSymbol(loanMint);
+      const hasStableLoan =
+        Buffer.from(market.loanOracleFeedId as number[]).every((byte) => byte === 0);
+      const oracleLabel =
+        marketMeta?.oracle ?? (hasStableLoan ? "StaticOracle / $1 stable" : "StaticOracle");
+
       return {
-        publicKey: pubkey,
-        collateralMint: m.collateralMint.toBase58(),
-        loanMint: m.loanMint.toBase58(),
-        lltv: Number(m.lltv) / 100,
-        utilization: utilPct * 100,
+        publicKey,
+        marketIdHex,
+        collateralMint,
+        loanMint,
+        lltv: Number(market.lltv) / 100,
+        utilization: utilizationPct,
         supplyApyPct,
         borrowApyPct,
         tvlUsd,
         borrowedUsd,
-        paused: m.paused,
-        collateralSymbol: "COL",
-        loanSymbol: "USDC",
-        id: pubkey,
+        paused: market.paused,
+        feeBps: Number(market.fee),
+        collateralSymbol,
+        loanSymbol,
+        oracleLabel,
+        name: marketMeta?.name ?? `${collateralSymbol} / ${loanSymbol}`,
+        id: publicKey,
       } satisfies MarketRow;
     })
   );
-
-  return rows;
 }
 
 export function useMarkets(pollMs = 30_000) {
@@ -130,7 +122,6 @@ export function useMarkets(pollMs = 30_000) {
 
   const load = async () => {
     try {
-      // Deduplicate: reuse in-flight promise (client-swr-dedup)
       if (!pendingFetch) {
         pendingFetch = fetchAllMarkets(connection).finally(() => {
           pendingFetch = null;
@@ -139,11 +130,10 @@ export function useMarkets(pollMs = 30_000) {
       const rows = await pendingFetch;
       setMarkets(rows);
       setError(null);
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : String(err);
-      console.warn("[useMarkets] RPC error, keeping stale data:", msg);
-      setError(msg);
-      // Keep existing data rather than resetting to empty
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      console.warn("[useMarkets]", message);
+      setError(message);
     } finally {
       setLoading(false);
     }
@@ -160,5 +150,5 @@ export function useMarkets(pollMs = 30_000) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [connection]);
 
-  return { markets, loading, error };
+  return { markets, loading, error, reload: load };
 }

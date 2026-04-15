@@ -76,55 +76,55 @@ export default function MarketsPage() {
 
       {/* Markets table — desktop */}
       {markets.length > 0 && (
-        <div className="hidden md:block rounded-xl border border-nucleus-border overflow-hidden">
+        <div className="hidden md:block rounded-xl border border-nucleus-border shadow-sm bg-white overflow-hidden">
           <table className="w-full text-sm">
-            <thead className="bg-nucleus-card border-b border-nucleus-border">
+            <thead className="bg-[#FAFAFA] border-b border-nucleus-border">
               <tr>
-                <th className="text-left py-3 px-5 text-xs font-semibold text-nucleus-text-secondary uppercase tracking-wide">
+                <th className="text-left py-4 px-6 text-xs font-bold text-nucleus-text-secondary uppercase tracking-wider">
                   Market
                 </th>
-                <th className="text-right py-3 px-4 text-xs font-semibold text-nucleus-text-secondary uppercase tracking-wide">
+                <th className="text-right py-4 px-5 text-xs font-bold text-nucleus-text-secondary uppercase tracking-wider">
                   LLTV
                 </th>
-                <th className="text-right py-3 px-4 text-xs font-semibold text-nucleus-text-secondary uppercase tracking-wide">
+                <th className="text-right py-4 px-5 text-xs font-bold text-nucleus-text-secondary uppercase tracking-wider">
                   Supply APY
                 </th>
-                <th className="text-right py-3 px-4 text-xs font-semibold text-nucleus-text-secondary uppercase tracking-wide">
+                <th className="text-right py-4 px-5 text-xs font-bold text-nucleus-text-secondary uppercase tracking-wider">
                   Borrow APY
                 </th>
-                <th className="text-right py-3 px-4 text-xs font-semibold text-nucleus-text-secondary uppercase tracking-wide">
+                <th className="text-right py-4 px-5 text-xs font-bold text-nucleus-text-secondary uppercase tracking-wider">
                   TVL
                 </th>
-                <th className="py-3 px-4 text-xs font-semibold text-nucleus-text-secondary uppercase tracking-wide">
+                <th className="text-left py-4 px-5 text-xs font-bold text-nucleus-text-secondary uppercase tracking-wider">
                   Utilization
                 </th>
-                <th className="text-right py-3 px-5 text-xs font-semibold text-nucleus-text-secondary uppercase tracking-wide">
+                <th className="text-right py-4 px-6 text-xs font-bold text-nucleus-text-secondary uppercase tracking-wider">
                   Actions
                 </th>
               </tr>
             </thead>
-            <tbody className="bg-nucleus-bg divide-y divide-nucleus-border/50">
+            <tbody className="divide-y divide-nucleus-border">
               {markets.map((market) => (
                 <tr
                   key={market.publicKey}
-                  className="hover:bg-white/[0.02] transition-colors"
+                  className="hover:bg-gray-50 transition-colors"
                 >
                   {/* Market name */}
-                  <td className="py-4 px-5">
+                  <td className="py-5 px-6">
                     <div className="flex items-center gap-3">
-                      <div className="flex -space-x-1">
-                        <span className="flex h-8 w-8 items-center justify-center rounded-full bg-nucleus-card border border-nucleus-border text-sm font-bold text-nucleus-text-secondary">
+                      <div className="flex -space-x-1 shadow-sm rounded-full">
+                        <span className="flex h-9 w-9 items-center justify-center rounded-full bg-white border border-nucleus-border text-sm font-bold text-nucleus-text-secondary z-10">
                           {market.collateralSymbol.slice(0, 2)}
                         </span>
-                        <span className="flex h-8 w-8 items-center justify-center rounded-full bg-nucleus-card border border-nucleus-border text-sm">
+                        <span className="flex h-9 w-9 items-center justify-center rounded-full bg-[#FAFAFA] border border-nucleus-border text-xs text-gray-400">
                           $
                         </span>
                       </div>
                       <div>
-                        <div className="font-semibold text-nucleus-text-primary">
+                        <div className="font-bold text-nucleus-text-primary tracking-tight">
                           {market.collateralSymbol} / {market.loanSymbol}
                         </div>
-                        <div className="text-xs text-nucleus-text-secondary font-mono">
+                        <div className="text-xs text-nucleus-text-secondary font-mono mt-0.5">
                           {market.publicKey.slice(0, 8)}…
                         </div>
                       </div>
@@ -132,56 +132,56 @@ export default function MarketsPage() {
                   </td>
 
                   {/* LLTV */}
-                  <td className="py-4 px-4 text-right">
+                  <td className="py-5 px-5 text-right">
                     <Badge variant="gray">{market.lltv}%</Badge>
                   </td>
 
                   {/* Supply APY */}
-                  <td className="py-4 px-4 text-right">
-                    <span className="font-semibold text-nucleus-green tabular-nums">
+                  <td className="py-5 px-5 text-right">
+                    <span className="font-black text-nucleus-green tabular-nums">
                       {formatAPY(market.supplyApyPct)}
                     </span>
                   </td>
 
                   {/* Borrow APY */}
-                  <td className="py-4 px-4 text-right">
-                    <span className="font-semibold text-nucleus-orange tabular-nums">
+                  <td className="py-5 px-5 text-right">
+                    <span className="font-black text-nucleus-orange tabular-nums">
                       {formatAPY(market.borrowApyPct)}
                     </span>
                   </td>
 
                   {/* TVL */}
-                  <td className="py-4 px-4 text-right">
-                    <span className="font-medium text-nucleus-text-primary tabular-nums">
+                  <td className="py-5 px-5 text-right">
+                    <span className="font-bold text-nucleus-text-primary tabular-nums">
                       {formatUSD(market.tvlUsd)}
                     </span>
                   </td>
 
                   {/* Utilization */}
-                  <td className="py-4 px-4">
-                    <div className="flex items-center gap-2 min-w-[100px]">
-                      <div className="flex-1 h-1.5 rounded-full bg-nucleus-border overflow-hidden">
+                  <td className="py-5 px-5">
+                    <div className="flex items-center gap-3 max-w-[140px]">
+                      <div className="flex-1 h-2 rounded-full bg-[#FAFAFA] overflow-hidden border border-nucleus-border/50">
                         <div
                           className={`h-full rounded-full ${utilizationColor(market.utilization)}`}
                           style={{ width: `${Math.min(market.utilization, 100)}%` }}
                         />
                       </div>
-                      <span className="text-xs font-medium text-nucleus-text-secondary tabular-nums w-8 text-right">
+                      <span className="text-xs font-bold text-nucleus-text-secondary tabular-nums w-8 text-right">
                         {market.utilization.toFixed(0)}%
                       </span>
                     </div>
                   </td>
 
                   {/* Actions */}
-                  <td className="py-4 px-5 text-right">
+                  <td className="py-5 px-6 text-right">
                     <div className="flex items-center justify-end gap-2">
                       <Link href={`/markets/${market.publicKey}?tab=supply`}>
-                        <Button variant="secondary" size="sm">
+                        <Button variant="secondary" size="sm" className="font-bold">
                           Supply
                         </Button>
                       </Link>
                       <Link href={`/markets/${market.publicKey}?tab=borrow`}>
-                        <Button variant="primary" size="sm">
+                        <Button variant="primary" size="sm" className="font-bold">
                           Borrow
                         </Button>
                       </Link>
@@ -196,16 +196,16 @@ export default function MarketsPage() {
 
       {/* Markets cards — mobile */}
       {markets.length > 0 && (
-        <div className="flex flex-col gap-3 md:hidden">
+        <div className="flex flex-col gap-4 md:hidden">
           {markets.map((market) => (
             <div
               key={market.publicKey}
-              className="rounded-xl border border-nucleus-border bg-nucleus-card p-4"
+              className="rounded-xl border border-nucleus-border bg-white p-5 shadow-sm"
             >
               {/* Header */}
-              <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-2">
-                  <span className="font-semibold text-nucleus-text-primary">
+                  <span className="font-bold text-nucleus-text-primary tracking-tight">
                     {market.collateralSymbol} / {market.loanSymbol}
                   </span>
                 </div>
@@ -213,27 +213,27 @@ export default function MarketsPage() {
               </div>
 
               {/* Stats grid */}
-              <div className="grid grid-cols-2 gap-3 mb-3">
+              <div className="grid grid-cols-2 gap-4 mb-4 bg-[#FAFAFA] p-3 rounded-lg border border-nucleus-border/50">
                 <div>
-                  <div className="text-xs text-nucleus-text-secondary mb-0.5">Supply APY</div>
-                  <div className="font-semibold text-nucleus-green">{formatAPY(market.supplyApyPct)}</div>
+                  <div className="text-[10px] font-bold text-nucleus-text-secondary uppercase tracking-wider mb-0.5">Supply APY</div>
+                  <div className="font-black text-nucleus-green">{formatAPY(market.supplyApyPct)}</div>
                 </div>
                 <div>
-                  <div className="text-xs text-nucleus-text-secondary mb-0.5">Borrow APY</div>
-                  <div className="font-semibold text-nucleus-orange">{formatAPY(market.borrowApyPct)}</div>
+                  <div className="text-[10px] font-bold text-nucleus-text-secondary uppercase tracking-wider mb-0.5">Borrow APY</div>
+                  <div className="font-black text-nucleus-orange">{formatAPY(market.borrowApyPct)}</div>
                 </div>
                 <div>
-                  <div className="text-xs text-nucleus-text-secondary mb-0.5">TVL</div>
-                  <div className="font-medium text-nucleus-text-primary">{formatUSD(market.tvlUsd)}</div>
+                  <div className="text-[10px] font-bold text-nucleus-text-secondary uppercase tracking-wider mb-0.5">TVL</div>
+                  <div className="font-bold text-nucleus-text-primary tabular-nums">{formatUSD(market.tvlUsd)}</div>
                 </div>
                 <div>
-                  <div className="text-xs text-nucleus-text-secondary mb-0.5">Utilization</div>
-                  <div className="font-medium text-nucleus-text-primary">{formatPct(market.utilization)}</div>
+                  <div className="text-[10px] font-bold text-nucleus-text-secondary uppercase tracking-wider mb-0.5">Utilization</div>
+                  <div className="font-bold text-nucleus-text-primary tabular-nums">{formatPct(market.utilization)}</div>
                 </div>
               </div>
 
               {/* Utilization bar */}
-              <div className="h-1.5 w-full rounded-full bg-nucleus-border overflow-hidden mb-3">
+              <div className="h-2 w-full rounded-full bg-[#FAFAFA] border border-nucleus-border/50 overflow-hidden mb-4">
                 <div
                   className={`h-full rounded-full ${utilizationColor(market.utilization)}`}
                   style={{ width: `${Math.min(market.utilization, 100)}%` }}
@@ -241,14 +241,14 @@ export default function MarketsPage() {
               </div>
 
               {/* Actions */}
-              <div className="flex gap-2">
+              <div className="flex gap-3">
                 <Link href={`/markets/${market.publicKey}?tab=supply`} className="flex-1">
-                  <Button variant="secondary" size="sm" fullWidth>
+                  <Button variant="secondary" size="md" fullWidth className="font-bold">
                     Supply
                   </Button>
                 </Link>
                 <Link href={`/markets/${market.publicKey}?tab=borrow`} className="flex-1">
-                  <Button variant="primary" size="sm" fullWidth>
+                  <Button variant="primary" size="md" fullWidth className="font-bold">
                     Borrow
                   </Button>
                 </Link>

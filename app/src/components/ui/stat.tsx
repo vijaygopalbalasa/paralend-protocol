@@ -12,13 +12,13 @@ interface StatProps {
 export function Stat({ label, value, change, description, className, valueClassName }: StatProps) {
   return (
     <div className={cn("flex flex-col gap-1", className)}>
-      <span className="text-xs font-medium text-nucleus-text-secondary uppercase tracking-wide">
+      <span className="text-[10px] font-bold text-nucleus-text-secondary uppercase tracking-wider mb-1">
         {label}
       </span>
       <div className="flex items-baseline gap-2">
         <span
           className={cn(
-            "text-xl font-bold text-nucleus-text-primary tabular-nums",
+            "text-2xl font-black text-nucleus-text-primary tabular-nums tracking-tight",
             valueClassName
           )}
         >

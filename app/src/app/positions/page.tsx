@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { formatUSD, formatHealthFactor, healthFactorBg } from "@/lib/utils";
 import { usePositions } from "@/hooks/usePositions";
+import { formatTokenAmount } from "@/lib/nucleus-program";
 
 export default function PositionsPage() {
   const { publicKey, connected } = useWallet();
@@ -169,7 +170,7 @@ export default function PositionsPage() {
                     <td className="py-4 px-4 text-right">
                       <div className="font-semibold text-nucleus-text-primary">
                         {Number(pos.collateralAmount) > 0
-                          ? `${(Number(pos.collateralAmount) / 1e9).toFixed(2)} ${pos.collateralSymbol}`
+                          ? `${formatTokenAmount(pos.collateralAmount, pos.collateralDecimals, 4)} ${pos.collateralSymbol}`
                           : "—"}
                       </div>
                       {pos.collateralValueUsd > 0 && (
@@ -192,7 +193,7 @@ export default function PositionsPage() {
                     </td>
 
                     <td className="py-4 px-5 text-right">
-                      <Link href={`/markets/${pos.id}`}>
+                      <Link href={`/markets/${pos.marketPubkey}`}>
                         <Button variant="secondary" size="sm">
                           Manage
                         </Button>
@@ -237,7 +238,7 @@ export default function PositionsPage() {
                     </div>
                   </div>
                 </div>
-                <Link href={`/markets/${pos.id}`}>
+                <Link href={`/markets/${pos.marketPubkey}`}>
                   <Button variant="secondary" size="sm" fullWidth>
                     Manage Position
                   </Button>

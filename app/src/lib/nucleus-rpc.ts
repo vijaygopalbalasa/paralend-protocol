@@ -1,49 +1,23 @@
-/**
- * nucleus-rpc.ts
- *
- * Server-side and shared Nucleus data fetching.
- * Works in Node.js (server components, API routes) — no browser APIs.
- *
- * All RPC calls are independent; we use Promise.all per `async-parallel`.
- */
+import { Buffer } from "buffer";
 
-import { Connection, Keypair } from "@solana/web3.js";
-import { AnchorProvider, Program } from "@coral-xyz/anchor";
-import type { Nucleus } from "./nucleus-idl-types";
-import IDL from "./nucleus-idl.json";
-import { BPS, RPC_ENDPOINT, SECONDS_PER_YEAR, WAD } from "./constants";
-
-// ─── Read-only provider (no wallet needed for reads) ─────────────────────────
-
-function makeReadonlyProvider() {
-  const connection = new Connection(RPC_ENDPOINT, {
-    commitment: "confirmed",
-    disableRetryOnRateLimit: false,
-  });
-  const dummyKeypair = Keypair.generate();
-  const dummyWallet = {
-    publicKey: dummyKeypair.publicKey,
-    signTransaction: async <T>(t: T) => t,
-    signAllTransactions: async <T>(ts: T[]) => ts,
-  };
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return new AnchorProvider(connection, dummyWallet as any, {
-    commitment: "confirmed",
-  });
-}
-
-function makeProgram() {
-  const provider = makeReadonlyProvider();
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return new Program<Nucleus>(IDL as any, provider);
-}
-
-// ─── Types ────────────────────────────────────────────────────────────────────
+import { getDemoMarket, resolveTokenSymbol } from "./demo-config";
+import {
+  annualizedPercent,
+  bnToBigInt,
+  calculateUtilization,
+  makeReadonlyProgram,
+  irmBorrowRatePerSecond,
+} from "./nucleus-program";
+import { BPS, RPC_ENDPOINT, WAD } from "./constants";
 
 export interface MarketView {
   publicKey: string;
   collateralMint: string;
   loanMint: string;
+  collateralSymbol: string;
+  loanSymbol: string;
+  name: string;
+  oracleLabel: string;
   lltv: number;
   feeBps: number;
   totalSupplyAssets: number;
@@ -63,120 +37,100 @@ export interface ProtocolStats {
   avgUtilization: number;
 }
 
-// ─── IRM borrow rate (mirrors on-chain kinked IRM) ───────────────────────────
-
-function irmBorrowRatePerSecond(
-  utilization: bigint,
-  baseRate: bigint,
-  slope1: bigint,
-  slope2: bigint,
-  kink: bigint
-): bigint {
-  if (utilization <= kink) {
-    return baseRate + (slope1 * utilization) / WAD;
-  }
-  const below = (slope1 * kink) / WAD;
-  const above = (slope2 * (utilization - kink)) / WAD;
-  return baseRate + below + above;
-}
-
-// ─── Public API ───────────────────────────────────────────────────────────────
-
-/**
- * Fetch all Market accounts from the chain.
- * Returns an array of MarketView objects ready for the UI.
- */
 export async function getAllMarkets(): Promise<MarketView[]> {
   try {
-    const program = makeProgram();
+    const program = makeReadonlyProgram();
     const rawMarkets = await program.account.market.all();
 
-    // Fetch IRM for each market in parallel (async-parallel rule)
-    const views = await Promise.all(
-      rawMarkets.map(async (a) => {
-        const m = a.account;
-        const totalSupply = BigInt(m.totalSupplyAssets.toString());
-        const totalBorrow = BigInt(m.totalBorrowAssets.toString());
+    return Promise.all(
+      rawMarkets.map(async (entry) => {
+        const market = entry.account;
+        const publicKey = entry.publicKey.toBase58();
+        const totalSupply = bnToBigInt(market.totalSupplyAssets);
+        const totalBorrow = bnToBigInt(market.totalBorrowAssets);
+        const utilization = calculateUtilization(totalBorrow, totalSupply);
 
-        const util =
-          totalSupply === 0n
-            ? 0n
-            : (totalBorrow * WAD) / totalSupply;
-
-        const utilPct = Number(util) / Number(WAD);
-
-        // Fetch IRM for borrow rate calculation
         let borrowApyPct = 0;
         let supplyApyPct = 0;
         try {
-          const irm = await (program.account as any).linearIrm.fetch(
-            m.irm
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const irm = await (program.account as any).linearIrm.fetch(market.irm);
+          const borrowRate = irmBorrowRatePerSecond(
+            utilization,
+            bnToBigInt(irm.baseRate),
+            bnToBigInt(irm.slope1),
+            bnToBigInt(irm.slope2),
+            bnToBigInt(irm.kink)
           );
-          const rate = irmBorrowRatePerSecond(
-            util,
-            BigInt(irm.baseRate.toString()),
-            BigInt(irm.slope1.toString()),
-            BigInt(irm.slope2.toString()),
-            BigInt(irm.kink.toString())
-          );
-          borrowApyPct =
-            (Number(rate) * Number(SECONDS_PER_YEAR)) / Number(WAD) * 100;
+          borrowApyPct = annualizedPercent(borrowRate);
           supplyApyPct =
             borrowApyPct *
-            utilPct *
-            (1 - Number(m.fee) / Number(BPS));
+            (Number(utilization) / Number(WAD)) *
+            (1 - Number(market.fee) / Number(BPS));
         } catch {
-          // IRM fetch failed — show 0%
+          // Keep 0% rates if IRM lookup fails.
         }
 
-        // Use actual decimals from on-chain market account
-        const LOAN_DECIMALS = m.loanDecimals ?? 6;
-        const tvlUsd = Number(totalSupply) / 10 ** LOAN_DECIMALS;
-        const borrowedUsd = Number(totalBorrow) / 10 ** LOAN_DECIMALS;
+        const loanDecimals = market.loanDecimals ?? 6;
+        const collateralMint = market.collateralMint.toBase58();
+        const loanMint = market.loanMint.toBase58();
+        const marketMeta = getDemoMarket(publicKey);
+        const collateralSymbol =
+          marketMeta?.collateralSymbol ?? resolveTokenSymbol(collateralMint);
+        const loanSymbol = marketMeta?.loanSymbol ?? resolveTokenSymbol(loanMint);
+        const hasStableLoan =
+          Buffer.from(market.loanOracleFeedId as number[]).every((byte) => byte === 0);
 
         return {
-          publicKey: a.publicKey.toBase58(),
-          collateralMint: m.collateralMint.toBase58(),
-          loanMint: m.loanMint.toBase58(),
-          lltv: Number(m.lltv) / 100,          // BPS → pct
-          feeBps: Number(m.fee) / 100,
+          publicKey,
+          collateralMint,
+          loanMint,
+          collateralSymbol,
+          loanSymbol,
+          name: marketMeta?.name ?? `${collateralSymbol} / ${loanSymbol}`,
+          oracleLabel:
+            marketMeta?.oracle ??
+            (hasStableLoan ? "StaticOracle / $1 stable" : "StaticOracle"),
+          lltv: Number(market.lltv) / 100,
+          feeBps: Number(market.fee),
           totalSupplyAssets: Number(totalSupply),
           totalBorrowAssets: Number(totalBorrow),
-          utilization: utilPct * 100,
+          utilization: (Number(utilization) / Number(WAD)) * 100,
           supplyApyPct,
           borrowApyPct,
-          tvlUsd,
-          borrowedUsd,
-          paused: m.paused,
+          tvlUsd: Number(totalSupply) / 10 ** loanDecimals,
+          borrowedUsd: Number(totalBorrow) / 10 ** loanDecimals,
+          paused: market.paused,
         } satisfies MarketView;
       })
     );
-
-    return views;
   } catch (err) {
     console.error("[nucleus-rpc] getAllMarkets failed:", err);
     return [];
   }
 }
 
-/**
- * Aggregate protocol-wide stats from all markets.
- */
 export async function getProtocolStats(): Promise<ProtocolStats> {
   const markets = await getAllMarkets();
   if (markets.length === 0) {
-    return { marketCount: 0, totalTvlUsd: 0, totalBorrowedUsd: 0, avgUtilization: 0 };
+    return {
+      marketCount: 0,
+      totalTvlUsd: 0,
+      totalBorrowedUsd: 0,
+      avgUtilization: 0,
+    };
   }
-
-  const totalTvlUsd = markets.reduce((s, m) => s + m.tvlUsd, 0);
-  const totalBorrowedUsd = markets.reduce((s, m) => s + m.borrowedUsd, 0);
-  const avgUtilization =
-    markets.reduce((s, m) => s + m.utilization, 0) / markets.length;
 
   return {
     marketCount: markets.length,
-    totalTvlUsd,
-    totalBorrowedUsd,
-    avgUtilization,
+    totalTvlUsd: markets.reduce((sum, market) => sum + market.tvlUsd, 0),
+    totalBorrowedUsd: markets.reduce((sum, market) => sum + market.borrowedUsd, 0),
+    avgUtilization:
+      markets.reduce((sum, market) => sum + market.utilization, 0) /
+      markets.length,
   };
+}
+
+export function getRpcEndpoint() {
+  return RPC_ENDPOINT;
 }

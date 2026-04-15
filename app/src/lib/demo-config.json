@@ -1,0 +1,86 @@
+{
+  "cluster": "devnet",
+  "programId": "ForUjmX3VzE5EsRfzktF529LToK7vyzx6czH5o1dUTY8",
+  "generatedAt": "2026-04-15T20:33:04.734Z",
+  "tokens": {
+    "2kAr3i8Fqwn5y8z63R6uTM9TpjSQBNgaR4EN77t1JseG": {
+      "symbol": "USDC",
+      "name": "USD Coin",
+      "icon": "$",
+      "decimals": 6
+    },
+    "Ezvh1A2P8LYf3XRYMtKAmySd3s7PLFWWxto8RXksg1Mi": {
+      "symbol": "wSOL",
+      "name": "Wrapped SOL",
+      "icon": "◎",
+      "decimals": 9,
+      "oracleFeedId": "0100000000000000000000000000000000000000000000000000000000000000"
+    },
+    "6fFJK7Bz1pmonvAujdNV1FBisCy97xes2n5LS38wmq4": {
+      "symbol": "jitoSOL",
+      "name": "Jito Staked SOL",
+      "icon": "⚡",
+      "decimals": 9,
+      "oracleFeedId": "0200000000000000000000000000000000000000000000000000000000000000"
+    },
+    "7EAKH24XSsyiKq3r2hADFzD8bE1H954ckevQxxYjHbDp": {
+      "symbol": "JUP",
+      "name": "Jupiter",
+      "icon": "♃",
+      "decimals": 6,
+      "oracleFeedId": "0300000000000000000000000000000000000000000000000000000000000000"
+    }
+  },
+  "markets": {
+    "BM2tzcbMvSXGoQ5mwqGGiB9madbDH6Sjxz6m9pSsDYka": {
+      "name": "wSOL / USDC",
+      "marketId": "38ad667c3130b8e700980fa4c3316da4e97d00522d880d9818e0430ab73648c7",
+      "collateralMint": "Ezvh1A2P8LYf3XRYMtKAmySd3s7PLFWWxto8RXksg1Mi",
+      "loanMint": "2kAr3i8Fqwn5y8z63R6uTM9TpjSQBNgaR4EN77t1JseG",
+      "collateralSymbol": "wSOL",
+      "loanSymbol": "USDC",
+      "oracle": "StaticOracle",
+      "lltv": 86,
+      "feeBps": 0,
+      "irm": "5adfqHhD4Y1hJid6qMMQUPaV7Su625YA6ce1aFeM1vTw",
+      "collateralOracleFeedId": "0100000000000000000000000000000000000000000000000000000000000000",
+      "loanOracleFeedId": "0000000000000000000000000000000000000000000000000000000000000000",
+      "collateralOracle": "EawDkSMHkaqey9g5QWmp4JPG4fCd9JMmY1u6qHKMEaN2",
+      "loanOracle": "HKkCWjK8DGY6c59n5kQmyYi1WC3oYNmHPpuVbuWyqr7B"
+    },
+    "HxDA9M6ySDf3McYSeKraiK6fgTQw63Ztd8hkVZasmiin": {
+      "name": "JitoSOL / USDC",
+      "marketId": "42b0a9bbd6c6e39740d74819fa76a99273d95dfe0b8c6fd0a51f1f2a4832793a",
+      "collateralMint": "6fFJK7Bz1pmonvAujdNV1FBisCy97xes2n5LS38wmq4",
+      "loanMint": "2kAr3i8Fqwn5y8z63R6uTM9TpjSQBNgaR4EN77t1JseG",
+      "collateralSymbol": "jitoSOL",
+      "loanSymbol": "USDC",
+      "oracle": "StaticOracle",
+      "lltv": 80,
+      "feeBps": 0,
+      "irm": "J8TFTrpB7sRvR8tEorgKa9yWBXByvgsaQtoNCL55UYLb",
+      "collateralOracleFeedId": "0200000000000000000000000000000000000000000000000000000000000000",
+      "loanOracleFeedId": "0000000000000000000000000000000000000000000000000000000000000000",
+      "collateralOracle": "6jmN5YBzVBtDZgL9WFdjTAieM2J6nR7QBxWuzrDqncbA",
+      "loanOracle": "HKkCWjK8DGY6c59n5kQmyYi1WC3oYNmHPpuVbuWyqr7B"
+    },
+    "CJYVhddxNfBHHuj9fmPvwizgNATdYWfGitXUAWDhtQKE": {
+      "name": "JUP / USDC",
+      "marketId": "7312bd6b32d1eb40c4891de8e4824203abc79b3ed3ce3d8c79d0eddda0b719f7",
+      "collateralMint": "7EAKH24XSsyiKq3r2hADFzD8bE1H954ckevQxxYjHbDp",
+      "loanMint": "2kAr3i8Fqwn5y8z63R6uTM9TpjSQBNgaR4EN77t1JseG",
+      "collateralSymbol": "JUP",
+      "loanSymbol": "USDC",
+      "oracle": "StaticOracle",
+      "lltv": 70,
+      "feeBps": 0,
+      "irm": "BbW8w31VWNrGyD4vKoW24HWC63WZ31Pj38vLryYkKvAc",
+      "collateralOracleFeedId": "0300000000000000000000000000000000000000000000000000000000000000",
+      "loanOracleFeedId": "0000000000000000000000000000000000000000000000000000000000000000",
+      "collateralOracle": "GYnFnFJoPJ3mfT2PzLyxK95C1FFXWNFF5DdRJV8FXdbP",
+      "loanOracle": "HKkCWjK8DGY6c59n5kQmyYi1WC3oYNmHPpuVbuWyqr7B"
+    }
+  },
+  "primaryWallet": "EUBjDaCEsscGXySFzV68j6Z6xXu9o3B6GSdrHNwcowUj",
+  "liquidationTarget": "GjzoG1apdbPJMFoEQzy6y4xFNMMzo2ufdYSMo9nynZSq"
+}

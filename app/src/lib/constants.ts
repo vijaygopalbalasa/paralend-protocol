@@ -1,5 +1,7 @@
 // Use the string for server components; create PublicKey in client code as needed
-export const PROGRAM_ID = "BDZo1obAjSPufJsRqJmBy82whgQfedDXnTDipdA2nCVn";
+export const PROGRAM_ID =
+  process.env.NEXT_PUBLIC_PROGRAM_ID ??
+  "ForUjmX3VzE5EsRfzktF529LToK7vyzx6czH5o1dUTY8";
 export const NETWORK = "devnet";
 export const RPC_ENDPOINT =
   process.env.NEXT_PUBLIC_RPC_URL ?? "https://api.devnet.solana.com";
@@ -22,74 +24,16 @@ export const LLTV_PRESETS = [
 ] as const;
 
 // Token display metadata (for UI only)
+// Keys are mint addresses OR well-known symbols for fallback matching
 export const TOKEN_META: Record<string, { symbol: string; icon: string; name: string }> = {
+  // Well-known symbols (fallback when mint not found)
   SOL: { symbol: "SOL", icon: "◎", name: "Solana" },
+  wSOL: { symbol: "wSOL", icon: "◎", name: "Wrapped SOL" },
   USDC: { symbol: "USDC", icon: "$", name: "USD Coin" },
   jitoSOL: { symbol: "jitoSOL", icon: "⚡", name: "Jito Staked SOL" },
   JUP: { symbol: "JUP", icon: "♃", name: "Jupiter" },
   mSOL: { symbol: "mSOL", icon: "◈", name: "Marinade Staked SOL" },
   BONK: { symbol: "BONK", icon: "🐕", name: "Bonk" },
+  // Devnet wrapped SOL (from spl-token create-token)
+  So11111111111111111111111111111111111111112: { symbol: "wSOL", icon: "◎", name: "Wrapped SOL" },
 };
-
-// Demo market data for UI development
-// TODO: replace with live chain data via NucleusClient
-export const DEMO_MARKETS = [
-  {
-    id: "sol-usdc",
-    collateral: "SOL",
-    loan: "USDC",
-    lltv: 86,
-    supplyApy: 4.2,
-    borrowApy: 5.8,
-    tvl: 850_000,
-    utilization: 72,
-    totalSupplied: 850_000,
-    totalBorrowed: 612_000,
-    oracle: "Pyth SOL/USD",
-  },
-  {
-    id: "jitosol-usdc",
-    collateral: "jitoSOL",
-    loan: "USDC",
-    lltv: 86,
-    supplyApy: 3.8,
-    borrowApy: 5.1,
-    tvl: 1_200_000,
-    utilization: 74,
-    totalSupplied: 1_200_000,
-    totalBorrowed: 888_000,
-    oracle: "Pyth jitoSOL/USD",
-  },
-  {
-    id: "jup-usdc",
-    collateral: "JUP",
-    loan: "USDC",
-    lltv: 75,
-    supplyApy: 8.1,
-    borrowApy: 11.2,
-    tvl: 320_000,
-    utilization: 71,
-    totalSupplied: 320_000,
-    totalBorrowed: 227_200,
-    oracle: "Pyth JUP/USD",
-  },
-] as const;
-
-export type DemoMarket = (typeof DEMO_MARKETS)[number];
-
-// Demo positions for UI development
-// TODO: replace with live chain data via NucleusClient
-export const DEMO_POSITIONS = [
-  {
-    marketId: "sol-usdc",
-    collateral: "SOL",
-    loan: "USDC",
-    suppliedShares: 5_000_000_000n, // raw shares
-    suppliedAssets: 5_000, // display USD
-    borrowedShares: 2_000_000_000n,
-    borrowedAssets: 3_000, // display USD
-    collateralAmount: 50, // SOL
-    collateralValueUsd: 9_500,
-    healthFactor: 1.82,
-  },
-] as const;

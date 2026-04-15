@@ -1,46 +1,67 @@
 "use client";
 
-import { Suspense, useState } from "react";
+import Link from "next/link";
+import { BN } from "@coral-xyz/anchor";
+import { Suspense, useEffect, useState } from "react";
 import { useParams, useSearchParams } from "next/navigation";
+import { Transaction } from "@solana/web3.js";
+import { useConnection, useWallet } from "@solana/wallet-adapter-react";
+
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
 import { Stat } from "@/components/ui/stat";
-import { DEMO_MARKETS, TOKEN_META } from "@/lib/constants";
+import { useMarketDetail } from "@/hooks/useMarketDetail";
+import {
+  deriveCollateralVaultPDA,
+  deriveLoanVaultPDA,
+  derivePositionPDA,
+  deriveStaticOraclePDA,
+  ensureAtaIx,
+  formatTokenAmount,
+  makeAnchorProvider,
+  makeProgram,
+  parseTokenAmount,
+  toAnchorWallet,
+} from "@/lib/nucleus-program";
 import {
   cn,
-  formatUSD,
   formatAPY,
-  formatPct,
   formatHealthFactor,
+  formatPct,
+  formatUSD,
   healthFactorBg,
   utilizationColor,
 } from "@/lib/utils";
-import Link from "next/link";
 
 type Tab = "supply" | "borrow" | "collateral";
+type Notice =
+  | { type: "success"; message: string }
+  | { type: "error"; message: string }
+  | null;
 
-// Mock position state — TODO: replace with live chain data via NucleusClient
-const MOCK_POSITION = {
-  suppliedAssets: 0,
-  suppliedShares: 0,
-  borrowedAssets: 0,
-  collateralAmount: 0,
-  healthFactor: Infinity,
-};
+function getErrorMessage(error: unknown): string {
+  if (error instanceof Error) {
+    return error.message;
+  }
+  return String(error);
+}
 
 function MarketDetailPageInner() {
   const params = useParams();
   const searchParams = useSearchParams();
+  const { connection } = useConnection();
+  const wallet = useWallet();
+  const marketAddress = typeof params.id === "string" ? params.id : null;
+  const requestedTab = (searchParams.get("tab") as Tab) || "supply";
 
-  const marketId = params.id as string;
-  const market = DEMO_MARKETS.find((m) => m.id === marketId);
+  const { market, loading, error, reload } = useMarketDetail(marketAddress);
 
-  const initialTab = (searchParams.get("tab") as Tab) || "supply";
-  const [activeTab, setActiveTab] = useState<Tab>(initialTab);
+  const [activeTab, setActiveTab] = useState<Tab>(requestedTab);
+  const [notice, setNotice] = useState<Notice>(null);
+  const [pendingAction, setPendingAction] = useState<string | null>(null);
 
-  // Form state
   const [supplyAmount, setSupplyAmount] = useState("");
   const [withdrawAmount, setWithdrawAmount] = useState("");
   const [borrowAmount, setBorrowAmount] = useState("");
@@ -48,18 +69,374 @@ function MarketDetailPageInner() {
   const [collateralDeposit, setCollateralDeposit] = useState("");
   const [collateralWithdraw, setCollateralWithdraw] = useState("");
 
-  // Loading states for tx simulation
-  const [loadingSupply, setLoadingSupply] = useState(false);
-  const [loadingWithdraw, setLoadingWithdraw] = useState(false);
-  const [loadingBorrow, setLoadingBorrow] = useState(false);
-  const [loadingRepay, setLoadingRepay] = useState(false);
-  const [loadingDepositCol, setLoadingDepositCol] = useState(false);
-  const [loadingWithdrawCol, setLoadingWithdrawCol] = useState(false);
+  useEffect(() => {
+    setActiveTab(requestedTab);
+  }, [requestedTab]);
 
-  if (!market) {
+  const loanBalanceLabel =
+    market &&
+    `${formatTokenAmount(
+      market.walletBalances.loan,
+      market.loanDecimals,
+      4
+    )} ${market.loanSymbol}`;
+  const collateralBalanceLabel =
+    market &&
+    `${formatTokenAmount(
+      market.walletBalances.collateral,
+      market.collateralDecimals,
+      4
+    )} ${market.collateralSymbol}`;
+
+  const runAction = async (
+    action: string,
+    buildTransaction: () => Promise<Transaction>
+  ) => {
+    const anchorWallet = toAnchorWallet(wallet);
+    if (!anchorWallet) {
+      setNotice({
+        type: "error",
+        message: "Connect a wallet that supports transaction signing.",
+      });
+      return;
+    }
+
+    setPendingAction(action);
+    setNotice(null);
+    try {
+      const provider = makeAnchorProvider(connection, anchorWallet);
+      const tx = await buildTransaction();
+      const signature = await provider.sendAndConfirm(tx, []);
+      setNotice({
+        type: "success",
+        message: `${action} confirmed: ${signature.slice(0, 12)}...`,
+      });
+      await reload();
+    } catch (txError) {
+      setNotice({ type: "error", message: getErrorMessage(txError) });
+    } finally {
+      setPendingAction(null);
+    }
+  };
+
+  const withProgram = () => {
+    const anchorWallet = toAnchorWallet(wallet);
+    if (!anchorWallet || !market) {
+      throw new Error("Wallet and market must both be available.");
+    }
+
+    const program = makeProgram(connection, anchorWallet);
+    const owner = anchorWallet.publicKey;
+    const positionPda = derivePositionPDA(market.marketId, owner);
+    const loanVault = deriveLoanVaultPDA(market.marketId);
+    const collateralVault = deriveCollateralVaultPDA(market.marketId);
+    const collateralOracle = deriveStaticOraclePDA(market.collateralOracleFeedId);
+    const loanOracle = deriveStaticOraclePDA(market.loanOracleFeedId);
+
+    return {
+      owner,
+      program,
+      positionPda,
+      loanVault,
+      collateralVault,
+      collateralOracle,
+      loanOracle,
+    };
+  };
+
+  const createPositionIx = async () => {
+    if (!market || market.position.exists) {
+      return null;
+    }
+
+    const { program, owner, positionPda } = withProgram();
+    const methods = program.methods as any;
+    return methods
+      .createPosition(Array.from(market.marketId))
+      .accountsPartial({
+        payer: owner,
+        owner,
+        market: market.publicKey,
+        position: positionPda,
+      })
+      .instruction();
+  };
+
+  const handleSupply = async () => {
+    if (!market) return;
+    const amount = parseTokenAmount(supplyAmount, market.loanDecimals);
+    if (!amount || amount <= 0n) {
+      setNotice({ type: "error", message: "Enter a valid supply amount." });
+      return;
+    }
+
+    await runAction("Supply", async () => {
+      const { owner, program, positionPda, loanVault } = withProgram();
+      const methods = program.methods as any;
+      const tx = new Transaction();
+      const { address: loanAta, instruction: ensureLoanAtaIx } = ensureAtaIx(
+        market.loanMint,
+        owner,
+        owner
+      );
+      tx.add(ensureLoanAtaIx);
+      const maybeCreatePosition = await createPositionIx();
+      if (maybeCreatePosition) tx.add(maybeCreatePosition);
+      tx.add(
+        await methods
+          .supply(Array.from(market.marketId), new BN(amount.toString()))
+          .accountsPartial({
+            supplier: owner,
+            market: market.publicKey,
+            irm: market.irm,
+            position: positionPda,
+            supplierLoanAta: loanAta,
+            loanVault,
+          })
+          .instruction()
+      );
+      return tx;
+    });
+
+    setSupplyAmount("");
+  };
+
+  const handleWithdraw = async () => {
+    if (!market) return;
+    const amount = parseTokenAmount(withdrawAmount, market.loanDecimals);
+    if (!amount || amount <= 0n) {
+      setNotice({ type: "error", message: "Enter a valid withdraw amount." });
+      return;
+    }
+
+    await runAction("Withdraw", async () => {
+      const { owner, program, positionPda, loanVault } = withProgram();
+      const methods = program.methods as any;
+      const tx = new Transaction();
+      const { address: loanAta, instruction: ensureLoanAtaIx } = ensureAtaIx(
+        market.loanMint,
+        owner,
+        owner
+      );
+      tx.add(ensureLoanAtaIx);
+      tx.add(
+        await methods
+          .withdraw(
+            Array.from(market.marketId),
+            new BN(amount.toString()),
+            new BN(0)
+          )
+          .accountsPartial({
+            owner,
+            market: market.publicKey,
+            irm: market.irm,
+            position: positionPda,
+            loanVault,
+            receiverLoanAta: loanAta,
+          })
+          .instruction()
+      );
+      return tx;
+    });
+
+    setWithdrawAmount("");
+  };
+
+  const handleBorrow = async () => {
+    if (!market) return;
+    const amount = parseTokenAmount(borrowAmount, market.loanDecimals);
+    if (!amount || amount <= 0n) {
+      setNotice({ type: "error", message: "Enter a valid borrow amount." });
+      return;
+    }
+
+    await runAction("Borrow", async () => {
+      const {
+        owner,
+        program,
+        positionPda,
+        loanVault,
+        collateralOracle,
+        loanOracle,
+      } = withProgram();
+      const methods = program.methods as any;
+      const tx = new Transaction();
+      const { address: loanAta, instruction: ensureLoanAtaIx } = ensureAtaIx(
+        market.loanMint,
+        owner,
+        owner
+      );
+      tx.add(ensureLoanAtaIx);
+      const maybeCreatePosition = await createPositionIx();
+      if (maybeCreatePosition) tx.add(maybeCreatePosition);
+      tx.add(
+        await methods
+          .borrow(Array.from(market.marketId), new BN(amount.toString()))
+          .accountsPartial({
+            borrower: owner,
+            market: market.publicKey,
+            irm: market.irm,
+            position: positionPda,
+            loanVault,
+            receiverLoanAta: loanAta,
+            collateralOracle,
+            loanOracle,
+          })
+          .instruction()
+      );
+      return tx;
+    });
+
+    setBorrowAmount("");
+  };
+
+  const handleRepay = async () => {
+    if (!market) return;
+    const amount = parseTokenAmount(repayAmount, market.loanDecimals);
+    if (!amount || amount <= 0n) {
+      setNotice({ type: "error", message: "Enter a valid repay amount." });
+      return;
+    }
+
+    await runAction("Repay", async () => {
+      const { owner, program, positionPda, loanVault } = withProgram();
+      const methods = program.methods as any;
+      const tx = new Transaction();
+      const { address: loanAta, instruction: ensureLoanAtaIx } = ensureAtaIx(
+        market.loanMint,
+        owner,
+        owner
+      );
+      tx.add(ensureLoanAtaIx);
+      tx.add(
+        await methods
+          .repay(
+            Array.from(market.marketId),
+            new BN(amount.toString()),
+            new BN(0)
+          )
+          .accountsPartial({
+            repayer: owner,
+            market: market.publicKey,
+            irm: market.irm,
+            position: positionPda,
+            borrower: owner,
+            repayerLoanAta: loanAta,
+            loanVault,
+          })
+          .instruction()
+      );
+      return tx;
+    });
+
+    setRepayAmount("");
+  };
+
+  const handleDepositCollateral = async () => {
+    if (!market) return;
+    const amount = parseTokenAmount(collateralDeposit, market.collateralDecimals);
+    if (!amount || amount <= 0n) {
+      setNotice({
+        type: "error",
+        message: "Enter a valid collateral deposit amount.",
+      });
+      return;
+    }
+
+    await runAction("Deposit Collateral", async () => {
+      const { owner, program, positionPda, collateralVault } = withProgram();
+      const methods = program.methods as any;
+      const tx = new Transaction();
+      const {
+        address: collateralAta,
+        instruction: ensureCollateralAtaIx,
+      } = ensureAtaIx(market.collateralMint, owner, owner);
+      tx.add(ensureCollateralAtaIx);
+      const maybeCreatePosition = await createPositionIx();
+      if (maybeCreatePosition) tx.add(maybeCreatePosition);
+      tx.add(
+        await methods
+          .supplyCollateral(Array.from(market.marketId), new BN(amount.toString()))
+          .accountsPartial({
+            depositor: owner,
+            market: market.publicKey,
+            position: positionPda,
+            depositorCollateralAta: collateralAta,
+            collateralVault,
+          })
+          .instruction()
+      );
+      return tx;
+    });
+
+    setCollateralDeposit("");
+  };
+
+  const handleWithdrawCollateral = async () => {
+    if (!market) return;
+    const amount = parseTokenAmount(collateralWithdraw, market.collateralDecimals);
+    if (!amount || amount <= 0n) {
+      setNotice({
+        type: "error",
+        message: "Enter a valid collateral withdrawal amount.",
+      });
+      return;
+    }
+
+    await runAction("Withdraw Collateral", async () => {
+      const {
+        owner,
+        program,
+        positionPda,
+        collateralVault,
+        collateralOracle,
+        loanOracle,
+      } = withProgram();
+      const methods = program.methods as any;
+      const tx = new Transaction();
+      const {
+        address: collateralAta,
+        instruction: ensureCollateralAtaIx,
+      } = ensureAtaIx(market.collateralMint, owner, owner);
+      tx.add(ensureCollateralAtaIx);
+      tx.add(
+        await methods
+          .withdrawCollateral(
+            Array.from(market.marketId),
+            new BN(amount.toString())
+          )
+          .accountsPartial({
+            owner,
+            market: market.publicKey,
+            irm: market.irm,
+            position: positionPda,
+            collateralVault,
+            receiverCollateralAta: collateralAta,
+            collateralOracle,
+            loanOracle,
+          })
+          .instruction()
+      );
+      return tx;
+    });
+
+    setCollateralWithdraw("");
+  };
+
+  if (loading && !market) {
     return (
-      <div className="flex flex-col items-center justify-center py-24 gap-4">
-        <p className="text-nucleus-text-secondary">Market not found.</p>
+      <div className="flex items-center justify-center py-24">
+        <span className="inline-block h-6 w-6 animate-spin rounded-full border-2 border-nucleus-primary border-t-transparent" />
+      </div>
+    );
+  }
+
+  if (error || !market) {
+    return (
+      <div className="flex flex-col items-center justify-center gap-4 py-24">
+        <p className="text-sm text-nucleus-text-secondary">
+          {error ?? "Market not found."}
+        </p>
         <Link href="/markets">
           <Button variant="secondary">Back to Markets</Button>
         </Link>
@@ -67,20 +444,7 @@ function MarketDetailPageInner() {
     );
   }
 
-  const colMeta = TOKEN_META[market.collateral];
-  const loanMeta = TOKEN_META[market.loan];
-
-  // Simulate tx (mock) — TODO: replace with NucleusClient transaction calls
-  const simulateTx = async (
-    setter: (v: boolean) => void,
-    action: string
-  ) => {
-    setter(true);
-    await new Promise((r) => setTimeout(r, 1200));
-    setter(false);
-    alert(`[MOCK] ${action} transaction submitted. Connect wallet and deploy program to execute for real.`);
-  };
-
+  const position = market.position;
   const tabs: { id: Tab; label: string }[] = [
     { id: "supply", label: "Supply" },
     { id: "borrow", label: "Borrow" },
@@ -89,95 +453,105 @@ function MarketDetailPageInner() {
 
   return (
     <div className="flex flex-col gap-6">
-      {/* Breadcrumb */}
-      <nav className="text-sm text-nucleus-text-secondary">
-        <Link href="/markets" className="hover:text-nucleus-text-primary transition-colors">
+      <nav className="text-sm font-medium text-nucleus-text-secondary">
+        <Link href="/markets" className="hover:text-nucleus-primary transition-colors">
           Markets
         </Link>
         <span className="mx-2">/</span>
-        <span className="text-nucleus-text-primary font-medium">
-          {market.collateral} / {market.loan}
+        <span className="font-bold text-nucleus-text-primary">
+          {market.collateralSymbol} / {market.loanSymbol}
         </span>
       </nav>
 
-      {/* Market header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between mb-2">
         <div className="flex items-center gap-4">
           <div className="flex -space-x-2">
-            <span className="flex h-12 w-12 items-center justify-center rounded-full bg-nucleus-card border-2 border-nucleus-bg text-2xl z-10">
-              {colMeta?.icon ?? "?"}
+            <span className="flex h-14 w-14 items-center justify-center rounded-full border-4 border-white bg-white shadow-sm text-2xl z-10">
+              {market.collateralIcon}
             </span>
-            <span className="flex h-12 w-12 items-center justify-center rounded-full bg-nucleus-card border-2 border-nucleus-bg text-2xl">
-              {loanMeta?.icon ?? "?"}
+            <span className="flex h-14 w-14 items-center justify-center rounded-full border-4 border-white bg-gray-50 shadow-sm text-2xl">
+              {market.loanIcon}
             </span>
           </div>
           <div>
-            <h1 className="text-xl font-bold text-nucleus-text-primary">
-              {market.collateral} / {market.loan}
+            <h1 className="text-2xl font-black text-nucleus-text-primary tracking-tight">
+              {market.collateralSymbol} / {market.loanSymbol}
             </h1>
-            <div className="flex items-center gap-2 mt-0.5">
+            <div className="mt-1 flex flex-wrap items-center gap-2">
               <Badge variant="gray">LLTV {market.lltv}%</Badge>
-              <span className="text-xs text-nucleus-text-secondary">{market.oracle}</span>
+              <Badge variant="gray">Fee {(market.feeBps / 100).toFixed(2)}%</Badge>
+              <span className="text-xs font-semibold text-nucleus-text-secondary">
+                {market.oracleLabel}
+              </span>
             </div>
           </div>
         </div>
+        <Button variant="secondary" onClick={() => reload()}>
+          Refresh
+        </Button>
       </div>
 
-      {/* Market stats */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <Card noPadding innerClassName="p-4">
+      {notice && (
+        <div
+          className={cn(
+            "rounded-xl border px-4 py-3 text-sm font-medium shadow-sm",
+            notice.type === "success"
+              ? "border-green-200 bg-green-50 text-green-700"
+              : "border-red-200 bg-red-50 text-red-600"
+          )}
+        >
+          {notice.message}
+        </div>
+      )}
+
+      <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+        <Card noPadding innerClassName="p-5">
           <Stat
             label="Supply APY"
-            value={formatAPY(market.supplyApy)}
-            valueClassName="text-nucleus-green"
+            value={formatAPY(market.supplyApyPct)}
+            valueClassName="text-nucleus-green font-black tracking-tight text-2xl"
           />
         </Card>
-        <Card noPadding innerClassName="p-4">
+        <Card noPadding innerClassName="p-5">
           <Stat
             label="Borrow APY"
-            value={formatAPY(market.borrowApy)}
-            valueClassName="text-nucleus-orange"
+            value={formatAPY(market.borrowApyPct)}
+            valueClassName="text-nucleus-orange font-black tracking-tight text-2xl"
           />
         </Card>
-        <Card noPadding innerClassName="p-4">
-          <Stat
-            label="TVL"
-            value={formatUSD(market.tvl)}
-          />
+        <Card noPadding innerClassName="p-5">
+          <Stat label="TVL" value={formatUSD(market.tvlUsd)} valueClassName="font-black tracking-tight text-2xl" />
         </Card>
-        <Card noPadding innerClassName="p-4">
+        <Card noPadding innerClassName="p-5">
           <div className="flex flex-col gap-1">
-            <span className="text-xs font-medium text-nucleus-text-secondary uppercase tracking-wide">
+            <span className="text-xs font-bold uppercase tracking-wider text-nucleus-text-secondary">
               Utilization
             </span>
-            <span className="text-xl font-bold text-nucleus-text-primary tabular-nums">
+            <span className="text-2xl font-black tabular-nums text-nucleus-text-primary tracking-tight">
               {formatPct(market.utilization)}
             </span>
-            <div className="h-1.5 w-full rounded-full bg-nucleus-border overflow-hidden mt-1">
+            <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-[#FAFAFA] border border-nucleus-border/50">
               <div
-                className={`h-full rounded-full ${utilizationColor(market.utilization)}`}
-                style={{ width: `${market.utilization}%` }}
+                className={`h-full rounded-full ${utilizationColor(market.utilization)} transition-all duration-500`}
+                style={{ width: `${Math.min(market.utilization, 100)}%` }}
               />
             </div>
           </div>
         </Card>
       </div>
 
-      {/* Main content: tabs + info */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Interaction panel (2/3 width) */}
-        <div className="lg:col-span-2 flex flex-col gap-4">
-          {/* Tab selector */}
-          <div className="flex rounded-lg border border-nucleus-border bg-nucleus-card p-1 gap-1">
+      <div className="grid grid-cols-1 gap-8 lg:grid-cols-3 mt-4">
+        <div className="flex flex-col gap-5 lg:col-span-2">
+          <div className="flex gap-1 rounded-lg border border-nucleus-border bg-gray-50 p-1.5 shadow-inner">
             {tabs.map((tab) => (
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
                 className={cn(
-                  "flex-1 py-2 rounded-md text-sm font-medium transition-all duration-150",
+                  "flex-1 rounded-md py-2.5 text-sm font-bold transition-all",
                   activeTab === tab.id
-                    ? "bg-nucleus-primary text-white shadow-[0_0_12px_rgba(124,58,237,0.3)]"
-                    : "text-nucleus-text-secondary hover:text-nucleus-text-primary"
+                    ? "bg-white text-nucleus-primary shadow-sm ring-1 ring-gray-900/5"
+                    : "text-nucleus-text-secondary hover:text-nucleus-text-primary hover:bg-gray-100/50"
                 )}
               >
                 {tab.label}
@@ -185,267 +559,262 @@ function MarketDetailPageInner() {
             ))}
           </div>
 
-          {/* Supply tab */}
           {activeTab === "supply" && (
             <div className="flex flex-col gap-4">
-              {/* Supply form */}
-              <Card header={<span className="font-semibold text-nucleus-text-primary">Supply {market.loan}</span>}>
+              <Card header={<span className="font-semibold text-nucleus-text-primary">Supply {market.loanSymbol}</span>}>
                 <div className="flex flex-col gap-4">
                   <Input
-                    label={`Amount (${market.loan})`}
+                    label={`Amount (${market.loanSymbol})`}
                     type="number"
                     placeholder="0.00"
                     value={supplyAmount}
-                    onChange={(e) => setSupplyAmount(e.target.value)}
-                    suffix={market.loan}
-                    onMax={() => setSupplyAmount("5000")} // TODO: use wallet balance
-                    hint={`Wallet balance: — ${market.loan}`}
+                    onChange={(event) => setSupplyAmount(event.target.value)}
+                    suffix={market.loanSymbol}
+                    onMax={() =>
+                      setSupplyAmount(
+                        formatTokenAmount(market.walletBalances.loan, market.loanDecimals, 6)
+                      )
+                    }
+                    hint={`Wallet balance: ${loanBalanceLabel ?? "—"}`}
                   />
-
-                  {/* Position preview */}
-                  <div className="rounded-lg border border-nucleus-border bg-nucleus-bg p-4 flex flex-col gap-2 text-sm">
+                  <div className="rounded-lg border border-nucleus-border bg-nucleus-bg p-4 text-sm">
                     <div className="flex justify-between text-nucleus-text-secondary">
                       <span>Your supplied</span>
-                      {/* TODO: fetch from Position PDA */}
-                      <span className="text-nucleus-text-primary font-medium">
-                        {MOCK_POSITION.suppliedAssets > 0
-                          ? formatUSD(MOCK_POSITION.suppliedAssets)
+                      <span className="font-medium text-nucleus-text-primary">
+                        {position.supplyAssets > 0n
+                          ? `${formatTokenAmount(position.supplyAssets, market.loanDecimals, 6)} ${market.loanSymbol}`
                           : "—"}
                       </span>
                     </div>
-                    <div className="flex justify-between text-nucleus-text-secondary">
-                      <span>Share tokens received</span>
-                      {/* TODO: compute from to_shares_down */}
-                      <span className="text-nucleus-text-primary font-medium">—</span>
-                    </div>
-                    <div className="flex justify-between text-nucleus-text-secondary">
-                      <span>Supply APY</span>
-                      <span className="text-nucleus-green font-semibold">
-                        {formatAPY(market.supplyApy)}
-                      </span>
-                    </div>
                   </div>
-
                   <Button
                     variant="primary"
                     size="lg"
                     fullWidth
-                    loading={loadingSupply}
-                    disabled={!supplyAmount || Number(supplyAmount) <= 0}
-                    onClick={() => simulateTx(setLoadingSupply, `Supply ${supplyAmount} ${market.loan}`)}
+                    loading={pendingAction === "Supply"}
+                    disabled={!supplyAmount}
+                    onClick={handleSupply}
                   >
-                    Supply {market.loan}
+                    Supply {market.loanSymbol}
                   </Button>
                 </div>
               </Card>
 
-              {/* Withdraw form */}
-              <Card header={<span className="font-semibold text-nucleus-text-primary">Withdraw {market.loan}</span>}>
+              <Card header={<span className="font-semibold text-nucleus-text-primary">Withdraw {market.loanSymbol}</span>}>
                 <div className="flex flex-col gap-4">
                   <Input
-                    label={`Amount (${market.loan})`}
+                    label={`Amount (${market.loanSymbol})`}
                     type="number"
                     placeholder="0.00"
                     value={withdrawAmount}
-                    onChange={(e) => setWithdrawAmount(e.target.value)}
-                    suffix={market.loan}
-                    onMax={() => setWithdrawAmount(String(MOCK_POSITION.suppliedAssets))}
-                    hint={`Currently supplied: ${MOCK_POSITION.suppliedAssets > 0 ? formatUSD(MOCK_POSITION.suppliedAssets) : "—"}`}
+                    onChange={(event) => setWithdrawAmount(event.target.value)}
+                    suffix={market.loanSymbol}
+                    onMax={() =>
+                      setWithdrawAmount(
+                        formatTokenAmount(position.supplyAssets, market.loanDecimals, 6)
+                      )
+                    }
+                    hint={`Currently supplied: ${
+                      position.supplyAssets > 0n
+                        ? `${formatTokenAmount(position.supplyAssets, market.loanDecimals, 6)} ${market.loanSymbol}`
+                        : "—"
+                    }`}
                   />
                   <Button
                     variant="secondary"
                     size="lg"
                     fullWidth
-                    loading={loadingWithdraw}
-                    disabled={!withdrawAmount || Number(withdrawAmount) <= 0}
-                    onClick={() => simulateTx(setLoadingWithdraw, `Withdraw ${withdrawAmount} ${market.loan}`)}
+                    loading={pendingAction === "Withdraw"}
+                    disabled={!withdrawAmount || position.supplyAssets === 0n}
+                    onClick={handleWithdraw}
                   >
-                    Withdraw {market.loan}
+                    Withdraw {market.loanSymbol}
                   </Button>
                 </div>
               </Card>
             </div>
           )}
 
-          {/* Borrow tab */}
           {activeTab === "borrow" && (
             <div className="flex flex-col gap-4">
-              {/* Borrow form */}
-              <Card header={<span className="font-semibold text-nucleus-text-primary">Borrow {market.loan}</span>}>
+              <Card header={<span className="font-semibold text-nucleus-text-primary">Borrow {market.loanSymbol}</span>}>
                 <div className="flex flex-col gap-4">
                   <Input
-                    label={`Amount (${market.loan})`}
+                    label={`Amount (${market.loanSymbol})`}
                     type="number"
                     placeholder="0.00"
                     value={borrowAmount}
-                    onChange={(e) => setBorrowAmount(e.target.value)}
-                    suffix={market.loan}
-                    hint={`Max borrow: depends on collateral posted`}
+                    onChange={(event) => setBorrowAmount(event.target.value)}
+                    suffix={market.loanSymbol}
+                    hint={`Wallet balance: ${loanBalanceLabel ?? "—"}`}
                   />
-
-                  {/* Health factor preview */}
-                  <div className="rounded-lg border border-nucleus-border bg-nucleus-bg p-4 flex flex-col gap-2 text-sm">
+                  <div className="rounded-lg border border-nucleus-border bg-nucleus-bg p-4 text-sm">
                     <div className="flex justify-between text-nucleus-text-secondary">
                       <span>Collateral posted</span>
-                      {/* TODO: fetch from Position PDA */}
-                      <span className="text-nucleus-text-primary font-medium">
-                        {MOCK_POSITION.collateralAmount > 0
-                          ? `${MOCK_POSITION.collateralAmount} ${market.collateral}`
+                      <span className="font-medium text-nucleus-text-primary">
+                        {position.collateralAmount > 0n
+                          ? `${formatTokenAmount(position.collateralAmount, market.collateralDecimals, 6)} ${market.collateralSymbol}`
                           : "—"}
                       </span>
                     </div>
-                    <div className="flex justify-between text-nucleus-text-secondary">
-                      <span>Current debt</span>
-                      <span className="text-nucleus-text-primary font-medium">—</span>
+                    <div className="mt-2 flex justify-between text-nucleus-text-secondary">
+                      <span>Outstanding debt</span>
+                      <span className="font-medium text-nucleus-text-primary">
+                        {position.borrowAssets > 0n
+                          ? `${formatTokenAmount(position.borrowAssets, market.loanDecimals, 6)} ${market.loanSymbol}`
+                          : "—"}
+                      </span>
                     </div>
-                    <div className="flex justify-between items-center text-nucleus-text-secondary">
-                      <span>Health Factor</span>
-                      {/* TODO: compute health_factor = (collateral_value * lltv) / (debt_value * BPS) */}
+                    <div className="mt-2 flex items-center justify-between text-nucleus-text-secondary">
+                      <span>Health factor</span>
                       <span
                         className={cn(
-                          "font-bold text-base px-2 py-0.5 rounded border",
-                          healthFactorBg(MOCK_POSITION.healthFactor)
+                          "rounded border px-2 py-0.5 text-base font-bold",
+                          healthFactorBg(position.healthFactor)
                         )}
                       >
-                        {formatHealthFactor(MOCK_POSITION.healthFactor)}
-                      </span>
-                    </div>
-                    <div className="flex justify-between text-nucleus-text-secondary">
-                      <span>Borrow APY</span>
-                      <span className="text-nucleus-orange font-semibold">
-                        {formatAPY(market.borrowApy)}
-                      </span>
-                    </div>
-                    <div className="flex justify-between text-nucleus-text-secondary">
-                      <span>LLTV</span>
-                      <span className="text-nucleus-text-primary font-medium">
-                        {market.lltv}%
+                        {formatHealthFactor(position.healthFactor)}
                       </span>
                     </div>
                   </div>
-
-                  {MOCK_POSITION.collateralAmount === 0 && (
-                    <div className="rounded-lg border border-nucleus-yellow/30 bg-nucleus-yellow/5 p-3 text-xs text-nucleus-yellow">
-                      You need to deposit {market.collateral} collateral before borrowing. Use the Collateral tab.
-                    </div>
-                  )}
-
                   <Button
                     variant="primary"
                     size="lg"
                     fullWidth
-                    loading={loadingBorrow}
-                    disabled={!borrowAmount || Number(borrowAmount) <= 0}
-                    onClick={() => simulateTx(setLoadingBorrow, `Borrow ${borrowAmount} ${market.loan}`)}
+                    loading={pendingAction === "Borrow"}
+                    disabled={!borrowAmount}
+                    onClick={handleBorrow}
                   >
-                    Borrow {market.loan}
+                    Borrow {market.loanSymbol}
                   </Button>
                 </div>
               </Card>
 
-              {/* Repay form */}
-              <Card header={<span className="font-semibold text-nucleus-text-primary">Repay {market.loan}</span>}>
+              <Card header={<span className="font-semibold text-nucleus-text-primary">Repay {market.loanSymbol}</span>}>
                 <div className="flex flex-col gap-4">
                   <Input
-                    label={`Amount (${market.loan})`}
+                    label={`Amount (${market.loanSymbol})`}
                     type="number"
                     placeholder="0.00"
                     value={repayAmount}
-                    onChange={(e) => setRepayAmount(e.target.value)}
-                    suffix={market.loan}
-                    onMax={() => setRepayAmount(String(MOCK_POSITION.borrowedAssets))}
-                    hint={`Outstanding debt: ${MOCK_POSITION.borrowedAssets > 0 ? formatUSD(MOCK_POSITION.borrowedAssets) : "—"}`}
+                    onChange={(event) => setRepayAmount(event.target.value)}
+                    suffix={market.loanSymbol}
+                    onMax={() =>
+                      setRepayAmount(
+                        formatTokenAmount(position.borrowAssets, market.loanDecimals, 6)
+                      )
+                    }
+                    hint={`Outstanding debt: ${
+                      position.borrowAssets > 0n
+                        ? `${formatTokenAmount(position.borrowAssets, market.loanDecimals, 6)} ${market.loanSymbol}`
+                        : "—"
+                    }`}
                   />
                   <Button
                     variant="secondary"
                     size="lg"
                     fullWidth
-                    loading={loadingRepay}
-                    disabled={!repayAmount || Number(repayAmount) <= 0}
-                    onClick={() => simulateTx(setLoadingRepay, `Repay ${repayAmount} ${market.loan}`)}
+                    loading={pendingAction === "Repay"}
+                    disabled={!repayAmount || position.borrowAssets === 0n}
+                    onClick={handleRepay}
                   >
-                    Repay {market.loan}
+                    Repay {market.loanSymbol}
                   </Button>
                 </div>
               </Card>
             </div>
           )}
 
-          {/* Collateral tab */}
           {activeTab === "collateral" && (
             <div className="flex flex-col gap-4">
-              {/* Deposit collateral */}
-              <Card header={<span className="font-semibold text-nucleus-text-primary">Deposit {market.collateral} Collateral</span>}>
+              <Card header={<span className="font-semibold text-nucleus-text-primary">Deposit {market.collateralSymbol}</span>}>
                 <div className="flex flex-col gap-4">
                   <Input
-                    label={`Amount (${market.collateral})`}
+                    label={`Amount (${market.collateralSymbol})`}
                     type="number"
                     placeholder="0.00"
                     value={collateralDeposit}
-                    onChange={(e) => setCollateralDeposit(e.target.value)}
-                    suffix={market.collateral}
-                    onMax={() => setCollateralDeposit("50")} // TODO: use wallet balance
-                    hint={`Wallet balance: — ${market.collateral}`}
+                    onChange={(event) => setCollateralDeposit(event.target.value)}
+                    suffix={market.collateralSymbol}
+                    onMax={() =>
+                      setCollateralDeposit(
+                        formatTokenAmount(
+                          market.walletBalances.collateral,
+                          market.collateralDecimals,
+                          6
+                        )
+                      )
+                    }
+                    hint={`Wallet balance: ${collateralBalanceLabel ?? "—"}`}
                   />
-
-                  <div className="rounded-lg border border-nucleus-border bg-nucleus-bg p-4 flex flex-col gap-2 text-sm">
+                  <div className="rounded-lg border border-nucleus-border bg-nucleus-bg p-4 text-sm">
                     <div className="flex justify-between text-nucleus-text-secondary">
                       <span>Current collateral</span>
-                      {/* TODO: fetch from Position PDA */}
-                      <span className="text-nucleus-text-primary font-medium">
-                        {MOCK_POSITION.collateralAmount > 0
-                          ? `${MOCK_POSITION.collateralAmount} ${market.collateral}`
+                      <span className="font-medium text-nucleus-text-primary">
+                        {position.collateralAmount > 0n
+                          ? `${formatTokenAmount(position.collateralAmount, market.collateralDecimals, 6)} ${market.collateralSymbol}`
                           : "—"}
                       </span>
                     </div>
-                    <div className="flex justify-between text-nucleus-text-secondary">
-                      <span>Collateral earns yield?</span>
-                      <span className="text-nucleus-text-secondary">No (isolated lending)</span>
-                    </div>
-                    <div className="flex justify-between text-nucleus-text-secondary">
-                      <span>Max LTV (LLTV)</span>
-                      <span className="text-nucleus-text-primary font-medium">{market.lltv}%</span>
+                    <div className="mt-2 flex justify-between text-nucleus-text-secondary">
+                      <span>Collateral value</span>
+                      <span className="font-medium text-nucleus-text-primary">
+                        {position.collateralValueUsd > 0
+                          ? formatUSD(position.collateralValueUsd)
+                          : "—"}
+                      </span>
                     </div>
                   </div>
-
                   <Button
                     variant="primary"
                     size="lg"
                     fullWidth
-                    loading={loadingDepositCol}
-                    disabled={!collateralDeposit || Number(collateralDeposit) <= 0}
-                    onClick={() => simulateTx(setLoadingDepositCol, `Deposit ${collateralDeposit} ${market.collateral} collateral`)}
+                    loading={pendingAction === "Deposit Collateral"}
+                    disabled={!collateralDeposit}
+                    onClick={handleDepositCollateral}
                   >
-                    Deposit {market.collateral}
+                    Deposit {market.collateralSymbol}
                   </Button>
                 </div>
               </Card>
 
-              {/* Withdraw collateral */}
-              <Card header={<span className="font-semibold text-nucleus-text-primary">Withdraw {market.collateral} Collateral</span>}>
+              <Card header={<span className="font-semibold text-nucleus-text-primary">Withdraw {market.collateralSymbol}</span>}>
                 <div className="flex flex-col gap-4">
                   <Input
-                    label={`Amount (${market.collateral})`}
+                    label={`Amount (${market.collateralSymbol})`}
                     type="number"
                     placeholder="0.00"
                     value={collateralWithdraw}
-                    onChange={(e) => setCollateralWithdraw(e.target.value)}
-                    suffix={market.collateral}
-                    onMax={() => setCollateralWithdraw(String(MOCK_POSITION.collateralAmount))}
-                    hint={`Posted: ${MOCK_POSITION.collateralAmount > 0 ? `${MOCK_POSITION.collateralAmount} ${market.collateral}` : "—"}`}
+                    onChange={(event) => setCollateralWithdraw(event.target.value)}
+                    suffix={market.collateralSymbol}
+                    onMax={() =>
+                      setCollateralWithdraw(
+                        formatTokenAmount(
+                          position.collateralAmount,
+                          market.collateralDecimals,
+                          6
+                        )
+                      )
+                    }
+                    hint={`Posted: ${
+                      position.collateralAmount > 0n
+                        ? `${formatTokenAmount(position.collateralAmount, market.collateralDecimals, 6)} ${market.collateralSymbol}`
+                        : "—"
+                    }`}
                   />
                   <div className="rounded-lg border border-nucleus-red/20 bg-nucleus-red/5 p-3 text-xs text-nucleus-red/80">
-                    Withdrawing collateral reduces your health factor. Ensure health factor stays above 1.0 or your position may be liquidated.
+                    Withdrawing collateral can make the position liquidatable if the
+                    health factor drops below 1.0.
                   </div>
                   <Button
                     variant="danger"
                     size="lg"
                     fullWidth
-                    loading={loadingWithdrawCol}
-                    disabled={!collateralWithdraw || Number(collateralWithdraw) <= 0}
-                    onClick={() => simulateTx(setLoadingWithdrawCol, `Withdraw ${collateralWithdraw} ${market.collateral} collateral`)}
+                    loading={pendingAction === "Withdraw Collateral"}
+                    disabled={!collateralWithdraw || position.collateralAmount === 0n}
+                    onClick={handleWithdrawCollateral}
                   >
-                    Withdraw {market.collateral}
+                    Withdraw {market.collateralSymbol}
                   </Button>
                 </div>
               </Card>
@@ -453,59 +822,93 @@ function MarketDetailPageInner() {
           )}
         </div>
 
-        {/* Market info panel (1/3 width) */}
         <div className="flex flex-col gap-4">
-          {/* Market parameters */}
+          <Card header={<span className="font-semibold text-nucleus-text-primary">Your Position</span>}>
+            <div className="flex flex-col gap-3 text-sm">
+              <div className="flex justify-between">
+                <span className="text-nucleus-text-secondary">Supplied</span>
+                <span className="font-medium text-nucleus-text-primary">
+                  {position.supplyAssets > 0n
+                    ? `${formatTokenAmount(position.supplyAssets, market.loanDecimals, 6)} ${market.loanSymbol}`
+                    : "—"}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-nucleus-text-secondary">Borrowed</span>
+                <span className="font-medium text-nucleus-text-primary">
+                  {position.borrowAssets > 0n
+                    ? `${formatTokenAmount(position.borrowAssets, market.loanDecimals, 6)} ${market.loanSymbol}`
+                    : "—"}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-nucleus-text-secondary">Collateral</span>
+                <span className="font-medium text-nucleus-text-primary">
+                  {position.collateralAmount > 0n
+                    ? `${formatTokenAmount(position.collateralAmount, market.collateralDecimals, 6)} ${market.collateralSymbol}`
+                    : "—"}
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-nucleus-text-secondary">Health factor</span>
+                <span
+                  className={cn(
+                    "rounded border px-2 py-0.5 font-bold",
+                    healthFactorBg(position.healthFactor)
+                  )}
+                >
+                  {formatHealthFactor(position.healthFactor)}
+                </span>
+              </div>
+            </div>
+          </Card>
+
           <Card header={<span className="font-semibold text-nucleus-text-primary">Market Parameters</span>}>
             <div className="flex flex-col gap-3 text-sm">
               {[
-                { label: "Collateral Token", value: `${colMeta?.icon ?? ""} ${market.collateral}` },
-                { label: "Loan Token", value: `${loanMeta?.icon ?? ""} ${market.loan}` },
-                { label: "Max LTV (LLTV)", value: `${market.lltv}%` },
-                { label: "Oracle", value: market.oracle },
-                { label: "Interest Rate Model", value: "Linear IRM (kinked)" },
-                { label: "Protocol Fee", value: "10%" },
+                { label: "Collateral", value: market.collateralSymbol },
+                { label: "Loan", value: market.loanSymbol },
+                { label: "LLTV", value: `${market.lltv}%` },
+                { label: "Oracle", value: market.oracleLabel },
+                { label: "IRM", value: market.irm.toBase58().slice(0, 8) + "..." },
+                { label: "Fee", value: `${(market.feeBps / 100).toFixed(2)}%` },
               ].map((row) => (
-                <div key={row.label} className="flex justify-between items-center py-2 border-b border-nucleus-border/50 last:border-0">
+                <div
+                  key={row.label}
+                  className="flex items-center justify-between border-b border-nucleus-border/50 py-2 last:border-0"
+                >
                   <span className="text-nucleus-text-secondary">{row.label}</span>
-                  <span className="text-nucleus-text-primary font-medium text-right">{row.value}</span>
+                  <span className="text-right font-medium text-nucleus-text-primary">
+                    {row.value}
+                  </span>
                 </div>
               ))}
             </div>
           </Card>
 
-          {/* IRM info */}
-          <Card header={<span className="font-semibold text-nucleus-text-primary">Rate Model</span>}>
-            <div className="flex flex-col gap-2 text-sm text-nucleus-text-secondary">
-              <p>Linear kinked IRM. Rates are WAD-scaled per-second, accrued lazily on every interaction.</p>
-              <div className="mt-2 flex flex-col gap-1.5">
-                {[
-                  { label: "0% utilization", rate: "0% APY" },
-                  { label: "80% (kink)", rate: "~4% APY" },
-                  { label: "100% utilization", rate: "~50% APY" },
-                ].map((point) => (
-                  <div key={point.label} className="flex justify-between">
-                    <span>{point.label}</span>
-                    <span className="text-nucleus-text-primary font-medium">{point.rate}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </Card>
-
-          {/* Liquidation info */}
           <Card header={<span className="font-semibold text-nucleus-text-primary">Liquidation</span>}>
             <div className="flex flex-col gap-2 text-sm text-nucleus-text-secondary">
-              <p>Positions are liquidatable when Health Factor drops below 1.0.</p>
-              <div className="mt-2 flex flex-col gap-1.5">
-                <div className="flex justify-between">
-                  <span>Liquidation bonus</span>
-                  <span className="text-nucleus-text-primary font-medium">Up to 15%</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>Bad debt handling</span>
-                  <span className="text-nucleus-text-primary font-medium">Socialized</span>
-                </div>
+              <p>
+                A position becomes liquidatable once its health factor drops below
+                1.0.
+              </p>
+              <div className="flex justify-between">
+                <span>Collateral price</span>
+                <span className="font-medium text-nucleus-text-primary">
+                  {formatUSD(market.collateralPriceUsd)}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span>Loan price</span>
+                <span className="font-medium text-nucleus-text-primary">
+                  {formatUSD(market.loanPriceUsd)}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span>Current borrowed</span>
+                <span className="font-medium text-nucleus-text-primary">
+                  {formatUSD(market.borrowedUsd)}
+                </span>
               </div>
             </div>
           </Card>
@@ -517,11 +920,13 @@ function MarketDetailPageInner() {
 
 export default function MarketDetailPage() {
   return (
-    <Suspense fallback={
-      <div className="flex items-center justify-center py-24">
-        <span className="inline-block h-6 w-6 animate-spin rounded-full border-2 border-nucleus-primary border-t-transparent" />
-      </div>
-    }>
+    <Suspense
+      fallback={
+        <div className="flex items-center justify-center py-24">
+          <span className="inline-block h-6 w-6 animate-spin rounded-full border-2 border-nucleus-primary border-t-transparent" />
+        </div>
+      }
+    >
       <MarketDetailPageInner />
     </Suspense>
   );

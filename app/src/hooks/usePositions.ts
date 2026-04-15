@@ -1,49 +1,21 @@
 "use client";
 
-/**
- * usePositions — fetch all Nucleus Position accounts for the connected wallet.
- *
- * Health factor calculation mirrors programs/nucleus/src/instructions/liquidate.rs.
- */
-
 import { useEffect, useRef, useState } from "react";
+import { Buffer } from "buffer";
 import { useConnection, useWallet } from "@solana/wallet-adapter-react";
-import { Keypair, PublicKey } from "@solana/web3.js";
-import { AnchorProvider, Program } from "@coral-xyz/anchor";
-import { WAD, BPS, SECONDS_PER_YEAR } from "@/lib/constants";
-import IDL from "@/lib/nucleus-idl.json";
-import type { Nucleus } from "@/lib/nucleus-idl-types";
 
-const VIRTUAL_SHARES = 1_000_000n;
-const VIRTUAL_ASSETS = 1n;
-
-function toAssetsUp(
-  shares: bigint,
-  totalAssets: bigint,
-  totalShares: bigint
-): bigint {
-  const num = shares * (totalAssets + VIRTUAL_ASSETS);
-  const den = totalShares + VIRTUAL_SHARES;
-  return (num + den - 1n) / den;
-}
-
-function calcHealthFactor(
-  collateral: bigint,
-  borrowShares: bigint,
-  totalBorrowAssets: bigint,
-  totalBorrowShares: bigint,
-  lltv: bigint,
-  collateralPriceWad: bigint,
-  loanPriceWad: bigint
-): number {
-  if (borrowShares === 0n) return Infinity;
-  const borrowAssets = toAssetsUp(borrowShares, totalBorrowAssets, totalBorrowShares);
-  if (borrowAssets === 0n) return Infinity;
-  const collUsd = (collateral * collateralPriceWad) / WAD;
-  const loanUsd = (borrowAssets * loanPriceWad + WAD - 1n) / WAD;
-  if (loanUsd === 0n) return Infinity;
-  return Number(collUsd * lltv) / Number(loanUsd * BPS);
-}
+import { resolveTokenSymbol } from "@/lib/demo-config";
+import {
+  bnToBigInt,
+  calculateHealthFactor,
+  deriveMarketPDA,
+  deriveStaticOraclePDA,
+  getProgramId,
+  makeReadonlyProgram,
+  toAssetsDown,
+  toAssetsUp,
+} from "@/lib/nucleus-program";
+import { WAD } from "@/lib/constants";
 
 export interface PositionRow {
   publicKey: string;
@@ -53,7 +25,8 @@ export interface PositionRow {
   supplyShares: bigint;
   borrowShares: bigint;
   collateralAmount: bigint;
-  // Derived display values
+  collateralDecimals: number;
+  loanDecimals: number;
   supplyAssetsUsd: number;
   borrowAssetsUsd: number;
   collateralValueUsd: number;
@@ -79,122 +52,126 @@ export function usePositions(pollMs = 15_000) {
 
     setLoading(true);
     try {
-      const dummyWallet = {
-        publicKey: Keypair.generate().publicKey,
-        signTransaction: async <T>(t: T) => t,
-        signAllTransactions: async <T>(ts: T[]) => ts,
-      };
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const provider = new AnchorProvider(connection, dummyWallet as any, {
-        commitment: "confirmed",
-      });
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const program = new Program<Nucleus>(IDL as any, provider);
+      const program = makeReadonlyProgram(connection, getProgramId());
 
-      // Fetch all positions for this wallet via memcmp filter on `owner` field
-      // Position layout: 8 (disc) + 1 (bump) + 32 (market_id) + 32 (owner) + ...
-      // owner is at offset 8 + 1 + 32 = 41
       const rawPositions = await program.account.position.all([
         {
           memcmp: {
-            offset: 8 + 1 + 32, // discriminator + bump + market_id
+            offset: 8 + 1 + 32,
             bytes: publicKey.toBase58(),
           },
         },
       ]);
 
-      // Fetch markets for each position in parallel
+      const marketCache = new Map<string, Awaited<ReturnType<typeof program.account.market.fetch>>>();
+      const oracleCache = new Map<string, bigint>();
+
       const rows = await Promise.all(
-        rawPositions.map(async (p) => {
-          const pos = p.account;
-          const marketIdBuf = Buffer.from(pos.marketId as number[]);
+        rawPositions.map(async (entry) => {
+          const position = entry.account;
+          const marketId = Buffer.from(position.marketId as number[]);
+          const marketPda = deriveMarketPDA(marketId);
+          const marketAddress = marketPda.toBase58();
 
-          let supplyAssetsUsd = 0;
-          let borrowAssetsUsd = 0;
-          let collateralValueUsd = 0;
-          let healthFactor = Infinity;
-          let collateralMint = "";
-          let loanMint = "";
-          let marketPdaStr = "";
-
-          try {
-            const [marketPda] = PublicKey.findProgramAddressSync(
-              [Buffer.from("nucleus"), Buffer.from("market"), marketIdBuf],
-              program.programId
-            );
-            marketPdaStr = marketPda.toBase58();
-            const market = await program.account.market.fetch(marketPda);
-            collateralMint = market.collateralMint.toBase58();
-            loanMint = market.loanMint.toBase58();
-
-            const totalSupply = BigInt(market.totalSupplyAssets.toString());
-            const totalSupplyShares = BigInt(market.totalSupplyShares.toString());
-            const totalBorrow = BigInt(market.totalBorrowAssets.toString());
-            const totalBorrowShares = BigInt(market.totalBorrowShares.toString());
-
-            // Use actual decimals from the on-chain market account
-            const LOAN_DECIMALS = market.loanDecimals ?? 6;
-            const COLL_DECIMALS = market.collateralDecimals ?? 9;
-
-            const supplyShares = BigInt(pos.supplyShares.toString());
-            if (supplyShares > 0n) {
-              const supplyAssets = toAssetsUp(supplyShares, totalSupply, totalSupplyShares);
-              supplyAssetsUsd = Number(supplyAssets) / 10 ** LOAN_DECIMALS;
-            }
-
-            const borrowShares = BigInt(pos.borrowShares.toString());
-            if (borrowShares > 0n) {
-              const borrowAssets = toAssetsUp(borrowShares, totalBorrow, totalBorrowShares);
-              borrowAssetsUsd = Number(borrowAssets) / 10 ** LOAN_DECIMALS;
-            }
-
-            const collateral = BigInt(pos.collateral.toString());
-            // Use actual decimals from the market account
-            const LOAN_DECIMALS_ACTUAL = market.loanDecimals ?? 6;
-            const COLL_DECIMALS_ACTUAL = market.collateralDecimals ?? 9;
-            // WAD-scaled price per base unit: $165/SOL with 9 decimals → 165 * 1e18 / 1e9 = 165e9 WAD
-            // TODO: replace with live StaticOracle/Pyth price once oracles are deployed on devnet
-            const SOL_PRICE_USD = 165;
-            const colPriceWad = BigInt(SOL_PRICE_USD) * (WAD / BigInt(10 ** COLL_DECIMALS_ACTUAL));
-            const loanPriceWad = WAD / BigInt(10 ** LOAN_DECIMALS_ACTUAL);
-            collateralValueUsd = (Number(collateral) / 10 ** COLL_DECIMALS_ACTUAL) * SOL_PRICE_USD;
-
-            healthFactor = calcHealthFactor(
-              collateral,
-              borrowShares,
-              totalBorrow,
-              totalBorrowShares,
-              BigInt(market.lltv.toString()),
-              colPriceWad,
-              loanPriceWad
-            );
-          } catch {
-            // market fetch failed
+          let market = marketCache.get(marketAddress);
+          if (!market) {
+            market = await program.account.market.fetch(marketPda);
+            marketCache.set(marketAddress, market);
           }
 
+          const totalSupplyAssets = bnToBigInt(market.totalSupplyAssets);
+          const totalSupplyShares = bnToBigInt(market.totalSupplyShares);
+          const totalBorrowAssets = bnToBigInt(market.totalBorrowAssets);
+          const totalBorrowShares = bnToBigInt(market.totalBorrowShares);
+          const supplyShares = bnToBigInt(position.supplyShares);
+          const borrowShares = bnToBigInt(position.borrowShares);
+          const collateralAmount = bnToBigInt(position.collateral);
+          const loanDecimals = market.loanDecimals ?? 6;
+          const collateralDecimals = market.collateralDecimals ?? 9;
+
+          const supplyAssets =
+            supplyShares > 0n
+              ? toAssetsDown(supplyShares, totalSupplyAssets, totalSupplyShares)
+              : 0n;
+          const borrowAssets =
+            borrowShares > 0n
+              ? toAssetsUp(borrowShares, totalBorrowAssets, totalBorrowShares)
+              : 0n;
+
+          const collateralOracleFeed = Buffer.from(
+            market.collateralOracleFeedId as number[]
+          );
+          const collateralOracle = deriveStaticOraclePDA(collateralOracleFeed);
+          let collateralPriceWad = oracleCache.get(collateralOracle.toBase58());
+          if (collateralPriceWad === undefined) {
+            const oracle = await program.account.staticOracle.fetch(collateralOracle);
+            collateralPriceWad = bnToBigInt(oracle.priceWad);
+            oracleCache.set(collateralOracle.toBase58(), collateralPriceWad);
+          }
+
+          let loanPriceWad: bigint;
+          const loanFeed = Buffer.from(market.loanOracleFeedId as number[]);
+          if (loanFeed.every((byte) => byte === 0)) {
+            loanPriceWad = WAD / 10n ** BigInt(loanDecimals);
+          } else {
+            const loanOracle = deriveStaticOraclePDA(loanFeed);
+            const cacheKey = loanOracle.toBase58();
+            let cached = oracleCache.get(cacheKey);
+            if (cached === undefined) {
+              const oracle = await program.account.staticOracle.fetch(loanOracle);
+              cached = bnToBigInt(oracle.priceWad);
+              oracleCache.set(cacheKey, cached);
+            }
+            loanPriceWad = cached;
+          }
+
+          const supplyAssetsUsd =
+            Number((supplyAssets * loanPriceWad) / WAD) / 10 ** loanDecimals;
+          const borrowAssetsUsd =
+            Number((borrowAssets * loanPriceWad) / WAD) / 10 ** loanDecimals;
+          const collateralValueUsd =
+            Number((collateralAmount * collateralPriceWad) / WAD) /
+            10 ** collateralDecimals;
+          const healthFactor = calculateHealthFactor({
+            collateral: collateralAmount,
+            borrowShares,
+            totalBorrowAssets,
+            totalBorrowShares,
+            lltv: bnToBigInt(market.lltv),
+            collateralPriceWad,
+            loanPriceWad,
+          });
+
+          const collateralMint = market.collateralMint.toBase58();
+          const loanMint = market.loanMint.toBase58();
+
           return {
-            publicKey: p.publicKey.toBase58(),
-            marketPubkey: marketPdaStr,
+            publicKey: entry.publicKey.toBase58(),
+            marketPubkey: marketAddress,
             collateralMint,
             loanMint,
-            supplyShares: BigInt(pos.supplyShares.toString()),
-            borrowShares: BigInt(pos.borrowShares.toString()),
-            collateralAmount: BigInt(pos.collateral.toString()),
+            supplyShares,
+            borrowShares,
+            collateralAmount,
+            collateralDecimals,
+            loanDecimals,
             supplyAssetsUsd,
             borrowAssetsUsd,
             collateralValueUsd,
             healthFactor,
-            collateralSymbol: "SOL",
-            loanSymbol: "USDC",
-            id: p.publicKey.toBase58(),
+            collateralSymbol: resolveTokenSymbol(collateralMint),
+            loanSymbol: resolveTokenSymbol(loanMint),
+            id: entry.publicKey.toBase58(),
           } satisfies PositionRow;
         })
       );
 
-      // Only show positions that have any activity
       setPositions(
         rows.filter(
-          (r) => r.supplyShares > 0n || r.borrowShares > 0n || r.collateralAmount > 0n
+          (row) =>
+            row.supplyShares > 0n ||
+            row.borrowShares > 0n ||
+            row.collateralAmount > 0n
         )
       );
     } catch (err) {
@@ -215,5 +192,5 @@ export function usePositions(pollMs = 15_000) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [connection, publicKey?.toBase58()]);
 
-  return { positions, loading };
+  return { positions, loading, reload: load };
 }

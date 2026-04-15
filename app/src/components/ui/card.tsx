@@ -11,7 +11,7 @@ export function Card({ header, noPadding, innerClassName, className, children, .
   return (
     <div
       className={cn(
-        "bg-nucleus-card border border-nucleus-border rounded-xl",
+        "bg-nucleus-card border border-nucleus-border rounded-xl shadow-sm",
         className
       )}
       {...props}

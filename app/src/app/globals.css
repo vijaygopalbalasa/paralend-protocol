@@ -3,15 +3,15 @@
 @tailwind utilities;
 
 :root {
-  --bg: #0F0F23;
-  --card: #1A1A35;
-  --border: #2D2D4E;
-  --text-primary: #E2E8F0;
-  --text-secondary: #94A3B8;
-  --primary: #7C3AED;
-  --primary-hover: #6D28D9;
-  --green: #22C55E;
-  --yellow: #EAB308;
+  --bg: #FAFAFA;
+  --card: #FFFFFF;
+  --border: #E5E7EB;
+  --text-primary: #030712;
+  --text-secondary: #4B5563;
+  --primary: #000000;
+  --primary-hover: #333333;
+  --green: #10B981;
+  --yellow: #F59E0B;
   --red: #EF4444;
   --orange: #F97316;
 }
@@ -33,17 +33,20 @@ body {
 /* Wallet adapter button override */
 .wallet-adapter-button {
   background-color: var(--primary) !important;
+  color: white !important;
   font-family: inherit !important;
   font-size: 0.875rem !important;
   font-weight: 600 !important;
   border-radius: 0.5rem !important;
   height: 2.25rem !important;
   padding: 0 1rem !important;
-  transition: background-color 0.15s ease !important;
+  transition: all 0.15s ease !important;
+  border: 1px solid var(--primary) !important;
 }
 
 .wallet-adapter-button:hover:not([disabled]) {
-  background-color: var(--primary-hover) !important;
+  background-color: var(--card) !important;
+  color: var(--primary) !important;
 }
 
 .wallet-adapter-button-trigger {
@@ -53,6 +56,7 @@ body {
 .wallet-adapter-modal-wrapper {
   background-color: var(--card) !important;
   border: 1px solid var(--border) !important;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04) !important;
 }
 
 .wallet-adapter-modal-title {
@@ -73,20 +77,20 @@ body {
   height: 6px;
 }
 ::-webkit-scrollbar-track {
-  background: var(--card);
+  background: var(--bg);
 }
 ::-webkit-scrollbar-thumb {
-  background: var(--border);
+  background: #D1D5DB;
   border-radius: 3px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #3d3d60;
+  background: #9CA3AF;
 }
 
 /* Stat card gradient borders */
 .gradient-border {
   background: linear-gradient(var(--card), var(--card)) padding-box,
-    linear-gradient(135deg, var(--primary), transparent) border-box;
+    linear-gradient(135deg, var(--border), #D1D5DB) border-box;
   border: 1px solid transparent;
 }
 
