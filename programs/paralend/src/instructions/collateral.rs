@@ -21,12 +21,13 @@ pub struct SupplyCollateral<'info> {
     pub depositor: Signer<'info>,
 
     /// Protocol state — blocks deposits when globally paused.
+    /// Boxed to avoid BPF stack overflow (ProtocolState is ~900 bytes).
     #[account(
         seeds = [SEED_PREFIX, SEED_PROTOCOL],
         bump = protocol_state.bump,
         constraint = !protocol_state.paused @ ParalendError::ProtocolPaused,
     )]
-    pub protocol_state: Account<'info, ProtocolState>,
+    pub protocol_state: Box<Account<'info, ProtocolState>>,
 
     /// Market account — blocks deposits on paused or resolved markets.
     #[account(
@@ -35,7 +36,7 @@ pub struct SupplyCollateral<'info> {
         constraint = !market.paused @ ParalendError::MarketPaused,
         constraint = market.market_status == 0 @ ParalendError::MarketNotActive,
     )]
-    pub market: Account<'info, Market>,
+    pub market: Box<Account<'info, Market>>,
 
     /// Depositor's position in this market
     #[account(
@@ -45,7 +46,7 @@ pub struct SupplyCollateral<'info> {
         constraint = position.owner == depositor.key() @ ParalendError::Unauthorized,
         constraint = position.market_id == market_id @ ParalendError::Unauthorized,
     )]
-    pub position: Account<'info, Position>,
+    pub position: Box<Account<'info, Position>>,
 
     /// Source: depositor's collateral token account
     #[account(
@@ -53,7 +54,7 @@ pub struct SupplyCollateral<'info> {
         token::mint = market.collateral_mint,
         token::authority = depositor,
     )]
-    pub depositor_collateral_ata: Account<'info, TokenAccount>,
+    pub depositor_collateral_ata: Box<Account<'info, TokenAccount>>,
 
     /// Destination: market's collateral vault
     #[account(
@@ -61,7 +62,7 @@ pub struct SupplyCollateral<'info> {
         seeds = [SEED_PREFIX, SEED_COLLATERAL_VAULT, &market_id],
         bump = market.collateral_vault_bump,
     )]
-    pub collateral_vault: Account<'info, TokenAccount>,
+    pub collateral_vault: Box<Account<'info, TokenAccount>>,
 
     pub token_program: Program<'info, Token>,
 }

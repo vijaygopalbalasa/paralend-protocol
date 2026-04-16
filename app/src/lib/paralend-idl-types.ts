@@ -1717,6 +1717,10 @@ export type Paralend = {
         },
         {
           "name": "protocolState",
+          "docs": [
+            "Boxed: ProtocolState is ~900 B and overflows the BPF stack frame",
+            "otherwise."
+          ],
           "pda": {
             "seeds": [
               {
@@ -2381,7 +2385,8 @@ export type Paralend = {
         {
           "name": "protocolState",
           "docs": [
-            "Protocol state — blocks deposits when globally paused."
+            "Protocol state — blocks deposits when globally paused.",
+            "Boxed to avoid BPF stack overflow (ProtocolState is ~900 bytes)."
           ],
           "pda": {
             "seeds": [

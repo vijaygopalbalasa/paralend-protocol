@@ -1711,6 +1711,10 @@
         },
         {
           "name": "protocol_state",
+          "docs": [
+            "Boxed: ProtocolState is ~900 B and overflows the BPF stack frame",
+            "otherwise."
+          ],
           "pda": {
             "seeds": [
               {
@@ -2375,7 +2379,8 @@
         {
           "name": "protocol_state",
           "docs": [
-            "Protocol state — blocks deposits when globally paused."
+            "Protocol state — blocks deposits when globally paused.",
+            "Boxed to avoid BPF stack overflow (ProtocolState is ~900 bytes)."
           ],
           "pda": {
             "seeds": [

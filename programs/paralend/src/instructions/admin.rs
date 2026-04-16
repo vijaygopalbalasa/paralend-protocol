@@ -234,12 +234,14 @@ pub struct RegisterPriceCache<'info> {
     #[account(mut)]
     pub payer: Signer<'info>,
 
+    /// Boxed: ProtocolState is ~900 B and overflows the BPF stack frame
+    /// otherwise.
     #[account(
         seeds = [SEED_PREFIX, SEED_PROTOCOL],
         bump = protocol_state.bump,
         constraint = protocol_state.owner == payer.key() @ ParalendError::Unauthorized,
     )]
-    pub protocol_state: Account<'info, ProtocolState>,
+    pub protocol_state: Box<Account<'info, ProtocolState>>,
 
     /// Market this cache will serve. Binds the cache's feed_id to
     /// `market.collateral_oracle_feed_id`.
@@ -247,7 +249,7 @@ pub struct RegisterPriceCache<'info> {
         seeds = [SEED_PREFIX, SEED_MARKET, &market_id],
         bump = market.bump,
     )]
-    pub market: Account<'info, Market>,
+    pub market: Box<Account<'info, Market>>,
 
     #[account(
         init,
@@ -256,7 +258,7 @@ pub struct RegisterPriceCache<'info> {
         seeds = [SEED_PREFIX, SEED_PRICE_CACHE, &market_id],
         bump,
     )]
-    pub price_cache: Account<'info, PriceCache>,
+    pub price_cache: Box<Account<'info, PriceCache>>,
 
     pub system_program: Program<'info, System>,
 }
