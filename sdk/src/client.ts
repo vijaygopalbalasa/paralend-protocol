@@ -274,6 +274,13 @@ export class ParalendClient {
     irm: PublicKey;
     lltv: bigint;
     fee: bigint;
+    /**
+     * Unix seconds when this prediction market resolves. Pass 0 to
+     * create a classical lending market (no time-decay, no force-close).
+     */
+    resolutionTimestamp: bigint;
+    /** Kalshi ticker (UTF-8, zero-padded to 48 bytes). */
+    kalshiTicker: Buffer;
     payer: PublicKey;
   }): Promise<{
     marketId: Buffer;
@@ -290,8 +297,15 @@ export class ParalendClient {
       irm,
       lltv,
       fee,
+      resolutionTimestamp,
+      kalshiTicker,
       payer,
     } = params;
+    if (kalshiTicker.length !== 48) {
+      throw new Error(
+        `kalshiTicker must be exactly 48 bytes (got ${kalshiTicker.length})`
+      );
+    }
     const marketId = computeMarketId({
       collateralMint,
       loanMint,
@@ -317,7 +331,9 @@ export class ParalendClient {
         Array.from(loanOracleFeedId) as unknown as number[] & { length: 32 },
         irm,
         bigIntToBN(lltv),
-        bigIntToBN(fee)
+        bigIntToBN(fee),
+        new BN(resolutionTimestamp.toString()),
+        Array.from(kalshiTicker) as unknown as number[] & { length: 48 }
       )
       .accountsPartial({
         payer,
@@ -931,6 +947,92 @@ export class ParalendClient {
         protocolState,
         market: marketPda,
         position: positionPda,
+      })
+      .instruction();
+  }
+
+  // ─── Resolution Instructions ──────────────────────────────────────────────
+
+  /**
+   * Build a `forceClosePosition` instruction.
+   * Callable by any liquidator during the 2-hour force-close window.
+   */
+  async forceClosePositionIx(params: {
+    marketId: Buffer;
+    liquidator: PublicKey;
+    borrower: PublicKey;
+  }): Promise<TransactionInstruction> {
+    const { marketId, liquidator, borrower } = params;
+    const [marketPda] = deriveMarketPDA(marketId, this.program.programId);
+    const [positionPda] = derivePositionPDA(
+      marketId,
+      borrower,
+      this.program.programId
+    );
+    const [loanVaultPda] = deriveLoanVaultPDA(marketId, this.program.programId);
+    const [collateralVaultPda] = deriveCollateralVaultPDA(
+      marketId,
+      this.program.programId
+    );
+    const [priceCachePda] = derivePriceCachePDA(
+      marketId,
+      this.program.programId
+    );
+    const market = await this.getMarket(marketId);
+    const liquidatorLoanAta = getAssociatedTokenAddressSync(
+      market.loanMint,
+      liquidator
+    );
+    const liquidatorCollateralAta = getAssociatedTokenAddressSync(
+      market.collateralMint,
+      liquidator
+    );
+
+    return this.program.methods
+      .forceClosePosition(
+        Array.from(marketId) as unknown as number[] & { length: 32 }
+      )
+      .accountsPartial({
+        liquidator,
+        market: marketPda,
+        irm: market.irm,
+        borrowerPosition: positionPda,
+        borrower,
+        liquidatorLoanAta,
+        loanVault: loanVaultPda,
+        collateralVault: collateralVaultPda,
+        liquidatorCollateralAta,
+        priceCache: priceCachePda,
+        tokenProgram: TOKEN_PROGRAM_ID,
+      })
+      .instruction();
+  }
+
+  /**
+   * Build a `handleResolution` instruction. Signer must be the market's
+   * registered attester.
+   */
+  async handleResolutionIx(params: {
+    attester: PublicKey;
+    marketId: Buffer;
+    outcomeBit: 1 | 2;
+  }): Promise<TransactionInstruction> {
+    const { attester, marketId, outcomeBit } = params;
+    const [marketPda] = deriveMarketPDA(marketId, this.program.programId);
+    const [priceCachePda] = derivePriceCachePDA(
+      marketId,
+      this.program.programId
+    );
+
+    return this.program.methods
+      .handleResolution(
+        Array.from(marketId) as unknown as number[] & { length: 32 },
+        outcomeBit
+      )
+      .accountsPartial({
+        attester,
+        market: marketPda,
+        priceCache: priceCachePda,
       })
       .instruction();
   }
