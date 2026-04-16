@@ -22,10 +22,12 @@ import { Keypair, PublicKey, SystemProgram, Transaction } from "@solana/web3.js"
 
 import {
   APP_DEMO_CONFIG_PATH,
+  DEMO_ATTESTER_PATH,
   DEMO_DEPLOYMENT_PATH,
   DEMO_MARKETS,
   DEMO_MINTS_PATH,
   DEMO_WALLETS_PATH,
+  DemoAttesterFile,
   DemoDeploymentEntry,
   DemoDeploymentFile,
   DemoMintsFile,
@@ -175,10 +177,35 @@ async function seedSupply(params: {
     .rpc();
 }
 
+/**
+ * Fresh attestation right before a borrow — devnet confirmations can take
+ * longer than the 30 s MAX_ORACLE_AGE, so we re-push the last spot from
+ * the cache to reset the staleness timer.
+ */
+async function refreshAttestation(
+  program: ReturnType<typeof makeProgram>,
+  attester: Keypair,
+  market: DemoDeploymentEntry
+): Promise<void> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const methods = program.methods as any;
+  const marketId = Buffer.from(market.marketId, "hex");
+  const priceCache = derivePriceCache(marketId);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const cache = await (program.account as any).priceCache.fetch(priceCache);
+  const lastSpot = BigInt(cache.lastSpotWad.toString());
+  await methods
+    .attestPrice(Array.from(marketId), new BN(lastSpot.toString()))
+    .accountsPartial({ attester: attester.publicKey, priceCache })
+    .signers([attester])
+    .rpc();
+}
+
 async function seedCollateralAndBorrow(params: {
   program: ReturnType<typeof makeProgram>;
   payer: Keypair;
   actor: Keypair;
+  attester: Keypair;
   market: DemoDeploymentEntry;
   collateralAmount: bigint;
   borrowAmount: bigint;
@@ -186,6 +213,7 @@ async function seedCollateralAndBorrow(params: {
 }) {
   const {
     actor,
+    attester,
     borrowAmount,
     collateralAmount,
     market,
@@ -245,6 +273,10 @@ async function seedCollateralAndBorrow(params: {
     position
   );
   if (BigInt(refreshedPosition.borrowShares.toString()) === 0n) {
+    // Reset the staleness timer right before we borrow — devnet confirms
+    // are slow enough that a bare borrow often trips OraclePriceStale.
+    await refreshAttestation(program, attester, market);
+
     await methods
       .borrow(Array.from(marketId), new BN(borrowAmount.toString()), new BN(0))
       .accountsPartial({
@@ -271,9 +303,13 @@ async function main() {
 
   const deployment = readJsonFile<DemoDeploymentFile>(DEMO_DEPLOYMENT_PATH);
   const mints = readJsonFile<DemoMintsFile>(DEMO_MINTS_PATH);
-  if (!deployment || !mints) {
+  const attesterFile = readJsonFile<DemoAttesterFile>(DEMO_ATTESTER_PATH);
+  if (!deployment || !mints || !attesterFile) {
     throw new Error("Run setup-demo-markets.ts before fund-demo.ts.");
   }
+  const attester = Keypair.fromSecretKey(
+    Uint8Array.from(attesterFile.secretKey)
+  );
 
   const existingWallets = readJsonFile<DemoWalletsFile>(DEMO_WALLETS_PATH) ?? {
     primaryWallet: payer.publicKey.toBase58(),
@@ -324,20 +360,33 @@ async function main() {
     );
 
     // Give the borrower some YES tokens and have them borrow against the
-    // position. Collateral sized so effective borrow is healthy even under
-    // time-decay — roughly 50% of what the LLTV would allow.
+    // position. Borrow is sized at ~50 % of the CURRENT effective LLTV
+    // (not the raw base LLTV) so near-resolution markets like NFL-FINAL
+    // don't immediately fail health checks under the decayed cap.
     const collateralTokens = 500; // 500 YES tokens
     const expectedCollateralValue =
       collateralTokens * market.initialPriceUsd; // USD
+
+    const DECAY_START_SECONDS = 7 * 24 * 3600;
+    const remaining = market.resolutionTimestamp - Math.floor(Date.now() / 1000);
+    const baseLltvFraction = market.lltv / 100;
+    const effectiveLltvFraction =
+      remaining >= DECAY_START_SECONDS
+        ? baseLltvFraction
+        : remaining <= 0
+          ? 0
+          : baseLltvFraction * (remaining / DECAY_START_SECONDS);
+    const targetLtv = effectiveLltvFraction * 0.5; // 50 % of effective
     const borrowUsd = Math.max(
-      50,
-      Math.floor(expectedCollateralValue * 0.3) // 30% LTV at seed time
+      1,
+      Math.floor(expectedCollateralValue * targetLtv)
     );
 
     await seedCollateralAndBorrow({
       program,
       payer,
       actor: borrower,
+      attester,
       market,
       collateralAmount: toBaseUnits(
         collateralTokens,

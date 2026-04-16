@@ -1,7 +1,86 @@
 {
   "cluster": "devnet",
   "programId": "2kZNrHd7QkUemYCLFw5dYGQWeKieAUNb5C1FvTjTYiC8",
-  "generatedAt": "",
-  "tokens": {},
-  "markets": {}
+  "generatedAt": "2026-04-16T19:37:33.674Z",
+  "tokens": {
+    "8S8evHRXJNTfKQ4AXuw7g2WTxCUmyaXaFr3UP98sR7PS": {
+      "symbol": "USDC",
+      "name": "USD Coin (devnet)",
+      "icon": "$",
+      "decimals": 6
+    },
+    "Ez7oGBsS6X2wNAXqFQyjMvqjtPciDE2gWpS3itTTpMPS": {
+      "symbol": "YES",
+      "name": "BTC ≥ $150k YES",
+      "icon": "🟢",
+      "decimals": 6
+    },
+    "66b64Pdnv6cdRNYLcQTMQG9QdCDma9LeUfn3CCANbyyh": {
+      "symbol": "YES",
+      "name": "SOL ≥ $300 YES",
+      "icon": "🟣",
+      "decimals": 6
+    },
+    "26GMB1GQbCMyD4RDYQxkz2B5oraJ1KTFCR8qnKTvkn86": {
+      "symbol": "YES",
+      "name": "NFL Final YES",
+      "icon": "🏈",
+      "decimals": 6
+    }
+  },
+  "markets": {
+    "EmFwUCZ8BULCKdVG1vdxzV5yWSP3rjP1sqzg2GZoxnqA": {
+      "name": "BTC > $150k by Jun 2026",
+      "kalshiTicker": "BTC-150K-JUN2026",
+      "resolutionTimestamp": 1780256247,
+      "marketId": "77218115953a83516d682476304f4ad28a7edbfe908152f06aa652f44d0b866a",
+      "collateralMint": "Ez7oGBsS6X2wNAXqFQyjMvqjtPciDE2gWpS3itTTpMPS",
+      "loanMint": "8S8evHRXJNTfKQ4AXuw7g2WTxCUmyaXaFr3UP98sR7PS",
+      "collateralSymbol": "YES",
+      "loanSymbol": "USDC",
+      "oracle": "PriceCache (attester EMA)",
+      "lltv": 60,
+      "feeBps": 0,
+      "irm": "6F3BebK7gundPj6VP5FdUZuFBcXSAM3dtdqkvj1wbmaY",
+      "priceCache": "8fr1F9vnKHjKNsiJJwtjNkbMTx6JbYjsuDmDGYB15ua",
+      "collateralOracleFeedId": "9aebd1d72994bdd5f79b797bdb2c83833fc05080b26b373cc36f7321ac0aee76",
+      "loanOracleFeedId": "0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    "88DLELNnRaSQgSJMNbC5K64NxwtybPvUkTULjx2nVXvi": {
+      "name": "SOL > $300 by Dec 2026",
+      "kalshiTicker": "SOL-300-DEC2026",
+      "resolutionTimestamp": 1777059447,
+      "marketId": "98b114cd363335e021fb28afa7e748f84859371c74cc9d932fa95334011ed170",
+      "collateralMint": "66b64Pdnv6cdRNYLcQTMQG9QdCDma9LeUfn3CCANbyyh",
+      "loanMint": "8S8evHRXJNTfKQ4AXuw7g2WTxCUmyaXaFr3UP98sR7PS",
+      "collateralSymbol": "YES",
+      "loanSymbol": "USDC",
+      "oracle": "PriceCache (attester EMA)",
+      "lltv": 60,
+      "feeBps": 0,
+      "irm": "Ej5h2q5kqrSnrhMo57m5E1XLavaCZgcBPyCStWRKF4y4",
+      "priceCache": "Gb164TrLbFnAtxt9Ptq233KFhMfmhvdcipK9kLpUh6zk",
+      "collateralOracleFeedId": "222c2383570f15c9a53c229e863e8dab59d42e5f8285fea2d5a86d740f0a2323",
+      "loanOracleFeedId": "0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    "3J4JxfPpEGrch9NCorJRa6zD8Pk4kV3aZBC4hmKb1vyh": {
+      "name": "NFL Final (demo — 18h)",
+      "kalshiTicker": "NFL-FINAL-24H",
+      "resolutionTimestamp": 1776433047,
+      "marketId": "9590ae87d612d16f7ce3c4e3517214699339c881ad05a0913d07666a56ab8231",
+      "collateralMint": "26GMB1GQbCMyD4RDYQxkz2B5oraJ1KTFCR8qnKTvkn86",
+      "loanMint": "8S8evHRXJNTfKQ4AXuw7g2WTxCUmyaXaFr3UP98sR7PS",
+      "collateralSymbol": "YES",
+      "loanSymbol": "USDC",
+      "oracle": "PriceCache (attester EMA)",
+      "lltv": 55,
+      "feeBps": 0,
+      "irm": "29J49VeYrBANUXumfwpop9t8jXoiRVbaTaTyK8UsC9uk",
+      "priceCache": "GvFjZrvy2oDj9FChmePkbG1vMxkGc9qcxJvtdLnsNfnR",
+      "collateralOracleFeedId": "c7c430fc6e9369f0f59e73e43b8c84957afcdbc5e8f2d470f7b7b4db2b60acee",
+      "loanOracleFeedId": "0000000000000000000000000000000000000000000000000000000000000000"
+    }
+  },
+  "attester": "F97Cs7oaHXXHo46K9d8ixArNXmWDPmbpuv5NaNC6SEjM",
+  "primaryWallet": "EUBjDaCEsscGXySFzV68j6Z6xXu9o3B6GSdrHNwcowUj"
 }
