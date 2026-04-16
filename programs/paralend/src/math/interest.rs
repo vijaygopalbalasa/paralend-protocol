@@ -48,6 +48,19 @@ pub fn accrue_interest_on_market(
         });
     }
 
+    // Freeze interest on resolved markets. Otherwise unrecoverable bad
+    // debt (losing-side positions with $0 collateral) keeps compounding
+    // into `total_supply_assets`, which silently inflates lender share
+    // value with phantom USDC the vault does not actually hold — early
+    // withdrawers would drain real funds from late withdrawers.
+    if market.market_status == 2 {
+        market.last_update = current_timestamp;
+        return Ok(AccrualResult {
+            interest: 0,
+            fee_shares: 0,
+        });
+    }
+
     // Cap elapsed time to prevent overflow in Taylor expansion
     // After MAX_INTEREST_ACCRUAL_SECONDS, accrue iteratively if needed
     let elapsed_u128 = (elapsed as u128).min(MAX_INTEREST_ACCRUAL_SECONDS);

@@ -4,7 +4,9 @@ use anchor_spl::token::{self, Token, TokenAccount, Transfer};
 use crate::constants::*;
 use crate::errors::ParalendError;
 use crate::events;
-use crate::interfaces::oracle::{get_loan_price, is_position_healthy, read_price_cache};
+use crate::interfaces::oracle::{
+    get_loan_price, is_position_healthy, read_price_cache_stale_ok,
+};
 use crate::math::decay::compute_effective_lltv;
 use crate::math::interest::accrue_interest_on_market;
 use crate::math::safe_math::safe_u128_to_u64;
@@ -135,8 +137,12 @@ pub fn handle_force_close_position(
         now,
     )?;
 
-    // Health check under the time-decayed LLTV.
-    let collateral_price_wad = read_price_cache(
+    // Health check under the time-decayed LLTV. Tolerate a stale oracle
+    // here — see `read_price_cache_stale_ok` for the chicken-and-egg
+    // reasoning. Inside the 2h window, effective LLTV is already close
+    // to zero so price precision doesn't move the healthy/unhealthy
+    // boundary much.
+    let collateral_price_wad = read_price_cache_stale_ok(
         &ctx.accounts.price_cache,
         &ctx.accounts.market.collateral_oracle_feed_id,
         &market_id,

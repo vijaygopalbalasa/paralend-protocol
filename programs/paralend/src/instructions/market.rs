@@ -130,6 +130,36 @@ pub fn handle_create_market(
 ) -> Result<()> {
     require!(lltv > 0 && lltv < BPS, ParalendError::InvalidLltv);
 
+    // Prediction-market collateral is capped at 70 % LLTV regardless of
+    // what the caller requests. Applies only when the market has a real
+    // resolution — classical markets (resolution_timestamp == 0) are not
+    // affected since they never decay.
+    if resolution_timestamp != 0 {
+        require!(
+            lltv <= MAX_BINARY_LLTV_BPS,
+            ParalendError::InvalidLltv
+        );
+    }
+
+    // Validate the resolution horizon. Accept 0 (classical lending) or a
+    // future timestamp that is at least `FORCE_CLOSE_WINDOW_SECONDS`
+    // away — otherwise the market is born inside or past the window,
+    // breaking the force-close economics. Also reject timestamps more
+    // than 10 years out (sanity: catches off-by-1000 ms/s mistakes and
+    // nonsense values).
+    if resolution_timestamp != 0 {
+        let now = Clock::get()?.unix_timestamp;
+        require!(
+            resolution_timestamp > now + FORCE_CLOSE_WINDOW_SECONDS,
+            ParalendError::ResolutionTooEarly
+        );
+        const MAX_RESOLUTION_HORIZON: i64 = 10 * 365 * 24 * 3600;
+        require!(
+            resolution_timestamp <= now + MAX_RESOLUTION_HORIZON,
+            ParalendError::ResolutionTooEarly
+        );
+    }
+
     // Verify fee is within bounds
     require!(fee <= MAX_FEE_BPS, ParalendError::FeeExceedsMax);
 

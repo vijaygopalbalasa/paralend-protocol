@@ -79,6 +79,14 @@ pub mod paralend {
         instructions::admin::handle_poke_price(ctx, market_id)
     }
 
+    pub fn rotate_attester(
+        ctx: Context<RotateAttester>,
+        market_id: [u8; 32],
+        new_attester: Pubkey,
+    ) -> Result<()> {
+        instructions::admin::handle_rotate_attester(ctx, market_id, new_attester)
+    }
+
     pub fn set_fee(ctx: Context<SetFee>, market_id: [u8; 32], fee: u64) -> Result<()> {
         instructions::admin::handle_set_fee(ctx, market_id, fee)
     }

@@ -7,14 +7,40 @@ use crate::state::market::Market;
 use crate::state::oracle::PriceCache;
 use anchor_lang::prelude::*;
 
-/// Read collateral price from the market's PriceCache.
-/// Enforces feed_id binding + staleness check against `MAX_ORACLE_AGE`.
-///
-/// Returns `price_wad`: USD per base unit, WAD-scaled.
+/// Read collateral price from the market's PriceCache, enforcing feed
+/// binding AND staleness. Borrow / liquidate / withdraw-under-debt all
+/// call this — any stale read is a hard failure.
 pub fn read_price_cache(
     cache: &Account<PriceCache>,
     expected_feed_id: &[u8; 32],
     expected_market_id: &[u8; 32],
+) -> Result<u128> {
+    read_price_cache_inner(cache, expected_feed_id, expected_market_id, false)
+}
+
+/// Stale-tolerant variant used by the force-close path.
+///
+/// Rationale: `force_close_position` only activates in the 2-hour window
+/// where effective LLTV is already decaying toward zero, so price
+/// precision matters less than having *some* trigger available. If we
+/// required a fresh oracle read here, a dead attester (or a merely slow
+/// one inside that window) would make the entire protocol unclearable —
+/// positions rot into bad debt with no mechanism to seize the collateral.
+/// We still require the feed binding and a nonzero EMA so a wholly
+/// uninitialised cache is rejected.
+pub fn read_price_cache_stale_ok(
+    cache: &Account<PriceCache>,
+    expected_feed_id: &[u8; 32],
+    expected_market_id: &[u8; 32],
+) -> Result<u128> {
+    read_price_cache_inner(cache, expected_feed_id, expected_market_id, true)
+}
+
+fn read_price_cache_inner(
+    cache: &Account<PriceCache>,
+    expected_feed_id: &[u8; 32],
+    expected_market_id: &[u8; 32],
+    allow_stale: bool,
 ) -> Result<u128> {
     require!(
         cache.market_id == *expected_market_id,
@@ -33,16 +59,17 @@ pub fn read_price_cache(
         ParalendError::OraclePriceStale
     );
 
-    // Staleness: reject reads older than MAX_ORACLE_AGE seconds.
-    let now = Clock::get()?.unix_timestamp;
-    let age = now
-        .checked_sub(cache.last_update_ts)
-        .ok_or_else(|| error!(ParalendError::MathOverflow))?;
-    require!(age >= 0, ParalendError::OraclePriceStale);
-    require!(
-        (age as u64) <= MAX_ORACLE_AGE,
-        ParalendError::OraclePriceStale
-    );
+    if !allow_stale {
+        let now = Clock::get()?.unix_timestamp;
+        let age = now
+            .checked_sub(cache.last_update_ts)
+            .ok_or_else(|| error!(ParalendError::MathOverflow))?;
+        require!(age >= 0, ParalendError::OraclePriceStale);
+        require!(
+            (age as u64) <= MAX_ORACLE_AGE,
+            ParalendError::OraclePriceStale
+        );
+    }
 
     Ok(cache.ema_price_wad)
 }

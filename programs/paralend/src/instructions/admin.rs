@@ -273,8 +273,30 @@ pub fn handle_register_price_cache(
         initial_price_wad > 0,
         ParalendError::OraclePriceNonPositive
     );
+    require!(
+        attester != Pubkey::default(),
+        ParalendError::AttesterNotAuthorized
+    );
 
     let market = &ctx.accounts.market;
+
+    // Bound the initial seed: binary-outcome Kalshi YES/NO tokens can never
+    // trade above $1 per whole token. At `market.collateral_decimals` base
+    // units per whole token, that's WAD / 10^decimals per base unit.
+    // Allow up to 2× to absorb oracle decimal mistakes without trapping
+    // legitimate values; reject anything higher as a configuration error
+    // (catches misplaced decimal / WAD-vs-USD confusion at registration).
+    let decimals_factor = 10u128
+        .checked_pow(market.collateral_decimals as u32)
+        .ok_or_else(|| error!(ParalendError::MathOverflow))?;
+    let max_price_per_base_unit = (WAD
+        .checked_mul(2)
+        .ok_or_else(|| error!(ParalendError::MathOverflow))?)
+        / decimals_factor;
+    require!(
+        initial_price_wad <= max_price_per_base_unit,
+        ParalendError::OraclePriceNonPositive
+    );
     let clock = Clock::get()?;
 
     let cache = &mut ctx.accounts.price_cache;
@@ -328,21 +350,31 @@ pub fn handle_attest_price(
     let cache = &mut ctx.accounts.price_cache;
     let clock = Clock::get()?;
 
-    // Deviation check against last spot (skipped on the first attestation
-    // after registration — bootstrap edge case covered by init seeding).
+    // Deviation check bound against BOTH `last_spot_wad` AND `ema_price_wad`.
+    // Prior code only checked vs last_spot, which let a malicious attester
+    // walk the EMA ±5 % per tick in a ratcheting pattern — 15 attestations
+    // could move the EMA 2× in ~5 minutes. Bounding vs the EMA as well
+    // caps the moving average itself to a 5 % per-attestation change.
     if cache.last_spot_wad > 0 {
-        let prev = cache.last_spot_wad;
-        let band = prev
-            .checked_mul(MAX_PRICE_DEVIATION_BPS as u128)
-            .ok_or_else(|| error!(ParalendError::MathOverflow))?
-            .checked_div(BPS as u128)
-            .ok_or_else(|| error!(ParalendError::DivisionByZero))?;
-        let diff = if new_spot_wad > prev {
-            new_spot_wad - prev
-        } else {
-            prev - new_spot_wad
+        let band_from = |anchor: u128| -> Result<u128> {
+            Ok(anchor
+                .checked_mul(MAX_PRICE_DEVIATION_BPS as u128)
+                .ok_or_else(|| error!(ParalendError::MathOverflow))?
+                .checked_div(BPS as u128)
+                .ok_or_else(|| error!(ParalendError::DivisionByZero))?)
         };
-        require!(diff <= band, ParalendError::PriceDeviationExceeded);
+        let abs_diff = |a: u128, b: u128| if a > b { a - b } else { b - a };
+
+        let spot_band = band_from(cache.last_spot_wad)?;
+        require!(
+            abs_diff(new_spot_wad, cache.last_spot_wad) <= spot_band,
+            ParalendError::PriceDeviationExceeded
+        );
+        let ema_band = band_from(cache.ema_price_wad)?;
+        require!(
+            abs_diff(new_spot_wad, cache.ema_price_wad) <= ema_band,
+            ParalendError::PriceDeviationExceeded
+        );
     }
 
     // Linear EMA with fixed alpha = 10 % (new spot weighted 1/10).
@@ -407,12 +439,55 @@ pub fn handle_poke_price(
         ParalendError::OraclePriceStale
     );
 
-    // No change to prices; only refresh slot stamp for observability.
+    // Advance BOTH stamps. Earlier version only bumped the slot, which
+    // meant `read_price_cache` (which keys staleness off
+    // `last_update_ts`) still treated the cache as stale and the poke
+    // achieved nothing. Poke now buys one MAX_ORACLE_AGE window of life
+    // without changing the EMA — enough for a brief attester outage.
     cache.last_update_slot = clock.slot;
+    cache.last_update_ts = clock.unix_timestamp;
     emit!(events::PriceCachePoked {
         market_id: cache.market_id,
         slot: clock.slot,
     });
 
+    Ok(())
+}
+
+// ─── Rotate Attester ──────────────────────────────────────────────────────────
+
+/// Replace the attester pubkey on a PriceCache. Owner-only.
+/// Needed for key compromise + routine rotation since the initial attester
+/// is fixed at `register_price_cache` time.
+#[derive(Accounts)]
+#[instruction(market_id: [u8; 32])]
+pub struct RotateAttester<'info> {
+    pub owner: Signer<'info>,
+
+    #[account(
+        seeds = [SEED_PREFIX, SEED_PROTOCOL],
+        bump = protocol_state.bump,
+        constraint = protocol_state.owner == owner.key() @ ParalendError::Unauthorized,
+    )]
+    pub protocol_state: Box<Account<'info, ProtocolState>>,
+
+    #[account(
+        mut,
+        seeds = [SEED_PREFIX, SEED_PRICE_CACHE, &market_id],
+        bump = price_cache.bump,
+    )]
+    pub price_cache: Box<Account<'info, PriceCache>>,
+}
+
+pub fn handle_rotate_attester(
+    ctx: Context<RotateAttester>,
+    _market_id: [u8; 32],
+    new_attester: Pubkey,
+) -> Result<()> {
+    require!(
+        new_attester != Pubkey::default(),
+        ParalendError::AttesterNotAuthorized
+    );
+    ctx.accounts.price_cache.attester = new_attester;
     Ok(())
 }

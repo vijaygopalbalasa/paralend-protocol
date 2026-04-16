@@ -43,6 +43,17 @@ pub struct Liquidate<'info> {
         mut,
         seeds = [SEED_PREFIX, SEED_MARKET, &market_id],
         bump = market.bump,
+        // Block liquidate once the market is paused (handle_resolution pauses
+        // the market) — post-resolution clearing goes through force_close
+        // and, after T_resolution, through the resolution handler exclusively.
+        constraint = !market.paused @ ParalendError::MarketPaused,
+        // Block liquidate inside the force-close window so the force_close
+        // path is the canonical clearing mechanism near resolution.
+        // `resolution_timestamp == 0` = classical lending market, no gating.
+        constraint = market.resolution_timestamp == 0
+            || Clock::get()?.unix_timestamp
+                < market.resolution_timestamp - FORCE_CLOSE_WINDOW_SECONDS
+            @ ParalendError::ForceCloseWindowClosed,
     )]
     pub market: Box<Account<'info, Market>>,
 
