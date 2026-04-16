@@ -20,7 +20,7 @@ import {
   makeReadonlyProgram,
   toAssetsDown,
   toAssetsUp,
-} from "@/lib/nucleus-program";
+} from "@/lib/paralend-program";
 import { BPS, WAD } from "@/lib/constants";
 
 export interface MarketDetail {

@@ -11,4 +11,4 @@ export * from "./math";
 export * from "./types";
 
 // Anchor-backed client with account fetchers and instruction builders
-export { NucleusClient } from "./client";
+export { ParalendClient } from "./client";

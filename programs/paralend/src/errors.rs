@@ -1,7 +1,7 @@
 use anchor_lang::prelude::*;
 
 #[error_code]
-pub enum NucleusError {
+pub enum ParalendError {
     // Admin errors (6000-6009)
     #[msg("Unauthorized: caller is not the protocol owner")]
     Unauthorized, // 6000

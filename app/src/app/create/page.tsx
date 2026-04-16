@@ -23,7 +23,7 @@ import {
   makeProgram,
   parseHex32,
   toAnchorWallet,
-} from "@/lib/nucleus-program";
+} from "@/lib/paralend-program";
 import { LLTV_PRESETS, MAX_FEE_BPS } from "@/lib/constants";
 import { cn, formatUSD } from "@/lib/utils";
 
@@ -207,8 +207,8 @@ export default function CreateMarketPage() {
   return (
     <div className="mx-auto flex max-w-5xl flex-col gap-8">
       <div>
-        <h1 className="text-2xl font-bold text-nucleus-text-primary">Create a Market</h1>
-        <p className="mt-1 text-sm text-nucleus-text-secondary">
+        <h1 className="text-2xl font-bold text-paralend-text-primary">Create a Market</h1>
+        <p className="mt-1 text-sm text-paralend-text-secondary">
           One transaction. Deterministic market address. No listing committee.
         </p>
       </div>
@@ -218,8 +218,8 @@ export default function CreateMarketPage() {
           className={cn(
             "rounded-xl border px-4 py-3 text-sm",
             notice.type === "success"
-              ? "border-nucleus-green/30 bg-nucleus-green/10 text-nucleus-green"
-              : "border-nucleus-red/30 bg-nucleus-red/10 text-nucleus-red"
+              ? "border-paralend-green/30 bg-paralend-green/10 text-paralend-green"
+              : "border-paralend-red/30 bg-paralend-red/10 text-paralend-red"
           )}
         >
           {notice.message}
@@ -227,23 +227,23 @@ export default function CreateMarketPage() {
       )}
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-        <div className="rounded-lg border border-nucleus-border bg-white p-4 shadow-sm">
-          <div className="text-[10px] font-bold uppercase tracking-wider text-nucleus-text-secondary mb-1">
+        <div className="rounded-lg border border-paralend-border bg-white p-4 shadow-sm">
+          <div className="text-[10px] font-bold uppercase tracking-wider text-paralend-text-secondary mb-1">
             Estimated Cost
           </div>
-          <div className="text-xl font-black text-nucleus-text-primary">~0.01 SOL</div>
+          <div className="text-xl font-black text-paralend-text-primary">~0.01 SOL</div>
         </div>
-        <div className="rounded-lg border border-nucleus-border bg-white p-4 shadow-sm">
-          <div className="text-[10px] font-bold uppercase tracking-wider text-nucleus-text-secondary mb-1">
+        <div className="rounded-lg border border-paralend-border bg-white p-4 shadow-sm">
+          <div className="text-[10px] font-bold uppercase tracking-wider text-paralend-text-secondary mb-1">
             Confirmation
           </div>
-          <div className="text-xl font-black text-nucleus-text-primary">~400ms</div>
+          <div className="text-xl font-black text-paralend-text-primary">~400ms</div>
         </div>
-        <div className="rounded-lg border border-nucleus-border bg-white p-4 shadow-sm">
-          <div className="text-[10px] font-bold uppercase tracking-wider text-nucleus-text-secondary mb-1">
+        <div className="rounded-lg border border-paralend-border bg-white p-4 shadow-sm">
+          <div className="text-[10px] font-bold uppercase tracking-wider text-paralend-text-secondary mb-1">
             Protocol Fee
           </div>
-          <div className="text-xl font-black text-nucleus-text-primary">
+          <div className="text-xl font-black text-paralend-text-primary">
             {(feeBps / 100).toFixed(2)}%
           </div>
         </div>
@@ -264,12 +264,12 @@ export default function CreateMarketPage() {
                 key={market.marketId}
                 type="button"
                 onClick={() => applyTemplate(Object.keys(DEMO_CONFIG.markets).find((key) => DEMO_CONFIG.markets[key].marketId === market.marketId) ?? "")}
-                className="rounded-xl border border-nucleus-border bg-gray-50 p-4 text-left transition-colors hover:border-gray-400 hover:bg-white hover:shadow-sm"
+                className="rounded-xl border border-paralend-border bg-gray-50 p-4 text-left transition-colors hover:border-gray-400 hover:bg-white hover:shadow-sm"
               >
-                <div className="text-sm font-bold text-nucleus-text-primary tracking-tight">
+                <div className="text-sm font-bold text-paralend-text-primary tracking-tight">
                   {market.name}
                 </div>
-                <div className="mt-1 text-xs font-medium text-nucleus-text-secondary">
+                <div className="mt-1 text-xs font-medium text-paralend-text-secondary">
                   LLTV {market.lltv}% · IRM {formatAddressPreview(market.irm)}
                 </div>
               </button>
@@ -291,7 +291,7 @@ export default function CreateMarketPage() {
             <div className="flex flex-col gap-5">
               {demoTokens.length > 0 && (
                 <div>
-                  <div className="mb-2 text-xs uppercase tracking-wide text-nucleus-text-secondary">
+                  <div className="mb-2 text-xs uppercase tracking-wide text-paralend-text-secondary">
                     Demo token shortcuts
                   </div>
                   <div className="flex flex-wrap gap-2">
@@ -309,7 +309,7 @@ export default function CreateMarketPage() {
                             setLoanMint(token.mint);
                           }
                         }}
-                        className="rounded-lg border border-nucleus-border bg-nucleus-bg px-3 py-1.5 text-xs font-medium text-nucleus-text-secondary transition-colors hover:border-nucleus-primary/30 hover:text-nucleus-text-primary"
+                        className="rounded-lg border border-paralend-border bg-paralend-bg px-3 py-1.5 text-xs font-medium text-paralend-text-secondary transition-colors hover:border-paralend-primary/30 hover:text-paralend-text-primary"
                       >
                         {token.icon} {token.symbol}
                       </button>
@@ -355,7 +355,7 @@ export default function CreateMarketPage() {
                 error={errors.collateralOracleFeedId}
                 hint="The scripts generate these feed ids automatically and write them into the demo manifest."
               />
-              <div className="rounded-lg border border-nucleus-border bg-nucleus-bg p-3 text-xs text-nucleus-text-secondary">
+              <div className="rounded-lg border border-paralend-border bg-paralend-bg p-3 text-xs text-paralend-text-secondary">
                 Loan oracle feed is fixed to <code className="font-mono">0x00..00</code>, which
                 means the protocol prices the loan token at exactly $1 per token.
               </div>
@@ -382,10 +382,10 @@ export default function CreateMarketPage() {
 
               <div>
                 <div className="mb-3 flex items-center justify-between">
-                  <label className="text-xs font-medium uppercase tracking-wide text-nucleus-text-secondary">
+                  <label className="text-xs font-medium uppercase tracking-wide text-paralend-text-secondary">
                     LLTV
                   </label>
-                  <span className="text-xl font-bold tabular-nums text-nucleus-text-primary">
+                  <span className="text-xl font-bold tabular-nums text-paralend-text-primary">
                     {lltv}%
                   </span>
                 </div>
@@ -396,12 +396,12 @@ export default function CreateMarketPage() {
                   step={1}
                   value={lltv}
                   onChange={(event) => setLltv(Number(event.target.value))}
-                  className="h-2 w-full cursor-pointer appearance-none rounded-full bg-nucleus-border"
+                  className="h-2 w-full cursor-pointer appearance-none rounded-full bg-paralend-border"
                   style={{
                     background: `linear-gradient(to right, #000000 ${((lltv - 50) / 45) * 100}%, #E5E7EB ${((lltv - 50) / 45) * 100}%)`,
                   }}
                 />
-                <div className="mt-1 flex justify-between text-[10px] text-nucleus-text-secondary">
+                <div className="mt-1 flex justify-between text-[10px] text-paralend-text-secondary">
                   <span>50%</span>
                   <span>95%</span>
                 </div>
@@ -414,8 +414,8 @@ export default function CreateMarketPage() {
                       className={cn(
                         "rounded-lg border px-3 py-1.5 text-xs font-bold transition-colors",
                         lltv === preset.lltv
-                          ? "border-nucleus-primary bg-nucleus-primary text-white shadow-sm"
-                          : "border-nucleus-border bg-gray-50 text-nucleus-text-secondary hover:border-gray-400 hover:text-nucleus-text-primary"
+                          ? "border-paralend-primary bg-paralend-primary text-white shadow-sm"
+                          : "border-paralend-border bg-gray-50 text-paralend-text-secondary hover:border-gray-400 hover:text-paralend-text-primary"
                       )}
                       title={preset.description}
                     >
@@ -441,8 +441,8 @@ export default function CreateMarketPage() {
         </div>
 
         <div className="flex flex-col gap-6">
-          <div className="rounded-xl border border-nucleus-border bg-nucleus-card p-5">
-            <div className="text-sm font-semibold text-nucleus-text-primary">Market Summary</div>
+          <div className="rounded-xl border border-paralend-border bg-paralend-card p-5">
+            <div className="text-sm font-semibold text-paralend-text-primary">Market Summary</div>
             <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
               {[
                 { label: "Collateral", value: formatAddressPreview(collateralMint) },
@@ -453,16 +453,16 @@ export default function CreateMarketPage() {
                 { label: "Fee", value: `${(feeBps / 100).toFixed(2)}%` },
               ].map((row) => (
                 <div key={row.label} className="flex flex-col gap-0.5">
-                  <span className="text-xs text-nucleus-text-secondary">{row.label}</span>
-                  <span className="font-mono text-xs font-medium text-nucleus-text-primary">
+                  <span className="text-xs text-paralend-text-secondary">{row.label}</span>
+                  <span className="font-mono text-xs font-medium text-paralend-text-primary">
                     {row.value}
                   </span>
                 </div>
               ))}
             </div>
-            <div className="mt-4 border-t border-nucleus-border pt-4 text-xs text-nucleus-text-secondary">
+            <div className="mt-4 border-t border-paralend-border pt-4 text-xs text-paralend-text-secondary">
               Deterministic market id
-              <div className="mt-1 break-all font-mono text-[11px] text-nucleus-text-primary">
+              <div className="mt-1 break-all font-mono text-[11px] text-paralend-text-primary">
                 {marketIdHex || "Fill all fields to preview the market id"}
               </div>
             </div>
@@ -481,18 +481,18 @@ export default function CreateMarketPage() {
           >
             <div className="flex flex-col gap-3">
               {markets.length === 0 && (
-                <div className="text-sm text-nucleus-text-secondary">No markets found yet.</div>
+                <div className="text-sm text-paralend-text-secondary">No markets found yet.</div>
               )}
               {markets.slice(0, 6).map((market) => (
                 <Link
                   key={market.publicKey}
                   href={`/markets/${market.publicKey}`}
-                  className="rounded-lg border border-nucleus-border bg-nucleus-bg p-3 transition-colors hover:border-nucleus-primary/40"
+                  className="rounded-lg border border-paralend-border bg-paralend-bg p-3 transition-colors hover:border-paralend-primary/40"
                 >
-                  <div className="text-sm font-semibold text-nucleus-text-primary">
+                  <div className="text-sm font-semibold text-paralend-text-primary">
                     {market.collateralSymbol} / {market.loanSymbol}
                   </div>
-                  <div className="mt-1 text-xs text-nucleus-text-secondary">
+                  <div className="mt-1 text-xs text-paralend-text-secondary">
                     LLTV {market.lltv}% · TVL {formatUSD(market.tvlUsd)}
                   </div>
                 </Link>

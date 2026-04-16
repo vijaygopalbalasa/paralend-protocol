@@ -7,7 +7,7 @@ import {
   calculateUtilization,
   makeReadonlyProgram,
   irmBorrowRatePerSecond,
-} from "./nucleus-program";
+} from "./paralend-program";
 import { BPS, RPC_ENDPOINT, WAD } from "./constants";
 
 export interface MarketView {
@@ -105,7 +105,7 @@ export async function getAllMarkets(): Promise<MarketView[]> {
       })
     );
   } catch (err) {
-    console.error("[nucleus-rpc] getAllMarkets failed:", err);
+    console.error("[paralend-rpc] getAllMarkets failed:", err);
     return [];
   }
 }

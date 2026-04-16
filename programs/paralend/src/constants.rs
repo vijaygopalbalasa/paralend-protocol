@@ -41,7 +41,7 @@ pub const MAX_LLTVS: usize = 20;
 pub const MAX_IRMS: usize = 10;
 
 /// PDA seed prefix
-pub const SEED_PREFIX: &[u8] = b"nucleus";
+pub const SEED_PREFIX: &[u8] = b"paralend";
 pub const SEED_PROTOCOL: &[u8] = b"protocol_state";
 pub const SEED_MARKET: &[u8] = b"market";
 pub const SEED_POSITION: &[u8] = b"position";

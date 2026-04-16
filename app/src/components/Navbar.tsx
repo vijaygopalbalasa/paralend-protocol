@@ -15,7 +15,7 @@ export function Navbar() {
   const pathname = usePathname();
 
   return (
-    <nav className="sticky top-0 z-50 border-b border-nucleus-border bg-nucleus-bg/80 backdrop-blur-xl">
+    <nav className="sticky top-0 z-50 border-b border-paralend-border bg-paralend-bg/80 backdrop-blur-xl">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <div className="flex h-14 items-center justify-between gap-4">
           {/* Logo */}
@@ -23,10 +23,10 @@ export function Navbar() {
             href="/"
             className="flex items-center gap-2 shrink-0 group"
           >
-            <span className="text-lg font-black tracking-tight text-nucleus-primary group-hover:text-gray-600 transition-colors">
-              Nucleus
+            <span className="text-lg font-black tracking-tight text-paralend-primary group-hover:text-gray-600 transition-colors">
+              Paralend
             </span>
-            <span className="hidden sm:inline-block text-[10px] font-bold uppercase tracking-widest text-nucleus-text-secondary border border-nucleus-border rounded px-1.5 py-0.5">
+            <span className="hidden sm:inline-block text-[10px] font-bold uppercase tracking-widest text-paralend-text-secondary border border-paralend-border rounded px-1.5 py-0.5">
               devnet
             </span>
           </Link>
@@ -44,8 +44,8 @@ export function Navbar() {
                   className={cn(
                     "px-3 py-1.5 rounded-md text-sm font-semibold transition-colors",
                     active
-                      ? "bg-nucleus-primary text-white"
-                      : "text-nucleus-text-secondary hover:text-nucleus-primary hover:bg-gray-100"
+                      ? "bg-paralend-primary text-white"
+                      : "text-paralend-text-secondary hover:text-paralend-primary hover:bg-gray-100"
                   )}
                 >
                   {link.label}
@@ -73,8 +73,8 @@ export function Navbar() {
                 className={cn(
                   "shrink-0 px-3 py-1.5 rounded-md text-sm font-semibold transition-colors",
                   active
-                    ? "bg-nucleus-primary text-white"
-                    : "text-nucleus-text-secondary hover:text-nucleus-primary hover:bg-gray-100"
+                    ? "bg-paralend-primary text-white"
+                    : "text-paralend-text-secondary hover:text-paralend-primary hover:bg-gray-100"
                 )}
               >
                 {link.label}

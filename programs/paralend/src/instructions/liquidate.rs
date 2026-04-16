@@ -2,7 +2,7 @@ use anchor_lang::prelude::*;
 use anchor_spl::token::{self, Token, TokenAccount, Transfer};
 
 use crate::constants::*;
-use crate::errors::NucleusError;
+use crate::errors::ParalendError;
 use crate::events;
 use crate::interfaces::oracle::{get_loan_price, is_position_healthy, read_static_oracle_price};
 use crate::math::interest::accrue_interest_on_market;
@@ -43,12 +43,12 @@ pub struct Liquidate<'info> {
         mut,
         seeds = [SEED_PREFIX, SEED_MARKET, &market_id],
         bump = market.bump,
-        constraint = market.flash_loan_lock == 0 @ NucleusError::FlashLoanLocked,
+        constraint = market.flash_loan_lock == 0 @ ParalendError::FlashLoanLocked,
     )]
     pub market: Box<Account<'info, Market>>,
 
     #[account(
-        constraint = irm.key() == market.irm @ NucleusError::IrmNotEnabled,
+        constraint = irm.key() == market.irm @ ParalendError::IrmNotEnabled,
     )]
     pub irm: Box<Account<'info, LinearIrm>>,
 
@@ -57,7 +57,7 @@ pub struct Liquidate<'info> {
         mut,
         seeds = [SEED_PREFIX, SEED_POSITION, &market_id, borrower.key().as_ref()],
         bump = borrower_position.bump,
-        constraint = borrower_position.market_id == market_id @ NucleusError::Unauthorized,
+        constraint = borrower_position.market_id == market_id @ ParalendError::Unauthorized,
     )]
     pub borrower_position: Box<Account<'info, Position>>,
 
@@ -109,7 +109,7 @@ pub fn handle_liquidate(
     market_id: [u8; 32],
     seized_collateral: u64,
 ) -> Result<()> {
-    require!(seized_collateral > 0, NucleusError::ZeroAmount);
+    require!(seized_collateral > 0, ParalendError::ZeroAmount);
 
     // Accrue interest before any health check
     let clock = Clock::get()?;
@@ -136,12 +136,12 @@ pub fn handle_liquidate(
         collateral_price_wad,
         loan_price_wad,
     )?;
-    require!(!healthy, NucleusError::PositionHealthy);
+    require!(!healthy, ParalendError::PositionHealthy);
 
     // Cannot seize more collateral than position holds
     require!(
         position.collateral >= seized_collateral as u128,
-        NucleusError::InsufficientCollateral
+        ParalendError::InsufficientCollateral
     );
 
     // ── Compute LIF and repaid_assets ─────────────────────────────────────────
@@ -167,8 +167,8 @@ pub fn handle_liquidate(
     // denominator = BPS - cursor_factor (must be > 0 for valid lltv < BPS)
     let denom = bps
         .checked_sub(cursor_factor)
-        .ok_or_else(|| error!(NucleusError::MathOverflow))?;
-    require!(denom > 0, NucleusError::InvalidLltv);
+        .ok_or_else(|| error!(ParalendError::MathOverflow))?;
+    require!(denom > 0, ParalendError::InvalidLltv);
 
     // raw_lif = BPS² / denom
     let raw_lif = mul_div_up(bps * bps, 1, denom)?;
@@ -182,7 +182,7 @@ pub fn handle_liquidate(
     // Step 3: repaid = collateral_value * BPS / lif
     let repaid_assets = mul_div_down(collateral_value, bps, lif)?;
 
-    require!(repaid_assets > 0, NucleusError::ZeroAmount);
+    require!(repaid_assets > 0, ParalendError::ZeroAmount);
 
     // repaid_shares = how many borrow shares correspond to repaid_assets (round DOWN)
     // (fewer shares burned = slight protocol advantage, but can't over-clear)
@@ -210,11 +210,11 @@ pub fn handle_liquidate(
     market.total_borrow_assets = market
         .total_borrow_assets
         .checked_sub(repaid_assets)
-        .ok_or_else(|| error!(NucleusError::MathOverflow))?;
+        .ok_or_else(|| error!(ParalendError::MathOverflow))?;
     market.total_borrow_shares = market
         .total_borrow_shares
         .checked_sub(repaid_shares)
-        .ok_or_else(|| error!(NucleusError::MathOverflow))?;
+        .ok_or_else(|| error!(ParalendError::MathOverflow))?;
 
     // ── Update borrower position ──────────────────────────────────────────────
 
@@ -222,11 +222,11 @@ pub fn handle_liquidate(
     position.collateral = position
         .collateral
         .checked_sub(seized_collateral as u128)
-        .ok_or_else(|| error!(NucleusError::MathOverflow))?;
+        .ok_or_else(|| error!(ParalendError::MathOverflow))?;
     position.borrow_shares = position
         .borrow_shares
         .checked_sub(repaid_shares)
-        .ok_or_else(|| error!(NucleusError::MathOverflow))?;
+        .ok_or_else(|| error!(ParalendError::MathOverflow))?;
 
     // ── Bad debt socialization ────────────────────────────────────────────────
     //

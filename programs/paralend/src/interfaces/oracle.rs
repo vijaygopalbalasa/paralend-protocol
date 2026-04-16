@@ -1,5 +1,5 @@
 use crate::constants::{BPS, MAX_ORACLE_AGE, WAD};
-use crate::errors::NucleusError;
+use crate::errors::ParalendError;
 use crate::math::shares::to_assets_up;
 use crate::math::wad::{mul_div_down, mul_div_up};
 use crate::state::market::Market;
@@ -15,19 +15,19 @@ pub fn read_static_oracle_price(
 ) -> Result<u128> {
     require!(
         oracle.feed_id == *expected_feed_id,
-        NucleusError::OracleFeedMismatch
+        ParalendError::OracleFeedMismatch
     );
-    require!(oracle.price_wad > 0, NucleusError::OraclePriceNonPositive);
+    require!(oracle.price_wad > 0, ParalendError::OraclePriceNonPositive);
 
     // Check staleness
     let current_time = Clock::get()?.unix_timestamp;
     let age = current_time
         .checked_sub(oracle.last_update)
-        .ok_or_else(|| error!(NucleusError::MathOverflow))?;
-    require!(age >= 0, NucleusError::OraclePriceStale);
+        .ok_or_else(|| error!(ParalendError::MathOverflow))?;
+    require!(age >= 0, ParalendError::OraclePriceStale);
     require!(
         (age as u64) <= MAX_ORACLE_AGE,
-        NucleusError::OraclePriceStale
+        ParalendError::OraclePriceStale
     );
 
     Ok(oracle.price_wad)
@@ -74,10 +74,10 @@ pub fn is_position_healthy(
     // Healthy if: collateral_usd * lltv >= loan_usd * BPS
     let lhs = collateral_usd
         .checked_mul(market.lltv as u128)
-        .ok_or_else(|| error!(NucleusError::MathOverflow))?;
+        .ok_or_else(|| error!(ParalendError::MathOverflow))?;
     let rhs = loan_usd
         .checked_mul(BPS as u128)
-        .ok_or_else(|| error!(NucleusError::MathOverflow))?;
+        .ok_or_else(|| error!(ParalendError::MathOverflow))?;
 
     Ok(lhs >= rhs)
 }
@@ -93,10 +93,10 @@ pub fn get_loan_price(
         // Stablecoin: $1 per full token → WAD / 10^decimals per base unit
         let decimals_factor = 10u128
             .checked_pow(market.loan_decimals as u32)
-            .ok_or_else(|| error!(NucleusError::MathOverflow))?;
+            .ok_or_else(|| error!(ParalendError::MathOverflow))?;
         let price = WAD
             .checked_div(decimals_factor)
-            .ok_or_else(|| error!(NucleusError::DivisionByZero))?;
+            .ok_or_else(|| error!(ParalendError::DivisionByZero))?;
         Ok(price)
     } else {
         read_static_oracle_price(loan_oracle, &market.loan_oracle_feed_id)

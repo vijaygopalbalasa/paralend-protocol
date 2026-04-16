@@ -2,7 +2,7 @@ use anchor_lang::prelude::*;
 use anchor_spl::token::{self, Token, TokenAccount, Transfer};
 
 use crate::constants::*;
-use crate::errors::NucleusError;
+use crate::errors::ParalendError;
 use crate::events;
 use crate::interfaces::oracle::{get_loan_price, is_position_healthy, read_static_oracle_price};
 use crate::math::interest::accrue_interest_on_market;
@@ -29,7 +29,7 @@ pub struct Borrow<'info> {
     #[account(
         seeds = [SEED_PREFIX, SEED_PROTOCOL],
         bump = protocol_state.bump,
-        constraint = !protocol_state.paused @ NucleusError::ProtocolPaused,
+        constraint = !protocol_state.paused @ ParalendError::ProtocolPaused,
     )]
     pub protocol_state: Box<Account<'info, ProtocolState>>,
 
@@ -37,13 +37,13 @@ pub struct Borrow<'info> {
         mut,
         seeds = [SEED_PREFIX, SEED_MARKET, &market_id],
         bump = market.bump,
-        constraint = !market.paused @ NucleusError::MarketPaused,
-        constraint = market.flash_loan_lock == 0 @ NucleusError::FlashLoanLocked,
+        constraint = !market.paused @ ParalendError::MarketPaused,
+        constraint = market.flash_loan_lock == 0 @ ParalendError::FlashLoanLocked,
     )]
     pub market: Box<Account<'info, Market>>,
 
     #[account(
-        constraint = irm.key() == market.irm @ NucleusError::IrmNotEnabled,
+        constraint = irm.key() == market.irm @ ParalendError::IrmNotEnabled,
     )]
     pub irm: Box<Account<'info, LinearIrm>>,
 
@@ -51,8 +51,8 @@ pub struct Borrow<'info> {
         mut,
         seeds = [SEED_PREFIX, SEED_POSITION, &market_id, borrower.key().as_ref()],
         bump = position.bump,
-        constraint = position.owner == borrower.key() @ NucleusError::Unauthorized,
-        constraint = position.market_id == market_id @ NucleusError::Unauthorized,
+        constraint = position.owner == borrower.key() @ ParalendError::Unauthorized,
+        constraint = position.market_id == market_id @ ParalendError::Unauthorized,
     )]
     pub position: Box<Account<'info, Position>>,
 
@@ -88,7 +88,7 @@ pub fn handle_borrow(
     assets: u64,
     max_shares: u128,
 ) -> Result<()> {
-    require!(assets > 0, NucleusError::ZeroAmount);
+    require!(assets > 0, ParalendError::ZeroAmount);
 
     // Accrue interest before computing shares (price debt accurately)
     let clock = Clock::get()?;
@@ -103,7 +103,7 @@ pub fn handle_borrow(
     // Check available liquidity before taking on debt
     require!(
         market.available_liquidity() >= assets as u128,
-        NucleusError::InsufficientLiquidity
+        ParalendError::InsufficientLiquidity
     );
 
     // assets → borrow shares, round UP (borrower owes more — favors protocol)
@@ -116,25 +116,25 @@ pub fn handle_borrow(
     // Slippage protection: ensure user doesn't take on more debt shares than expected
     // max_shares = 0 means no slippage protection (backwards compatible)
     if max_shares > 0 {
-        require!(new_shares <= max_shares, NucleusError::SlippageExceeded);
+        require!(new_shares <= max_shares, ParalendError::SlippageExceeded);
     }
 
     // Update market totals
     market.total_borrow_assets = market
         .total_borrow_assets
         .checked_add(assets as u128)
-        .ok_or_else(|| error!(NucleusError::MathOverflow))?;
+        .ok_or_else(|| error!(ParalendError::MathOverflow))?;
     market.total_borrow_shares = market
         .total_borrow_shares
         .checked_add(new_shares)
-        .ok_or_else(|| error!(NucleusError::MathOverflow))?;
+        .ok_or_else(|| error!(ParalendError::MathOverflow))?;
 
     // Update position
     let position = &mut ctx.accounts.position;
     position.borrow_shares = position
         .borrow_shares
         .checked_add(new_shares)
-        .ok_or_else(|| error!(NucleusError::MathOverflow))?;
+        .ok_or_else(|| error!(ParalendError::MathOverflow))?;
 
     // Health check AFTER updating state (position must be healthy post-borrow)
     let collateral_price_wad = read_static_oracle_price(
@@ -150,7 +150,7 @@ pub fn handle_borrow(
         collateral_price_wad,
         loan_price_wad,
     )?;
-    require!(healthy, NucleusError::PositionUnhealthy);
+    require!(healthy, ParalendError::PositionUnhealthy);
 
     let market_id_copy = position.market_id;
     let borrower_key = ctx.accounts.borrower.key();
@@ -202,12 +202,12 @@ pub struct Repay<'info> {
         mut,
         seeds = [SEED_PREFIX, SEED_MARKET, &market_id],
         bump = market.bump,
-        constraint = market.flash_loan_lock == 0 @ NucleusError::FlashLoanLocked,
+        constraint = market.flash_loan_lock == 0 @ ParalendError::FlashLoanLocked,
     )]
     pub market: Box<Account<'info, Market>>,
 
     #[account(
-        constraint = irm.key() == market.irm @ NucleusError::IrmNotEnabled,
+        constraint = irm.key() == market.irm @ ParalendError::IrmNotEnabled,
     )]
     pub irm: Box<Account<'info, LinearIrm>>,
 
@@ -216,7 +216,7 @@ pub struct Repay<'info> {
         mut,
         seeds = [SEED_PREFIX, SEED_POSITION, &market_id, borrower.key().as_ref()],
         bump = position.bump,
-        constraint = position.market_id == market_id @ NucleusError::Unauthorized,
+        constraint = position.market_id == market_id @ ParalendError::Unauthorized,
     )]
     pub position: Box<Account<'info, Position>>,
 
@@ -251,7 +251,7 @@ pub fn handle_repay(
     // Exactly one of assets or shares must be non-zero
     require!(
         (assets == 0) != (shares == 0),
-        NucleusError::InvalidInput
+        ParalendError::InvalidInput
     );
 
     // Accrue interest before computing share/asset values
@@ -285,30 +285,30 @@ pub fn handle_repay(
         (assets_in, shares)
     };
 
-    require!(final_assets > 0, NucleusError::ZeroAmount);
+    require!(final_assets > 0, ParalendError::ZeroAmount);
 
     // Cannot repay more than the position owes
     require!(
         position.borrow_shares >= final_shares,
-        NucleusError::InsufficientShares
+        ParalendError::InsufficientShares
     );
 
     // Update market totals
     market.total_borrow_assets = market
         .total_borrow_assets
         .checked_sub(final_assets)
-        .ok_or_else(|| error!(NucleusError::MathOverflow))?;
+        .ok_or_else(|| error!(ParalendError::MathOverflow))?;
     market.total_borrow_shares = market
         .total_borrow_shares
         .checked_sub(final_shares)
-        .ok_or_else(|| error!(NucleusError::MathOverflow))?;
+        .ok_or_else(|| error!(ParalendError::MathOverflow))?;
 
     // Update position
     let position = &mut ctx.accounts.position;
     position.borrow_shares = position
         .borrow_shares
         .checked_sub(final_shares)
-        .ok_or_else(|| error!(NucleusError::MathOverflow))?;
+        .ok_or_else(|| error!(ParalendError::MathOverflow))?;
 
     let market_id_copy = position.market_id;
     let repayer_key = ctx.accounts.repayer.key();

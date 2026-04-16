@@ -1,8 +1,8 @@
-# Nucleus — Permissionless Isolated Lending on Solana
+# Paralend — Permissionless Isolated Lending on Solana
 
 Colosseum Frontier hackathon (Apr 6 – May 11, 2026). DeFi track. $25K prize + $250K accelerator.
 
-**The pitch:** Morpho Blue earns $132M ARR on Ethereum. Zero equivalent exists on Solana. Kamino V2 claims "permissionless" but requires admin key in practice. Nucleus is trustless-first — anyone creates a lending market with 5 parameters in one transaction. No admin, no governance, no whitelist.
+**The pitch:** Morpho Blue earns $132M ARR on Ethereum. Zero equivalent exists on Solana. Kamino V2 claims "permissionless" but requires admin key in practice. Paralend is trustless-first — anyone creates a lending market with 5 parameters in one transaction. No admin, no governance, no whitelist.
 
 ---
 
@@ -21,8 +21,8 @@ Colosseum Frontier hackathon (Apr 6 – May 11, 2026). DeFi track. $25K prize + 
 When changing instruction signatures (adding/removing accounts or args):
 1. Update the program instruction
 2. Rebuild IDL: `anchor build`
-3. Sync IDL to frontend: `cp target/idl/nucleus.json app/src/lib/nucleus-idl.json`
-4. Sync types: `cp target/types/nucleus.ts app/src/lib/nucleus-idl-types.ts`
+3. Sync IDL to frontend: `cp target/idl/paralend.json app/src/lib/paralend-idl.json`
+4. Sync types: `cp target/types/paralend.ts app/src/lib/paralend-idl-types.ts`
 5. Update ALL tests that call the instruction
 6. Update SDK client methods
 7. Update frontend calls
@@ -45,11 +45,11 @@ Add to MISTAKES.md when errors occur. Learn from them.
 |-------|--------|-------|
 | Anchor program | ✅ Complete | 20/20 integration tests passing |
 | Rust unit tests | ✅ 28/28 passing | math, shares, IRM |
-| TypeScript SDK | ✅ Complete | NucleusClient, PDA helpers, math utils |
+| TypeScript SDK | ✅ Complete | ParalendClient, PDA helpers, math utils |
 | Next.js frontend | ✅ Built + deployed | Live on Vercel |
 | Demo scripts | ✅ Working | setup-demo-markets, fund-demo, liquidation-bot |
-| GitHub repo | ✅ Private | github.com/vijaygopalbalasa/nucleus-protocol |
-| Vercel deploy | ✅ Live | nucleus-frontend-67t0tqgai-vijaygopal-balasas-projects.vercel.app |
+| GitHub repo | ✅ Private | github.com/vijaygopalbalasa/paralend-protocol |
+| Vercel deploy | ✅ Live | paralend-frontend-67t0tqgai-vijaygopal-balasas-projects.vercel.app |
 | Devnet program | ✅ Deployed | ForUjmX3VzE5EsRfzktF529LToK7vyzx6czH5o1dUTY8 |
 | Demo markets | ✅ Live | wSOL/USDC, JitoSOL/USDC, JUP/USDC with liquidity |
 
@@ -81,7 +81,7 @@ rustup default stable
 anchor build
 
 # Run unit tests (math, state) — 28/28 passing
-cargo test --manifest-path programs/nucleus/Cargo.toml
+cargo test --manifest-path programs/paralend/Cargo.toml
 
 # Run integration tests (localnet) — 19/19 passing
 anchor test
@@ -111,12 +111,12 @@ colosseum-frontier/
   Anchor.toml
   Cargo.toml                        # workspace
   tsconfig.json                     # covers sdk/ + scripts/ only (NOT app/ or tests/)
-  programs/nucleus/
+  programs/paralend/
     Cargo.toml                      # no solana-program direct dep (zeroize conflict)
     src/
       lib.rs                        # declare_id!, program entry
       constants.rs                  # WAD, BPS, seeds, VIRTUAL_SHARES, MAX_*
-      errors.rs                     # NucleusError (26 codes)
+      errors.rs                     # ParalendError (26 codes)
       events.rs                     # Anchor events
       math/
         mod.rs
@@ -148,7 +148,7 @@ colosseum-frontier/
     pdas.ts                         # 7 derive*PDA functions (findProgramAddressSync)
     math.ts                         # computeMarketId, shares math, APY, health factor, IRM
     types.ts                        # MarketState, PositionState, IrmState, etc.
-    client.ts                       # NucleusClient class — fetch + instruction builders
+    client.ts                       # ParalendClient class — fetch + instruction builders
     index.ts                        # barrel re-export
   scripts/
     setup-demo-markets.ts           # creates 3 demo markets + oracles on devnet
@@ -167,16 +167,16 @@ colosseum-frontier/
         usePositions.ts             # memcmp filter on owner field, computes health factor
       lib/
         constants.ts                # PROGRAM_ID, WAD, BPS, DEMO_MARKETS, TOKEN_META
-        nucleus-idl.json            # copy of target/idl/nucleus.json for Next.js
-        nucleus-idl-types.ts        # copy of target/types/nucleus.ts
-        nucleus-rpc.ts              # server-side getAllMarkets, getProtocolStats
+        paralend-idl.json            # copy of target/idl/paralend.json for Next.js
+        paralend-idl-types.ts        # copy of target/types/paralend.ts
+        paralend-rpc.ts              # server-side getAllMarkets, getProtocolStats
         utils.ts                    # cn(), formatUSD(), formatAPY(), formatHealthFactor()
       components/
         WalletProvider.tsx          # Phantom+Solflare adapters, autoConnect
         Navbar.tsx                  # sticky nav, WalletMultiButton
         ui/                         # button, card, input, badge, stat primitives
   tests/
-    nucleus.ts                      # 19 integration tests (run via anchor test / ts-mocha)
+    paralend.ts                      # 19 integration tests (run via anchor test / ts-mocha)
 ```
 
 ---
@@ -193,7 +193,7 @@ The root `tsconfig.json` covers **only** `sdk/src/`, `scripts/`, and `migrations
 In Anchor 0.31, `.accounts()` expects discriminated unions (one key at a time) for strict type safety. Tests use `.accounts()` multi-key which works at runtime but triggers TS2353. Tests pass 19/19. If you add new tests, either use `.accountsPartial()` (accepts partial objects) or add `// @ts-ignore`.
 
 ### getAllMarkets() and market IDs
-`NucleusClient.getAllMarkets()` returns `publicKey` (the account address) but `marketId` is a 32-byte zero buffer because the `Market` account doesn't store its own ID. Use `computeMarketId(params)` to get the real ID from known params.
+`ParalendClient.getAllMarkets()` returns `publicKey` (the account address) but `marketId` is a 32-byte zero buffer because the `Market` account doesn't store its own ID. Use `computeMarketId(params)` to get the real ID from known params.
 
 ---
 
@@ -201,25 +201,25 @@ In Anchor 0.31, `.accounts()` expects discriminated unions (one key at a time) f
 
 ```rust
 // ProtocolState (singleton)
-seeds = [b"nucleus", b"protocol_state"]
+seeds = [b"paralend", b"protocol_state"]
 
 // Market
 // market_id = keccak256(collateral_mint || loan_mint || collateral_oracle_feed_id || loan_oracle_feed_id || irm || lltv.to_le_bytes())
-seeds = [b"nucleus", b"market", &market_id]
+seeds = [b"paralend", b"market", &market_id]
 
 // Vault token accounts (owned by Market PDA via CPI)
-seeds = [b"nucleus", b"collateral_vault", &market_id]
-seeds = [b"nucleus", b"loan_vault", &market_id]
+seeds = [b"paralend", b"collateral_vault", &market_id]
+seeds = [b"paralend", b"loan_vault", &market_id]
 
 // Position (per user per market)
 // memcmp filter for owner: offset = 8 (disc) + 1 (bump) + 32 (market_id) = 41
-seeds = [b"nucleus", b"position", &market_id, owner.as_ref()]
+seeds = [b"paralend", b"position", &market_id, owner.as_ref()]
 
 // LinearIrm
-seeds = [b"nucleus", b"linear_irm", admin.as_ref(), &nonce.to_le_bytes()]
+seeds = [b"paralend", b"linear_irm", admin.as_ref(), &nonce.to_le_bytes()]
 
 // StaticOracle (localnet only)
-seeds = [b"nucleus", b"static_oracle", &feed_id]
+seeds = [b"paralend", b"static_oracle", &feed_id]
 ```
 
 ---
@@ -288,7 +288,7 @@ Bad debt socialization: if collateral=0 but borrow_shares remain after liquidati
 ## Dependency Notes
 
 ```toml
-# Cargo.toml — programs/nucleus
+# Cargo.toml — programs/paralend
 [dependencies]
 anchor-lang = { version = "0.31.1", features = ["init-if-needed"] }
 anchor-spl = "0.31.1"
@@ -317,11 +317,11 @@ anchor-spl = "0.31.1"
 - [x] **Day 6** — 19/19 integration tests passing (full flow + flash loans + liquidation)
 
 ### Week 2 — Done
-- [x] TypeScript SDK (`sdk/src/`) — NucleusClient, PDA helpers, math utils, APY calculations, zero tsc errors
+- [x] TypeScript SDK (`sdk/src/`) — ParalendClient, PDA helpers, math utils, APY calculations, zero tsc errors
 - [x] Demo scripts (`scripts/`) — setup-demo-markets.ts, fund-demo.ts, liquidation-bot.ts
 - [x] Next.js frontend (`app/`) — markets, positions, create, home pages with live chain data hooks
-- [x] GitHub repo — private, at github.com/vijaygopalbalasa/nucleus-protocol
-- [x] Vercel deployment — live at nucleus-frontend-cuu50kx4x-vijaygopal-balasas-projects.vercel.app
+- [x] GitHub repo — private, at github.com/vijaygopalbalasa/paralend-protocol
+- [x] Vercel deployment — live at paralend-frontend-cuu50kx4x-vijaygopal-balasas-projects.vercel.app
 - [x] Detective audit — 6 bugs fixed (see commit e910cb4)
 - [ ] Devnet program deploy — blocked on 4.25 SOL (faucet rate-limited)
 
@@ -331,23 +331,23 @@ anchor-spl = "0.31.1"
 
 **When judges ask "What about Kamino V2?":**
 
-> "Kamino V2 requires an admin key to create markets — it's a curated product. Nucleus is a protocol: the market address is the keccak hash of its 5 parameters. There is no admin, no governance, no ability to pause a specific market. It's the same difference as Compound vs Morpho."
+> "Kamino V2 requires an admin key to create markets — it's a curated product. Paralend is a protocol: the market address is the keccak hash of its 5 parameters. There is no admin, no governance, no ability to pause a specific market. It's the same difference as Compound vs Morpho."
 
 **Key numbers for the pitch:**
 - Morpho Blue: $132M ARR on Ethereum, $5.8-13B TVL
 - Kamino V2: All markets team-curated in practice
-- Nucleus: First truly permissionless isolated lending on Solana
+- Paralend: First truly permissionless isolated lending on Solana
 
 ---
 
 ## Demo Script (3 min)
 
-1. **0:00-0:15** — Landing page with live TVL. Hook: "Kamino takes months to list a new token. Nucleus takes 30 seconds."
+1. **0:00-0:15** — Landing page with live TVL. Hook: "Kamino takes months to list a new token. Paralend takes 30 seconds."
 2. **0:15-0:45** — Create JUP/USDC market live. 5 fields. 400ms confirmation. **This is the wow moment.**
 3. **0:45-1:30** — Supply 5000 USDC. Switch wallet, post JUP collateral, borrow 3000 USDC. Show health factor.
 4. **1:30-2:00** — Liquidate pre-staged unhealthy position.
 5. **2:00-2:30** — Positions page with health factors.
-6. **2:30-3:00** — Close: "$132M ARR on Ethereum. Zero on Solana. Nucleus is it."
+6. **2:30-3:00** — Close: "$132M ARR on Ethereum. Zero on Solana. Paralend is it."
 
 ---
 
@@ -366,7 +366,7 @@ ForUjmX3VzE5EsRfzktF529LToK7vyzx6czH5o1dUTY8  (devnet — deployed Apr 16, 2026)
 - JitoSOL / USDC — 25k USDC supplied  
 - JUP / USDC — created, needs liquidity
 
-**Frontend:** https://nucleus-frontend-67t0tqgai-vijaygopal-balasas-projects.vercel.app
+**Frontend:** https://paralend-frontend-67t0tqgai-vijaygopal-balasas-projects.vercel.app
 
 ### Redeploy (if needed)
 ```bash
@@ -377,8 +377,8 @@ export PATH="$HOME/.local/share/solana/install/active_release/bin:$PATH"
 
 ### After deploy — update Program ID in 4 places
 ```bash
-# 1. programs/nucleus/src/lib.rs — declare_id!("NEW_ID")
-# 2. Anchor.toml — [programs.devnet] nucleus = "NEW_ID"
+# 1. programs/paralend/src/lib.rs — declare_id!("NEW_ID")
+# 2. Anchor.toml — [programs.devnet] paralend = "NEW_ID"
 # 3. sdk/src/constants.ts — PROGRAM_ID = new PublicKey("NEW_ID")
 # 4. app/src/lib/constants.ts — PROGRAM_ID = "NEW_ID"
 ```
@@ -414,13 +414,13 @@ These features are documented but not implemented. They are acceptable for hacka
 - **What:** Detect and handle tokens that take fees on transfer (e.g., some rebasing tokens)
 - **Why deferred:** Demo uses standard SPL tokens. Complex to implement correctly.
 - **Risk:** Accounting mismatch if fee-on-transfer token is used as loan/collateral.
-- **TODO location:** `programs/nucleus/src/instructions/supply.rs`, `collateral.rs`
+- **TODO location:** `programs/paralend/src/instructions/supply.rs`, `collateral.rs`
 
 ### 2. Cross-Market Flash Loan Isolation (Low Priority)
 - **What:** Prevent flash loans from being used to manipulate other markets
 - **Why deferred:** Single-market demo. Attacker would need significant capital anyway.
 - **Risk:** Sophisticated attacker could manipulate oracle prices across markets.
-- **TODO location:** `programs/nucleus/src/instructions/flash_loan.rs`
+- **TODO location:** `programs/paralend/src/instructions/flash_loan.rs`
 
 ---
 
@@ -435,7 +435,7 @@ Every instruction MUST have:
 Test file structure:
 ```
 tests/
-  nucleus.ts           # Main integration tests (happy paths)
+  paralend.ts           # Main integration tests (happy paths)
   security.ts          # Security-focused tests (pause, staleness, access)
   errors.ts            # Negative tests (all error codes)
   edge-cases.ts        # Boundary conditions, precision, overflow

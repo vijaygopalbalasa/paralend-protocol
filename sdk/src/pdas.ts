@@ -13,7 +13,7 @@ import {
 
 /**
  * Derive the ProtocolState singleton PDA.
- * Seeds: ["nucleus", "protocol_state"]
+ * Seeds: ["paralend", "protocol_state"]
  */
 export function deriveProtocolStatePDA(
   programId: PublicKey = PROGRAM_ID
@@ -26,7 +26,7 @@ export function deriveProtocolStatePDA(
 
 /**
  * Derive the Market PDA for a given market ID.
- * Seeds: ["nucleus", "market", marketId]
+ * Seeds: ["paralend", "market", marketId]
  */
 export function deriveMarketPDA(
   marketId: Buffer,
@@ -40,7 +40,7 @@ export function deriveMarketPDA(
 
 /**
  * Derive the collateral vault token account PDA for a market.
- * Seeds: ["nucleus", "collateral_vault", marketId]
+ * Seeds: ["paralend", "collateral_vault", marketId]
  */
 export function deriveCollateralVaultPDA(
   marketId: Buffer,
@@ -54,7 +54,7 @@ export function deriveCollateralVaultPDA(
 
 /**
  * Derive the loan vault token account PDA for a market.
- * Seeds: ["nucleus", "loan_vault", marketId]
+ * Seeds: ["paralend", "loan_vault", marketId]
  */
 export function deriveLoanVaultPDA(
   marketId: Buffer,
@@ -68,7 +68,7 @@ export function deriveLoanVaultPDA(
 
 /**
  * Derive the Position PDA for (market, owner).
- * Seeds: ["nucleus", "position", marketId, owner]
+ * Seeds: ["paralend", "position", marketId, owner]
  */
 export function derivePositionPDA(
   marketId: Buffer,
@@ -83,7 +83,7 @@ export function derivePositionPDA(
 
 /**
  * Derive the LinearIrm PDA for (admin, nonce).
- * Seeds: ["nucleus", "linear_irm", admin, nonce_le_bytes]
+ * Seeds: ["paralend", "linear_irm", admin, nonce_le_bytes]
  */
 export function deriveLinearIrmPDA(
   admin: PublicKey,
@@ -106,7 +106,7 @@ export function deriveLinearIrmPDA(
 
 /**
  * Derive the StaticOracle PDA for a given feed ID.
- * Seeds: ["nucleus", "static_oracle", feedId]
+ * Seeds: ["paralend", "static_oracle", feedId]
  */
 export function deriveStaticOraclePDA(
   feedId: Buffer,

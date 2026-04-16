@@ -48,19 +48,19 @@ export function formatHealthFactor(hf: number): string {
 }
 
 export function healthFactorColor(hf: number): string {
-  if (hf >= 1.5) return "text-nucleus-green";
-  if (hf >= 1.1) return "text-nucleus-yellow";
-  return "text-nucleus-red";
+  if (hf >= 1.5) return "text-paralend-green";
+  if (hf >= 1.1) return "text-paralend-yellow";
+  return "text-paralend-red";
 }
 
 export function healthFactorBg(hf: number): string {
-  if (hf >= 1.5) return "bg-nucleus-green/10 text-nucleus-green border-nucleus-green/20";
-  if (hf >= 1.1) return "bg-nucleus-yellow/10 text-nucleus-yellow border-nucleus-yellow/20";
-  return "bg-nucleus-red/10 text-nucleus-red border-nucleus-red/20";
+  if (hf >= 1.5) return "bg-paralend-green/10 text-paralend-green border-paralend-green/20";
+  if (hf >= 1.1) return "bg-paralend-yellow/10 text-paralend-yellow border-paralend-yellow/20";
+  return "bg-paralend-red/10 text-paralend-red border-paralend-red/20";
 }
 
 export function utilizationColor(util: number): string {
-  if (util < 60) return "bg-nucleus-green";
-  if (util < 85) return "bg-nucleus-yellow";
-  return "bg-nucleus-red";
+  if (util < 60) return "bg-paralend-green";
+  if (util < 85) return "bg-paralend-yellow";
+  return "bg-paralend-red";
 }

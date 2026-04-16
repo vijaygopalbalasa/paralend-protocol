@@ -26,7 +26,7 @@ export const LIF_CURSOR = BigInt(3_000); // 30%
 export const FLASH_LOAN_FEE_BPS = BigInt(5); // 0.05%
 
 // PDA seeds (Buffer for use with findProgramAddressSync)
-export const SEED_PREFIX = Buffer.from("nucleus");
+export const SEED_PREFIX = Buffer.from("paralend");
 export const SEED_PROTOCOL = Buffer.from("protocol_state");
 export const SEED_MARKET = Buffer.from("market");
 export const SEED_POSITION = Buffer.from("position");

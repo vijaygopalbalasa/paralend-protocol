@@ -6,7 +6,7 @@ export const NETWORK = "devnet";
 export const RPC_ENDPOINT =
   process.env.NEXT_PUBLIC_RPC_URL ?? "https://api.devnet.solana.com";
 
-// Protocol constants (mirrors programs/nucleus/src/constants.rs)
+// Protocol constants (mirrors programs/paralend/src/constants.rs)
 export const WAD = BigInt("1000000000000000000"); // 1e18
 export const BPS = 10_000n;
 export const VIRTUAL_SHARES = 1_000_000n;

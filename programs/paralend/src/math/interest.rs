@@ -1,5 +1,5 @@
 use crate::constants::{BPS, MAX_INTEREST_ACCRUAL_SECONDS, SECONDS_PER_YEAR, WAD};
-use crate::errors::NucleusError;
+use crate::errors::ParalendError;
 use crate::math::shares::to_shares_down;
 use crate::math::wad::{mul_div_down, w_taylor_compounded, wad_mul_down};
 use crate::state::irm::LinearIrm;
@@ -37,7 +37,7 @@ pub fn accrue_interest_on_market(
 ) -> Result<AccrualResult> {
     let elapsed = current_timestamp
         .checked_sub(market.last_update)
-        .ok_or_else(|| error!(NucleusError::MathOverflow))?;
+        .ok_or_else(|| error!(ParalendError::MathOverflow))?;
 
     // No time passed, no interest to accrue
     if elapsed <= 0 || market.total_borrow_assets == 0 {
@@ -65,12 +65,12 @@ pub fn accrue_interest_on_market(
     market.total_borrow_assets = market
         .total_borrow_assets
         .checked_add(interest)
-        .ok_or_else(|| error!(NucleusError::MathOverflow))?;
+        .ok_or_else(|| error!(ParalendError::MathOverflow))?;
 
     market.total_supply_assets = market
         .total_supply_assets
         .checked_add(interest)
-        .ok_or_else(|| error!(NucleusError::MathOverflow))?;
+        .ok_or_else(|| error!(ParalendError::MathOverflow))?;
 
     // Compute protocol fee shares
     let mut fee_shares: u128 = 0;
@@ -91,12 +91,12 @@ pub fn accrue_interest_on_market(
             market.total_supply_shares = market
                 .total_supply_shares
                 .checked_add(fee_shares)
-                .ok_or_else(|| error!(NucleusError::MathOverflow))?;
+                .ok_or_else(|| error!(ParalendError::MathOverflow))?;
 
             market.pending_fee_shares = market
                 .pending_fee_shares
                 .checked_add(fee_shares)
-                .ok_or_else(|| error!(NucleusError::MathOverflow))?;
+                .ok_or_else(|| error!(ParalendError::MathOverflow))?;
         }
     }
 
@@ -117,7 +117,7 @@ pub fn compute_supply_rate_per_second(irm: &LinearIrm, market: &Market) -> Resul
     let rate_times_util = wad_mul_down(borrow_rate, utilization)?;
     let fee_factor = (BPS as u128)
         .checked_sub(market.fee as u128)
-        .ok_or_else(|| error!(NucleusError::MathOverflow))?;
+        .ok_or_else(|| error!(ParalendError::MathOverflow))?;
     mul_div_down(rate_times_util, fee_factor, BPS as u128)
 }
 

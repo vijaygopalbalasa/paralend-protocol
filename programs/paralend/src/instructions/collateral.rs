@@ -2,7 +2,7 @@ use anchor_lang::prelude::*;
 use anchor_spl::token::{self, Token, TokenAccount, Transfer};
 
 use crate::constants::*;
-use crate::errors::NucleusError;
+use crate::errors::ParalendError;
 use crate::events;
 use crate::interfaces::oracle::{get_loan_price, is_position_healthy, read_static_oracle_price};
 use crate::math::interest::accrue_interest_on_market;
@@ -23,7 +23,7 @@ pub struct SupplyCollateral<'info> {
     #[account(
         seeds = [SEED_PREFIX, SEED_MARKET, &market_id],
         bump = market.bump,
-        constraint = market.flash_loan_lock == 0 @ NucleusError::FlashLoanLocked,
+        constraint = market.flash_loan_lock == 0 @ ParalendError::FlashLoanLocked,
     )]
     pub market: Account<'info, Market>,
 
@@ -32,8 +32,8 @@ pub struct SupplyCollateral<'info> {
         mut,
         seeds = [SEED_PREFIX, SEED_POSITION, &market_id, depositor.key().as_ref()],
         bump = position.bump,
-        constraint = position.owner == depositor.key() @ NucleusError::Unauthorized,
-        constraint = position.market_id == market_id @ NucleusError::Unauthorized,
+        constraint = position.owner == depositor.key() @ ParalendError::Unauthorized,
+        constraint = position.market_id == market_id @ ParalendError::Unauthorized,
     )]
     pub position: Account<'info, Position>,
 
@@ -61,7 +61,7 @@ pub fn handle_supply_collateral(
     _market_id: [u8; 32],
     amount: u64,
 ) -> Result<()> {
-    require!(amount > 0, NucleusError::ZeroAmount);
+    require!(amount > 0, ParalendError::ZeroAmount);
 
     // Transfer collateral from depositor to vault
     token::transfer(
@@ -81,7 +81,7 @@ pub fn handle_supply_collateral(
     position.collateral = position
         .collateral
         .checked_add(amount as u128)
-        .ok_or_else(|| error!(NucleusError::MathOverflow))?;
+        .ok_or_else(|| error!(ParalendError::MathOverflow))?;
 
     emit!(events::CollateralSupplied {
         market_id: position.market_id,
@@ -105,13 +105,13 @@ pub struct WithdrawCollateral<'info> {
         mut,
         seeds = [SEED_PREFIX, SEED_MARKET, &market_id],
         bump = market.bump,
-        constraint = market.flash_loan_lock == 0 @ NucleusError::FlashLoanLocked,
+        constraint = market.flash_loan_lock == 0 @ ParalendError::FlashLoanLocked,
     )]
     pub market: Box<Account<'info, Market>>,
 
     /// IRM account needed for interest accrual
     #[account(
-        constraint = irm.key() == market.irm @ NucleusError::IrmNotEnabled,
+        constraint = irm.key() == market.irm @ ParalendError::IrmNotEnabled,
     )]
     pub irm: Box<Account<'info, LinearIrm>>,
 
@@ -120,8 +120,8 @@ pub struct WithdrawCollateral<'info> {
         mut,
         seeds = [SEED_PREFIX, SEED_POSITION, &market_id, owner.key().as_ref()],
         bump = position.bump,
-        constraint = position.owner == owner.key() @ NucleusError::Unauthorized,
-        constraint = position.market_id == market_id @ NucleusError::Unauthorized,
+        constraint = position.owner == owner.key() @ ParalendError::Unauthorized,
+        constraint = position.market_id == market_id @ ParalendError::Unauthorized,
     )]
     pub position: Box<Account<'info, Position>>,
 
@@ -159,12 +159,12 @@ pub fn handle_withdraw_collateral(
     market_id: [u8; 32],
     amount: u64,
 ) -> Result<()> {
-    require!(amount > 0, NucleusError::ZeroAmount);
+    require!(amount > 0, ParalendError::ZeroAmount);
 
     let position = &ctx.accounts.position;
     require!(
         position.collateral >= amount as u128,
-        NucleusError::InsufficientCollateral
+        ParalendError::InsufficientCollateral
     );
 
     // Accrue interest before health check so we use up-to-date debt figures
@@ -180,7 +180,7 @@ pub fn handle_withdraw_collateral(
     position.collateral = position
         .collateral
         .checked_sub(amount as u128)
-        .ok_or_else(|| error!(NucleusError::MathOverflow))?;
+        .ok_or_else(|| error!(ParalendError::MathOverflow))?;
 
     // Health check: only required if position has debt
     if position.has_debt() {
@@ -197,7 +197,7 @@ pub fn handle_withdraw_collateral(
             collateral_price_wad,
             loan_price_wad,
         )?;
-        require!(healthy, NucleusError::PositionUnhealthy);
+        require!(healthy, ParalendError::PositionUnhealthy);
     }
 
     // Transfer collateral from vault to receiver, signed by market PDA

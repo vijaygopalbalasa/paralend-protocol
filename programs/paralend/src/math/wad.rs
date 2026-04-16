@@ -1,27 +1,27 @@
 use crate::constants::WAD;
-use crate::errors::NucleusError;
+use crate::errors::ParalendError;
 use anchor_lang::prelude::*;
 
 /// Multiply two values and divide by a third, rounding down
 /// result = (a * b) / c, rounded toward zero
 pub fn mul_div_down(a: u128, b: u128, c: u128) -> Result<u128> {
-    require!(c > 0, NucleusError::DivisionByZero);
+    require!(c > 0, ParalendError::DivisionByZero);
     // Use u128 directly — max product is u64::MAX * u64::MAX which fits in u128
     // For larger values, we need to be careful about overflow
     // Split into high/low multiplication if needed
-    let product = a.checked_mul(b).ok_or_else(|| error!(NucleusError::MathOverflow))?;
+    let product = a.checked_mul(b).ok_or_else(|| error!(ParalendError::MathOverflow))?;
     Ok(product / c)
 }
 
 /// Multiply two values and divide by a third, rounding up
 /// result = ceil(a * b / c)
 pub fn mul_div_up(a: u128, b: u128, c: u128) -> Result<u128> {
-    require!(c > 0, NucleusError::DivisionByZero);
-    let product = a.checked_mul(b).ok_or_else(|| error!(NucleusError::MathOverflow))?;
+    require!(c > 0, ParalendError::DivisionByZero);
+    let product = a.checked_mul(b).ok_or_else(|| error!(ParalendError::MathOverflow))?;
     // (product + c - 1) / c = ceil(product / c)
     let result = product
         .checked_add(c - 1)
-        .ok_or_else(|| error!(NucleusError::MathOverflow))?
+        .ok_or_else(|| error!(ParalendError::MathOverflow))?
         / c;
     Ok(result)
 }
@@ -47,7 +47,7 @@ pub fn wad_mul_up(a: u128, b: u128) -> Result<u128> {
 pub fn w_taylor_compounded(rate_per_second: u128, elapsed: u128) -> Result<u128> {
     let x = rate_per_second
         .checked_mul(elapsed)
-        .ok_or_else(|| error!(NucleusError::MathOverflow))?;
+        .ok_or_else(|| error!(ParalendError::MathOverflow))?;
 
     if x == 0 {
         return Ok(0);
@@ -66,7 +66,7 @@ pub fn w_taylor_compounded(rate_per_second: u128, elapsed: u128) -> Result<u128>
     first_term
         .checked_add(second_term)
         .and_then(|v| v.checked_add(third_term))
-        .ok_or_else(|| error!(NucleusError::MathOverflow))
+        .ok_or_else(|| error!(ParalendError::MathOverflow))
 }
 
 #[cfg(test)]

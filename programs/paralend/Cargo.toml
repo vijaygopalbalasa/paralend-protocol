@@ -1,12 +1,12 @@
 [package]
-name = "nucleus"
+name = "paralend"
 version = "0.1.0"
-description = "Permissionless isolated lending protocol on Solana"
+description = "Credit layer for prediction markets on Solana"
 edition = "2021"
 
 [lib]
 crate-type = ["cdylib", "lib"]
-name = "nucleus"
+name = "paralend"
 
 [features]
 default = []

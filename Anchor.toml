@@ -6,10 +6,10 @@ resolution = true
 skip-lint = false
 
 [programs.localnet]
-nucleus = "ForUjmX3VzE5EsRfzktF529LToK7vyzx6czH5o1dUTY8"
+paralend = "2kZNrHd7QkUemYCLFw5dYGQWeKieAUNb5C1FvTjTYiC8"
 
 [programs.devnet]
-nucleus = "ForUjmX3VzE5EsRfzktF529LToK7vyzx6czH5o1dUTY8"
+paralend = "2kZNrHd7QkUemYCLFw5dYGQWeKieAUNb5C1FvTjTYiC8"
 
 [registry]
 url = "https://api.apr.dev"

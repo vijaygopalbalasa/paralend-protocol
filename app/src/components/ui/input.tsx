@@ -21,14 +21,14 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
         {label && (
           <label
             htmlFor={inputId}
-            className="block text-xs font-medium text-nucleus-text-secondary mb-1.5 uppercase tracking-wide"
+            className="block text-xs font-medium text-paralend-text-secondary mb-1.5 uppercase tracking-wide"
           >
             {label}
           </label>
         )}
         <div className="relative flex items-center">
           {prefix && (
-            <span className="absolute left-3 text-nucleus-text-secondary text-sm pointer-events-none select-none">
+            <span className="absolute left-3 text-paralend-text-secondary text-sm pointer-events-none select-none">
               {prefix}
             </span>
           )}
@@ -36,10 +36,10 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
             ref={ref}
             id={inputId}
             className={cn(
-              "w-full bg-nucleus-bg border border-nucleus-border rounded-lg",
-              "text-nucleus-text-primary text-sm placeholder:text-nucleus-text-secondary/50",
+              "w-full bg-paralend-bg border border-paralend-border rounded-lg",
+              "text-paralend-text-primary text-sm placeholder:text-paralend-text-secondary/50",
               "h-11 px-3",
-              "focus:outline-none focus:ring-2 focus:ring-nucleus-primary/20 focus:border-nucleus-primary/60",
+              "focus:outline-none focus:ring-2 focus:ring-paralend-primary/20 focus:border-paralend-primary/60",
               "transition-colors duration-150",
               "disabled:opacity-50 disabled:cursor-not-allowed",
               error && "border-red-400 focus:ring-red-200 focus:border-red-400",
@@ -51,7 +51,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
           />
           <div className="absolute right-3 flex items-center gap-2">
             {suffix && (
-              <span className="text-nucleus-text-secondary text-sm font-medium select-none">
+              <span className="text-paralend-text-secondary text-sm font-medium select-none">
                 {suffix}
               </span>
             )}
@@ -59,7 +59,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
               <button
                 type="button"
                 onClick={onMax}
-                className="text-xs font-semibold text-nucleus-primary hover:text-gray-600 transition-colors"
+                className="text-xs font-semibold text-paralend-primary hover:text-gray-600 transition-colors"
               >
                 MAX
               </button>
@@ -67,10 +67,10 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
           </div>
         </div>
         {error && (
-          <p className="mt-1.5 text-xs text-nucleus-red">{error}</p>
+          <p className="mt-1.5 text-xs text-paralend-red">{error}</p>
         )}
         {hint && !error && (
-          <p className="mt-1.5 text-xs text-nucleus-text-secondary">{hint}</p>
+          <p className="mt-1.5 text-xs text-paralend-text-secondary">{hint}</p>
         )}
       </div>
     );

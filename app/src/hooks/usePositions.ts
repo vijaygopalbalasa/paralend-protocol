@@ -14,7 +14,7 @@ import {
   makeReadonlyProgram,
   toAssetsDown,
   toAssetsUp,
-} from "@/lib/nucleus-program";
+} from "@/lib/paralend-program";
 import { WAD } from "@/lib/constants";
 
 export interface PositionRow {

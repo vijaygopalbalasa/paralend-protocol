@@ -11,13 +11,13 @@ export function Card({ header, noPadding, innerClassName, className, children, .
   return (
     <div
       className={cn(
-        "bg-nucleus-card border border-nucleus-border rounded-xl shadow-sm",
+        "bg-paralend-card border border-paralend-border rounded-xl shadow-sm",
         className
       )}
       {...props}
     >
       {header && (
-        <div className="px-5 py-4 border-b border-nucleus-border flex items-center justify-between">
+        <div className="px-5 py-4 border-b border-paralend-border flex items-center justify-between">
           {header}
         </div>
       )}
@@ -36,9 +36,9 @@ export function CardHeader({ title, description, action }: CardHeaderProps) {
   return (
     <div className="flex items-start justify-between w-full">
       <div>
-        <h2 className="text-base font-semibold text-nucleus-text-primary">{title}</h2>
+        <h2 className="text-base font-semibold text-paralend-text-primary">{title}</h2>
         {description && (
-          <p className="text-xs text-nucleus-text-secondary mt-0.5">{description}</p>
+          <p className="text-xs text-paralend-text-secondary mt-0.5">{description}</p>
         )}
       </div>
       {action && <div>{action}</div>}

@@ -15,13 +15,13 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 
 const variantClasses: Record<ButtonVariant, string> = {
   primary:
-    "bg-nucleus-primary hover:bg-nucleus-primary-hover text-white shadow-lg shadow-black/5",
+    "bg-paralend-primary hover:bg-paralend-primary-hover text-white shadow-lg shadow-black/5",
   secondary:
-    "bg-white hover:bg-gray-50 text-nucleus-text-primary border border-nucleus-border shadow-sm",
+    "bg-white hover:bg-gray-50 text-paralend-text-primary border border-paralend-border shadow-sm",
   danger:
     "bg-red-50 hover:bg-red-100 text-red-600 border border-red-200",
   ghost:
-    "bg-transparent hover:bg-gray-100 text-nucleus-text-secondary hover:text-nucleus-text-primary border border-transparent",
+    "bg-transparent hover:bg-gray-100 text-paralend-text-secondary hover:text-paralend-text-primary border border-transparent",
 };
 
 const sizeClasses: Record<ButtonSize, string> = {
@@ -50,7 +50,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
         disabled={disabled || loading}
         className={cn(
           "inline-flex items-center justify-center gap-2 transition-all duration-150",
-          "focus:outline-none focus:ring-2 focus:ring-nucleus-primary/20 focus:ring-offset-2 focus:ring-offset-white",
+          "focus:outline-none focus:ring-2 focus:ring-paralend-primary/20 focus:ring-offset-2 focus:ring-offset-white",
           "disabled:opacity-50 disabled:cursor-not-allowed",
           variantClasses[variant],
           sizeClasses[size],

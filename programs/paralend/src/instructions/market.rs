@@ -2,7 +2,7 @@ use anchor_lang::prelude::*;
 use anchor_spl::token::{Mint, Token, TokenAccount};
 
 use crate::constants::*;
-use crate::errors::NucleusError;
+use crate::errors::ParalendError;
 use crate::events;
 use crate::state::irm::LinearIrm;
 use crate::state::market::{compute_market_id, Market};
@@ -35,7 +35,7 @@ pub fn handle_create_irm(
     kink: u128,
     _nonce: u64,
 ) -> Result<()> {
-    require!(kink <= WAD, NucleusError::InvalidIrmConfig);
+    require!(kink <= WAD, ParalendError::InvalidIrmConfig);
 
     let irm = &mut ctx.accounts.irm;
     irm.bump = ctx.bumps.irm;
@@ -78,7 +78,7 @@ pub struct CreateMarket<'info> {
     pub loan_mint: Box<Account<'info, Mint>>,
 
     #[account(
-        constraint = irm_account.key() == irm_key @ NucleusError::IrmNotEnabled,
+        constraint = irm_account.key() == irm_key @ ParalendError::IrmNotEnabled,
     )]
     pub irm_account: Box<Account<'info, LinearIrm>>,
 
@@ -124,19 +124,19 @@ pub fn handle_create_market(
     lltv: u64,
     fee: u64,
 ) -> Result<()> {
-    require!(lltv > 0 && lltv < BPS, NucleusError::InvalidLltv);
+    require!(lltv > 0 && lltv < BPS, ParalendError::InvalidLltv);
 
     // Verify fee is within bounds
-    require!(fee <= MAX_FEE_BPS, NucleusError::FeeExceedsMax);
+    require!(fee <= MAX_FEE_BPS, ParalendError::FeeExceedsMax);
 
     // Verify LLTV and IRM are enabled in protocol state
     require!(
         ctx.accounts.protocol_state.is_lltv_enabled(lltv),
-        NucleusError::LltvNotEnabled
+        ParalendError::LltvNotEnabled
     );
     require!(
         ctx.accounts.protocol_state.is_irm_enabled(&irm_key),
-        NucleusError::IrmNotEnabled
+        ParalendError::IrmNotEnabled
     );
 
     // Verify the client-supplied market_id matches what we'd compute
@@ -148,7 +148,7 @@ pub fn handle_create_market(
         &irm_key,
         lltv,
     );
-    require!(market_id == expected_market_id, NucleusError::Unauthorized);
+    require!(market_id == expected_market_id, ParalendError::Unauthorized);
 
     let market = &mut ctx.accounts.market;
     market.bump = ctx.bumps.market;
@@ -180,7 +180,7 @@ pub fn handle_create_market(
     protocol_state.market_count = protocol_state
         .market_count
         .checked_add(1)
-        .ok_or_else(|| error!(NucleusError::MathOverflow))?;
+        .ok_or_else(|| error!(ParalendError::MathOverflow))?;
 
     emit!(events::MarketCreated {
         market_id,

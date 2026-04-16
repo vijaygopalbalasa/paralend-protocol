@@ -2,7 +2,7 @@ use anchor_lang::prelude::*;
 use anchor_spl::token::{self, Token, TokenAccount, Transfer};
 
 use crate::constants::*;
-use crate::errors::NucleusError;
+use crate::errors::ParalendError;
 use crate::math::safe_math::safe_u128_to_u64;
 use crate::math::wad::mul_div_up;
 use crate::state::market::Market;
@@ -35,7 +35,7 @@ pub struct FlashLoanStart<'info> {
     #[account(
         seeds = [SEED_PREFIX, SEED_PROTOCOL],
         bump = protocol_state.bump,
-        constraint = !protocol_state.paused @ NucleusError::ProtocolPaused,
+        constraint = !protocol_state.paused @ ParalendError::ProtocolPaused,
     )]
     pub protocol_state: Box<Account<'info, ProtocolState>>,
 
@@ -43,8 +43,8 @@ pub struct FlashLoanStart<'info> {
         mut,
         seeds = [SEED_PREFIX, SEED_MARKET, &market_id],
         bump = market.bump,
-        constraint = !market.paused @ NucleusError::MarketPaused,
-        constraint = market.flash_loan_lock == 0 @ NucleusError::FlashLoanLocked,
+        constraint = !market.paused @ ParalendError::MarketPaused,
+        constraint = market.flash_loan_lock == 0 @ ParalendError::FlashLoanLocked,
     )]
     pub market: Box<Account<'info, Market>>,
 
@@ -71,10 +71,10 @@ pub fn handle_flash_loan_start(
     market_id: [u8; 32],
     amount: u64,
 ) -> Result<()> {
-    require!(amount > 0, NucleusError::ZeroAmount);
+    require!(amount > 0, ParalendError::ZeroAmount);
     require!(
         ctx.accounts.market.available_liquidity() >= amount as u128,
-        NucleusError::InsufficientLiquidity
+        ParalendError::InsufficientLiquidity
     );
 
     // Lock the market and store the principal/caller for validation at end.
@@ -114,7 +114,7 @@ pub struct FlashLoanEnd<'info> {
         mut,
         seeds = [SEED_PREFIX, SEED_MARKET, &market_id],
         bump = market.bump,
-        constraint = market.flash_loan_lock == 1 @ NucleusError::FlashLoanLocked,
+        constraint = market.flash_loan_lock == 1 @ ParalendError::FlashLoanLocked,
     )]
     pub market: Box<Account<'info, Market>>,
 
@@ -144,18 +144,18 @@ pub fn handle_flash_loan_end(
 ) -> Result<()> {
     require!(
         ctx.accounts.market.flash_loan_caller == ctx.accounts.caller.key(),
-        NucleusError::FlashLoanCallerMismatch
+        ParalendError::FlashLoanCallerMismatch
     );
     require!(
         ctx.accounts.market.flash_loan_amount == amount,
-        NucleusError::FlashLoanAmountMismatch
+        ParalendError::FlashLoanAmountMismatch
     );
 
     // Compute required repayment: amount + fee (round UP on fee — protocol-favorable)
     let fee = mul_div_up(amount as u128, FLASH_LOAN_FEE_BPS as u128, BPS as u128)?;
     let repay_total = (amount as u128)
         .checked_add(fee)
-        .ok_or_else(|| error!(NucleusError::MathOverflow))?;
+        .ok_or_else(|| error!(ParalendError::MathOverflow))?;
     let repay_amount = safe_u128_to_u64(repay_total)?;
 
     // Transfer repayment from caller to vault
@@ -180,7 +180,7 @@ pub fn handle_flash_loan_end(
         .market
         .total_supply_assets
         .checked_add(fee_u64 as u128)
-        .ok_or_else(|| error!(NucleusError::MathOverflow))?;
+        .ok_or_else(|| error!(ParalendError::MathOverflow))?;
 
     // Unlock market
     ctx.accounts.market.clear_flash_loan_state();

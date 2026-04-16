@@ -1,5 +1,5 @@
 use crate::constants::{SECONDS_PER_YEAR, WAD};
-use crate::errors::NucleusError;
+use crate::errors::ParalendError;
 use crate::math::wad::{mul_div_down, wad_mul_down};
 use anchor_lang::prelude::*;
 
@@ -46,7 +46,7 @@ impl LinearIrm {
             let variable = wad_mul_down(self.slope1, utilization)?;
             self.base_rate
                 .checked_add(variable)
-                .ok_or_else(|| error!(NucleusError::MathOverflow))
+                .ok_or_else(|| error!(ParalendError::MathOverflow))
         } else {
             // Above kink: base_rate + slope1 * kink / WAD + slope2 * (utilization - kink) / WAD
             let below_kink = wad_mul_down(self.slope1, self.kink)?;
@@ -54,12 +54,12 @@ impl LinearIrm {
                 self.slope2,
                 utilization
                     .checked_sub(self.kink)
-                    .ok_or_else(|| error!(NucleusError::MathOverflow))?,
+                    .ok_or_else(|| error!(ParalendError::MathOverflow))?,
             )?;
             self.base_rate
                 .checked_add(below_kink)
                 .and_then(|v| v.checked_add(above_kink))
-                .ok_or_else(|| error!(NucleusError::MathOverflow))
+                .ok_or_else(|| error!(ParalendError::MathOverflow))
         }
     }
 
@@ -68,7 +68,7 @@ impl LinearIrm {
         let per_second = self.borrow_rate_per_second(utilization)?;
         per_second
             .checked_mul(SECONDS_PER_YEAR)
-            .ok_or_else(|| error!(NucleusError::MathOverflow))
+            .ok_or_else(|| error!(ParalendError::MathOverflow))
     }
 
     /// Create default IRM parameters for demo markets

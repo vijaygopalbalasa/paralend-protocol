@@ -31,7 +31,7 @@ This document tracks mistakes made during development to avoid repeating them.
 
 **Prevention:**
 1. For every instruction, write: 1 happy path + N negative tests
-2. Test error codes explicitly (expect specific NucleusError)
+2. Test error codes explicitly (expect specific ParalendError)
 3. Test boundary conditions (0, 1, MAX_VALUE)
 4. Test access control on every admin function
 
@@ -44,8 +44,8 @@ This document tracks mistakes made during development to avoid repeating them.
 **Root cause:** Manual file copying, no automated sync.
 
 **Prevention:**
-1. After `anchor build`, always run: `cp target/idl/nucleus.json app/src/lib/nucleus-idl.json`
-2. After `anchor build`, always run: `cp target/types/nucleus.ts app/src/lib/nucleus-idl-types.ts`
+1. After `anchor build`, always run: `cp target/idl/paralend.json app/src/lib/paralend-idl.json`
+2. After `anchor build`, always run: `cp target/types/paralend.ts app/src/lib/paralend-idl-types.ts`
 3. Add a script: `scripts/sync-idl.sh`
 
 ---

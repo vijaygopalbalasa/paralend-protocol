@@ -1,8 +1,8 @@
 import * as anchor from "@coral-xyz/anchor";
 import { AnchorProvider, Program } from "@coral-xyz/anchor";
 import { keccak_256 } from "@noble/hashes/sha3";
-import type { Nucleus } from "../target/types/nucleus";
-import IDL from "../target/idl/nucleus.json";
+import type { Paralend } from "../target/types/paralend";
+import IDL from "../target/idl/paralend.json";
 import * as fs from "fs";
 import * as path from "path";
 import { Connection, Keypair, PublicKey } from "@solana/web3.js";
@@ -10,7 +10,7 @@ import { Connection, Keypair, PublicKey } from "@solana/web3.js";
 export type DemoCluster = "devnet" | "localnet";
 
 export const PROGRAM_ID = new PublicKey(
-  process.env.NUCLEUS_PROGRAM_ID ??
+  process.env.PARALEND_PROGRAM_ID ??
     "ForUjmX3VzE5EsRfzktF529LToK7vyzx6czH5o1dUTY8"
 );
 
@@ -18,7 +18,7 @@ export const WAD = 1_000_000_000_000_000_000n;
 export const BPS = 10_000n;
 export const SECONDS_PER_YEAR = 31_536_000n;
 
-const SEED_PREFIX = Buffer.from("nucleus");
+const SEED_PREFIX = Buffer.from("paralend");
 const SEED_PROTOCOL = Buffer.from("protocol_state");
 const SEED_MARKET = Buffer.from("market");
 const SEED_COLLATERAL_VAULT = Buffer.from("collateral_vault");
@@ -221,13 +221,13 @@ export function makeProvider(cluster: DemoCluster) {
   };
 }
 
-export function makeProgram(provider: AnchorProvider): Program<Nucleus> {
+export function makeProgram(provider: AnchorProvider): Program<Paralend> {
   const idl = {
     ...(IDL as Record<string, unknown>),
     address: PROGRAM_ID.toBase58(),
   };
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return new Program<Nucleus>(idl as any, provider);
+  return new Program<Paralend>(idl as any, provider);
 }
 
 export function deriveProtocolState(programId = PROGRAM_ID): PublicKey {

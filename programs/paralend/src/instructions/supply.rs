@@ -2,7 +2,7 @@ use anchor_lang::prelude::*;
 use anchor_spl::token::{self, Token, TokenAccount, Transfer};
 
 use crate::constants::*;
-use crate::errors::NucleusError;
+use crate::errors::ParalendError;
 use crate::events;
 use crate::math::interest::accrue_interest_on_market;
 use crate::math::shares::{to_assets_down, to_shares_down, to_shares_up};
@@ -23,7 +23,7 @@ pub struct Supply<'info> {
     #[account(
         seeds = [SEED_PREFIX, SEED_PROTOCOL],
         bump = protocol_state.bump,
-        constraint = !protocol_state.paused @ NucleusError::ProtocolPaused,
+        constraint = !protocol_state.paused @ ParalendError::ProtocolPaused,
     )]
     pub protocol_state: Box<Account<'info, ProtocolState>>,
 
@@ -31,13 +31,13 @@ pub struct Supply<'info> {
         mut,
         seeds = [SEED_PREFIX, SEED_MARKET, &market_id],
         bump = market.bump,
-        constraint = !market.paused @ NucleusError::MarketPaused,
-        constraint = market.flash_loan_lock == 0 @ NucleusError::FlashLoanLocked,
+        constraint = !market.paused @ ParalendError::MarketPaused,
+        constraint = market.flash_loan_lock == 0 @ ParalendError::FlashLoanLocked,
     )]
     pub market: Box<Account<'info, Market>>,
 
     #[account(
-        constraint = irm.key() == market.irm @ NucleusError::IrmNotEnabled,
+        constraint = irm.key() == market.irm @ ParalendError::IrmNotEnabled,
     )]
     pub irm: Box<Account<'info, LinearIrm>>,
 
@@ -45,8 +45,8 @@ pub struct Supply<'info> {
         mut,
         seeds = [SEED_PREFIX, SEED_POSITION, &market_id, supplier.key().as_ref()],
         bump = position.bump,
-        constraint = position.owner == supplier.key() @ NucleusError::Unauthorized,
-        constraint = position.market_id == market_id @ NucleusError::Unauthorized,
+        constraint = position.owner == supplier.key() @ ParalendError::Unauthorized,
+        constraint = position.market_id == market_id @ ParalendError::Unauthorized,
     )]
     pub position: Box<Account<'info, Position>>,
 
@@ -75,7 +75,7 @@ pub fn handle_supply(
     assets: u64,
     min_shares: u128,
 ) -> Result<()> {
-    require!(assets > 0, NucleusError::ZeroAmount);
+    require!(assets > 0, ParalendError::ZeroAmount);
 
     // Accrue interest so shares are priced against current state
     let clock = Clock::get()?;
@@ -95,24 +95,24 @@ pub fn handle_supply(
     )?;
 
     // Slippage protection: ensure user gets at least min_shares
-    require!(shares >= min_shares, NucleusError::SlippageExceeded);
+    require!(shares >= min_shares, ParalendError::SlippageExceeded);
 
     // Update market totals
     market.total_supply_assets = market
         .total_supply_assets
         .checked_add(assets as u128)
-        .ok_or_else(|| error!(NucleusError::MathOverflow))?;
+        .ok_or_else(|| error!(ParalendError::MathOverflow))?;
     market.total_supply_shares = market
         .total_supply_shares
         .checked_add(shares)
-        .ok_or_else(|| error!(NucleusError::MathOverflow))?;
+        .ok_or_else(|| error!(ParalendError::MathOverflow))?;
 
     // Update position
     let position = &mut ctx.accounts.position;
     position.supply_shares = position
         .supply_shares
         .checked_add(shares)
-        .ok_or_else(|| error!(NucleusError::MathOverflow))?;
+        .ok_or_else(|| error!(ParalendError::MathOverflow))?;
 
     let market_id = position.market_id;
     let supplier_key = ctx.accounts.supplier.key();
@@ -156,12 +156,12 @@ pub struct Withdraw<'info> {
         mut,
         seeds = [SEED_PREFIX, SEED_MARKET, &market_id],
         bump = market.bump,
-        constraint = market.flash_loan_lock == 0 @ NucleusError::FlashLoanLocked,
+        constraint = market.flash_loan_lock == 0 @ ParalendError::FlashLoanLocked,
     )]
     pub market: Box<Account<'info, Market>>,
 
     #[account(
-        constraint = irm.key() == market.irm @ NucleusError::IrmNotEnabled,
+        constraint = irm.key() == market.irm @ ParalendError::IrmNotEnabled,
     )]
     pub irm: Box<Account<'info, LinearIrm>>,
 
@@ -169,8 +169,8 @@ pub struct Withdraw<'info> {
         mut,
         seeds = [SEED_PREFIX, SEED_POSITION, &market_id, owner.key().as_ref()],
         bump = position.bump,
-        constraint = position.owner == owner.key() @ NucleusError::Unauthorized,
-        constraint = position.market_id == market_id @ NucleusError::Unauthorized,
+        constraint = position.owner == owner.key() @ ParalendError::Unauthorized,
+        constraint = position.market_id == market_id @ ParalendError::Unauthorized,
     )]
     pub position: Box<Account<'info, Position>>,
 
@@ -203,7 +203,7 @@ pub fn handle_withdraw(
     // Exactly one of assets or shares must be non-zero
     require!(
         (assets == 0) != (shares == 0),
-        NucleusError::InvalidInput
+        ParalendError::InvalidInput
     );
 
     // Accrue interest before computing share/asset values
@@ -235,47 +235,47 @@ pub fn handle_withdraw(
         (assets_out, shares)
     };
 
-    require!(final_assets > 0, NucleusError::ZeroAmount);
+    require!(final_assets > 0, ParalendError::ZeroAmount);
 
     // Slippage protection (0 = no protection, backwards compatible)
     // When withdrawing by assets: ensure user doesn't burn more shares than expected
     if assets > 0 && max_shares_burn > 0 {
-        require!(final_shares <= max_shares_burn, NucleusError::SlippageExceeded);
+        require!(final_shares <= max_shares_burn, ParalendError::SlippageExceeded);
     }
     // When withdrawing by shares: ensure user gets at least min_assets
     if shares > 0 && min_assets_out > 0 {
-        require!(final_assets >= min_assets_out, NucleusError::SlippageExceeded);
+        require!(final_assets >= min_assets_out, ParalendError::SlippageExceeded);
     }
 
     // Check position has enough shares to burn
     let position = &ctx.accounts.position;
     require!(
         position.supply_shares >= final_shares,
-        NucleusError::InsufficientShares
+        ParalendError::InsufficientShares
     );
 
     // Check market has enough free liquidity (not borrowed out)
     require!(
         market.available_liquidity() >= final_assets,
-        NucleusError::InsufficientLiquidity
+        ParalendError::InsufficientLiquidity
     );
 
     // Update market totals
     market.total_supply_assets = market
         .total_supply_assets
         .checked_sub(final_assets)
-        .ok_or_else(|| error!(NucleusError::MathOverflow))?;
+        .ok_or_else(|| error!(ParalendError::MathOverflow))?;
     market.total_supply_shares = market
         .total_supply_shares
         .checked_sub(final_shares)
-        .ok_or_else(|| error!(NucleusError::MathOverflow))?;
+        .ok_or_else(|| error!(ParalendError::MathOverflow))?;
 
     // Update position
     let position = &mut ctx.accounts.position;
     position.supply_shares = position
         .supply_shares
         .checked_sub(final_shares)
-        .ok_or_else(|| error!(NucleusError::MathOverflow))?;
+        .ok_or_else(|| error!(ParalendError::MathOverflow))?;
 
     let market_id_copy = position.market_id;
     let caller_key = ctx.accounts.owner.key();

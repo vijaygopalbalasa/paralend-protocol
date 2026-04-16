@@ -13,8 +13,8 @@ import {
 } from "@solana/spl-token";
 import { keccak_256 } from "@noble/hashes/sha3";
 
-import IDL from "./nucleus-idl.json";
-import type { Nucleus } from "./nucleus-idl-types";
+import IDL from "./paralend-idl.json";
+import type { Paralend } from "./paralend-idl-types";
 import {
   BPS,
   PROGRAM_ID,
@@ -46,7 +46,7 @@ export interface MarketAccountLike {
   lltv: { toString(): string } | bigint | number;
 }
 
-const SEED_PREFIX = Buffer.from("nucleus");
+const SEED_PREFIX = Buffer.from("paralend");
 const SEED_PROTOCOL = Buffer.from("protocol_state");
 const SEED_MARKET = Buffer.from("market");
 const SEED_POSITION = Buffer.from("position");
@@ -111,10 +111,10 @@ export function makeProgram(
   connection: Connection,
   wallet?: AnchorWalletLike,
   programId: PublicKey = getProgramId()
-): Program<Nucleus> {
+): Program<Paralend> {
   const provider = makeAnchorProvider(connection, wallet ?? makeReadonlyWallet());
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return new Program<Nucleus>(withProgramAddress(programId) as any, provider);
+  return new Program<Paralend>(withProgramAddress(programId) as any, provider);
 }
 
 export function makeReadonlyProgram(

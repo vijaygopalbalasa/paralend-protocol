@@ -36,7 +36,7 @@ async function main() {
   const program = makeProgram(provider);
   const methods = program.methods as any;
 
-  console.log(`\n🚀 Nucleus demo setup`);
+  console.log(`\n🚀 Paralend demo setup`);
   console.log(`   Cluster: ${cluster}`);
   console.log(`   RPC:     ${connection.rpcEndpoint}`);
   console.log(`   Wallet:  ${payer.publicKey.toBase58()}`);

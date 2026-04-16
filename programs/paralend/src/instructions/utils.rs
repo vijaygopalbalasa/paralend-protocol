@@ -1,7 +1,7 @@
 use anchor_lang::prelude::*;
 
 use crate::constants::*;
-use crate::errors::NucleusError;
+use crate::errors::ParalendError;
 use crate::events;
 use crate::math::interest::accrue_interest_on_market;
 use crate::state::irm::LinearIrm;
@@ -25,12 +25,12 @@ pub struct AccrueInterest<'info> {
         mut,
         seeds = [SEED_PREFIX, SEED_MARKET, &market_id],
         bump = market.bump,
-        constraint = market.flash_loan_lock == 0 @ NucleusError::FlashLoanLocked,
+        constraint = market.flash_loan_lock == 0 @ ParalendError::FlashLoanLocked,
     )]
     pub market: Box<Account<'info, Market>>,
 
     #[account(
-        constraint = irm.key() == market.irm @ NucleusError::IrmNotEnabled,
+        constraint = irm.key() == market.irm @ ParalendError::IrmNotEnabled,
     )]
     pub irm: Box<Account<'info, LinearIrm>>,
 }
@@ -71,7 +71,7 @@ pub struct ClaimFees<'info> {
     #[account(
         seeds = [SEED_PREFIX, SEED_PROTOCOL],
         bump = protocol_state.bump,
-        constraint = protocol_state.fee_recipient == fee_recipient.key() @ NucleusError::Unauthorized,
+        constraint = protocol_state.fee_recipient == fee_recipient.key() @ ParalendError::Unauthorized,
     )]
     pub protocol_state: Box<Account<'info, ProtocolState>>,
 
@@ -79,7 +79,7 @@ pub struct ClaimFees<'info> {
         mut,
         seeds = [SEED_PREFIX, SEED_MARKET, &market_id],
         bump = market.bump,
-        constraint = market.flash_loan_lock == 0 @ NucleusError::FlashLoanLocked,
+        constraint = market.flash_loan_lock == 0 @ ParalendError::FlashLoanLocked,
     )]
     pub market: Box<Account<'info, Market>>,
 
@@ -89,7 +89,7 @@ pub struct ClaimFees<'info> {
         mut,
         seeds = [SEED_PREFIX, SEED_POSITION, &market_id, fee_recipient.key().as_ref()],
         bump = position.bump,
-        constraint = position.owner == fee_recipient.key() @ NucleusError::Unauthorized,
+        constraint = position.owner == fee_recipient.key() @ ParalendError::Unauthorized,
     )]
     pub position: Box<Account<'info, Position>>,
 }
@@ -108,7 +108,7 @@ pub fn handle_claim_fees(ctx: Context<ClaimFees>, market_id: [u8; 32]) -> Result
         .position
         .supply_shares
         .checked_add(pending_shares)
-        .ok_or_else(|| error!(NucleusError::MathOverflow))?;
+        .ok_or_else(|| error!(ParalendError::MathOverflow))?;
 
     // Reset pending fee shares on the market
     ctx.accounts.market.pending_fee_shares = 0;

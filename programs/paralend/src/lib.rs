@@ -18,10 +18,10 @@ use instructions::position::*;
 use instructions::supply::*;
 use instructions::utils::*;
 
-declare_id!("ForUjmX3VzE5EsRfzktF529LToK7vyzx6czH5o1dUTY8");
+declare_id!("2kZNrHd7QkUemYCLFw5dYGQWeKieAUNb5C1FvTjTYiC8");
 
 #[program]
-pub mod nucleus {
+pub mod paralend {
     use super::*;
 
     // ─── Admin ───────────────────────────────────────────────

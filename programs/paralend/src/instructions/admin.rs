@@ -1,7 +1,7 @@
 use anchor_lang::prelude::*;
 
 use crate::constants::*;
-use crate::errors::NucleusError;
+use crate::errors::ParalendError;
 use crate::events;
 use crate::state::oracle::StaticOracle;
 use crate::state::protocol::ProtocolState;
@@ -59,22 +59,22 @@ pub struct EnableLltv<'info> {
         mut,
         seeds = [SEED_PREFIX, SEED_PROTOCOL],
         bump = protocol_state.bump,
-        constraint = protocol_state.owner == owner.key() @ NucleusError::Unauthorized,
+        constraint = protocol_state.owner == owner.key() @ ParalendError::Unauthorized,
     )]
     pub protocol_state: Account<'info, ProtocolState>,
 }
 
 pub fn handle_enable_lltv(ctx: Context<EnableLltv>, lltv: u64) -> Result<()> {
-    require!(lltv > 0 && lltv < BPS, NucleusError::InvalidLltv);
+    require!(lltv > 0 && lltv < BPS, ParalendError::InvalidLltv);
 
     let state = &mut ctx.accounts.protocol_state;
     require!(
         !state.is_lltv_enabled(lltv),
-        NucleusError::LltvAlreadyEnabled
+        ParalendError::LltvAlreadyEnabled
     );
     require!(
         (state.lltv_count as usize) < MAX_LLTVS,
-        NucleusError::MaxLltvsReached
+        ParalendError::MaxLltvsReached
     );
 
     let idx = state.lltv_count as usize;
@@ -95,7 +95,7 @@ pub struct EnableIrm<'info> {
         mut,
         seeds = [SEED_PREFIX, SEED_PROTOCOL],
         bump = protocol_state.bump,
-        constraint = protocol_state.owner == owner.key() @ NucleusError::Unauthorized,
+        constraint = protocol_state.owner == owner.key() @ ParalendError::Unauthorized,
     )]
     pub protocol_state: Account<'info, ProtocolState>,
 }
@@ -104,11 +104,11 @@ pub fn handle_enable_irm(ctx: Context<EnableIrm>, irm: Pubkey) -> Result<()> {
     let state = &mut ctx.accounts.protocol_state;
     require!(
         !state.is_irm_enabled(&irm),
-        NucleusError::IrmAlreadyEnabled
+        ParalendError::IrmAlreadyEnabled
     );
     require!(
         (state.irm_count as usize) < MAX_IRMS,
-        NucleusError::MaxIrmsReached
+        ParalendError::MaxIrmsReached
     );
 
     let idx = state.irm_count as usize;
@@ -129,7 +129,7 @@ pub struct SetFee<'info> {
     #[account(
         seeds = [SEED_PREFIX, SEED_PROTOCOL],
         bump = protocol_state.bump,
-        constraint = protocol_state.owner == owner.key() @ NucleusError::Unauthorized,
+        constraint = protocol_state.owner == owner.key() @ ParalendError::Unauthorized,
     )]
     pub protocol_state: Account<'info, ProtocolState>,
 
@@ -142,7 +142,7 @@ pub struct SetFee<'info> {
 }
 
 pub fn handle_set_fee(ctx: Context<SetFee>, _market_id: [u8; 32], fee: u64) -> Result<()> {
-    require!(fee <= MAX_FEE_BPS, NucleusError::FeeExceedsMax);
+    require!(fee <= MAX_FEE_BPS, ParalendError::FeeExceedsMax);
     ctx.accounts.market.fee = fee;
     Ok(())
 }
@@ -175,7 +175,7 @@ pub fn handle_create_static_oracle(
     feed_id: [u8; 32],
     initial_price_wad: u128,
 ) -> Result<()> {
-    require!(initial_price_wad > 0, NucleusError::OraclePriceNonPositive);
+    require!(initial_price_wad > 0, ParalendError::OraclePriceNonPositive);
 
     let oracle = &mut ctx.accounts.oracle;
     oracle.bump = ctx.bumps.oracle;
@@ -194,7 +194,7 @@ pub struct SetStaticOraclePrice<'info> {
 
     #[account(
         mut,
-        constraint = oracle.admin == admin.key() @ NucleusError::Unauthorized,
+        constraint = oracle.admin == admin.key() @ ParalendError::Unauthorized,
     )]
     pub oracle: Account<'info, StaticOracle>,
 }
@@ -203,7 +203,7 @@ pub fn handle_set_static_oracle_price(
     ctx: Context<SetStaticOraclePrice>,
     new_price_wad: u128,
 ) -> Result<()> {
-    require!(new_price_wad > 0, NucleusError::OraclePriceNonPositive);
+    require!(new_price_wad > 0, ParalendError::OraclePriceNonPositive);
     let oracle = &mut ctx.accounts.oracle;
     oracle.price_wad = new_price_wad;
     oracle.last_update = Clock::get()?.unix_timestamp;

@@ -21,9 +21,9 @@ export default function MarketsPage() {
       {/* Page header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-nucleus-text-primary">Markets</h1>
-          <p className="text-sm text-nucleus-text-secondary mt-1">
-            All permissionless lending markets on Nucleus.
+          <h1 className="text-2xl font-bold text-paralend-text-primary">Markets</h1>
+          <p className="text-sm text-paralend-text-secondary mt-1">
+            All permissionless lending markets on Paralend.
           </p>
         </div>
         <Link href="/create">
@@ -43,12 +43,12 @@ export default function MarketsPage() {
         ].map((s) => (
           <div
             key={s.label}
-            className="rounded-xl border border-nucleus-border bg-nucleus-card px-4 py-3"
+            className="rounded-xl border border-paralend-border bg-paralend-card px-4 py-3"
           >
-            <div className="text-xs text-nucleus-text-secondary uppercase tracking-wide mb-1">
+            <div className="text-xs text-paralend-text-secondary uppercase tracking-wide mb-1">
               {s.label}
             </div>
-            <div className="text-lg font-bold text-nucleus-text-primary tabular-nums">
+            <div className="text-lg font-bold text-paralend-text-primary tabular-nums">
               {s.value}
             </div>
           </div>
@@ -57,15 +57,15 @@ export default function MarketsPage() {
 
       {/* Loading state */}
       {loading && markets.length === 0 && (
-        <div className="flex items-center justify-center py-16 text-nucleus-text-secondary text-sm animate-pulse">
+        <div className="flex items-center justify-center py-16 text-paralend-text-secondary text-sm animate-pulse">
           Loading markets from devnet…
         </div>
       )}
 
       {/* No markets yet */}
       {!loading && markets.length === 0 && (
-        <div className="flex flex-col items-center justify-center py-16 gap-4 rounded-xl border border-nucleus-border border-dashed">
-          <p className="text-nucleus-text-secondary text-sm">
+        <div className="flex flex-col items-center justify-center py-16 gap-4 rounded-xl border border-paralend-border border-dashed">
+          <p className="text-paralend-text-secondary text-sm">
             No markets found on devnet yet.
           </p>
           <Link href="/create">
@@ -76,34 +76,34 @@ export default function MarketsPage() {
 
       {/* Markets table — desktop */}
       {markets.length > 0 && (
-        <div className="hidden md:block rounded-xl border border-nucleus-border shadow-sm bg-white overflow-hidden">
+        <div className="hidden md:block rounded-xl border border-paralend-border shadow-sm bg-white overflow-hidden">
           <table className="w-full text-sm">
-            <thead className="bg-[#FAFAFA] border-b border-nucleus-border">
+            <thead className="bg-[#FAFAFA] border-b border-paralend-border">
               <tr>
-                <th className="text-left py-4 px-6 text-xs font-bold text-nucleus-text-secondary uppercase tracking-wider">
+                <th className="text-left py-4 px-6 text-xs font-bold text-paralend-text-secondary uppercase tracking-wider">
                   Market
                 </th>
-                <th className="text-right py-4 px-5 text-xs font-bold text-nucleus-text-secondary uppercase tracking-wider">
+                <th className="text-right py-4 px-5 text-xs font-bold text-paralend-text-secondary uppercase tracking-wider">
                   LLTV
                 </th>
-                <th className="text-right py-4 px-5 text-xs font-bold text-nucleus-text-secondary uppercase tracking-wider">
+                <th className="text-right py-4 px-5 text-xs font-bold text-paralend-text-secondary uppercase tracking-wider">
                   Supply APY
                 </th>
-                <th className="text-right py-4 px-5 text-xs font-bold text-nucleus-text-secondary uppercase tracking-wider">
+                <th className="text-right py-4 px-5 text-xs font-bold text-paralend-text-secondary uppercase tracking-wider">
                   Borrow APY
                 </th>
-                <th className="text-right py-4 px-5 text-xs font-bold text-nucleus-text-secondary uppercase tracking-wider">
+                <th className="text-right py-4 px-5 text-xs font-bold text-paralend-text-secondary uppercase tracking-wider">
                   TVL
                 </th>
-                <th className="text-left py-4 px-5 text-xs font-bold text-nucleus-text-secondary uppercase tracking-wider">
+                <th className="text-left py-4 px-5 text-xs font-bold text-paralend-text-secondary uppercase tracking-wider">
                   Utilization
                 </th>
-                <th className="text-right py-4 px-6 text-xs font-bold text-nucleus-text-secondary uppercase tracking-wider">
+                <th className="text-right py-4 px-6 text-xs font-bold text-paralend-text-secondary uppercase tracking-wider">
                   Actions
                 </th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-nucleus-border">
+            <tbody className="divide-y divide-paralend-border">
               {markets.map((market) => (
                 <tr
                   key={market.publicKey}
@@ -113,18 +113,18 @@ export default function MarketsPage() {
                   <td className="py-5 px-6">
                     <div className="flex items-center gap-3">
                       <div className="flex -space-x-1 shadow-sm rounded-full">
-                        <span className="flex h-9 w-9 items-center justify-center rounded-full bg-white border border-nucleus-border text-sm font-bold text-nucleus-text-secondary z-10">
+                        <span className="flex h-9 w-9 items-center justify-center rounded-full bg-white border border-paralend-border text-sm font-bold text-paralend-text-secondary z-10">
                           {market.collateralSymbol.slice(0, 2)}
                         </span>
-                        <span className="flex h-9 w-9 items-center justify-center rounded-full bg-[#FAFAFA] border border-nucleus-border text-xs text-gray-400">
+                        <span className="flex h-9 w-9 items-center justify-center rounded-full bg-[#FAFAFA] border border-paralend-border text-xs text-gray-400">
                           $
                         </span>
                       </div>
                       <div>
-                        <div className="font-bold text-nucleus-text-primary tracking-tight">
+                        <div className="font-bold text-paralend-text-primary tracking-tight">
                           {market.collateralSymbol} / {market.loanSymbol}
                         </div>
-                        <div className="text-xs text-nucleus-text-secondary font-mono mt-0.5">
+                        <div className="text-xs text-paralend-text-secondary font-mono mt-0.5">
                           {market.publicKey.slice(0, 8)}…
                         </div>
                       </div>
@@ -138,21 +138,21 @@ export default function MarketsPage() {
 
                   {/* Supply APY */}
                   <td className="py-5 px-5 text-right">
-                    <span className="font-black text-nucleus-green tabular-nums">
+                    <span className="font-black text-paralend-green tabular-nums">
                       {formatAPY(market.supplyApyPct)}
                     </span>
                   </td>
 
                   {/* Borrow APY */}
                   <td className="py-5 px-5 text-right">
-                    <span className="font-black text-nucleus-orange tabular-nums">
+                    <span className="font-black text-paralend-orange tabular-nums">
                       {formatAPY(market.borrowApyPct)}
                     </span>
                   </td>
 
                   {/* TVL */}
                   <td className="py-5 px-5 text-right">
-                    <span className="font-bold text-nucleus-text-primary tabular-nums">
+                    <span className="font-bold text-paralend-text-primary tabular-nums">
                       {formatUSD(market.tvlUsd)}
                     </span>
                   </td>
@@ -160,13 +160,13 @@ export default function MarketsPage() {
                   {/* Utilization */}
                   <td className="py-5 px-5">
                     <div className="flex items-center gap-3 max-w-[140px]">
-                      <div className="flex-1 h-2 rounded-full bg-[#FAFAFA] overflow-hidden border border-nucleus-border/50">
+                      <div className="flex-1 h-2 rounded-full bg-[#FAFAFA] overflow-hidden border border-paralend-border/50">
                         <div
                           className={`h-full rounded-full ${utilizationColor(market.utilization)}`}
                           style={{ width: `${Math.min(market.utilization, 100)}%` }}
                         />
                       </div>
-                      <span className="text-xs font-bold text-nucleus-text-secondary tabular-nums w-8 text-right">
+                      <span className="text-xs font-bold text-paralend-text-secondary tabular-nums w-8 text-right">
                         {market.utilization.toFixed(0)}%
                       </span>
                     </div>
@@ -200,12 +200,12 @@ export default function MarketsPage() {
           {markets.map((market) => (
             <div
               key={market.publicKey}
-              className="rounded-xl border border-nucleus-border bg-white p-5 shadow-sm"
+              className="rounded-xl border border-paralend-border bg-white p-5 shadow-sm"
             >
               {/* Header */}
               <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-2">
-                  <span className="font-bold text-nucleus-text-primary tracking-tight">
+                  <span className="font-bold text-paralend-text-primary tracking-tight">
                     {market.collateralSymbol} / {market.loanSymbol}
                   </span>
                 </div>
@@ -213,27 +213,27 @@ export default function MarketsPage() {
               </div>
 
               {/* Stats grid */}
-              <div className="grid grid-cols-2 gap-4 mb-4 bg-[#FAFAFA] p-3 rounded-lg border border-nucleus-border/50">
+              <div className="grid grid-cols-2 gap-4 mb-4 bg-[#FAFAFA] p-3 rounded-lg border border-paralend-border/50">
                 <div>
-                  <div className="text-[10px] font-bold text-nucleus-text-secondary uppercase tracking-wider mb-0.5">Supply APY</div>
-                  <div className="font-black text-nucleus-green">{formatAPY(market.supplyApyPct)}</div>
+                  <div className="text-[10px] font-bold text-paralend-text-secondary uppercase tracking-wider mb-0.5">Supply APY</div>
+                  <div className="font-black text-paralend-green">{formatAPY(market.supplyApyPct)}</div>
                 </div>
                 <div>
-                  <div className="text-[10px] font-bold text-nucleus-text-secondary uppercase tracking-wider mb-0.5">Borrow APY</div>
-                  <div className="font-black text-nucleus-orange">{formatAPY(market.borrowApyPct)}</div>
+                  <div className="text-[10px] font-bold text-paralend-text-secondary uppercase tracking-wider mb-0.5">Borrow APY</div>
+                  <div className="font-black text-paralend-orange">{formatAPY(market.borrowApyPct)}</div>
                 </div>
                 <div>
-                  <div className="text-[10px] font-bold text-nucleus-text-secondary uppercase tracking-wider mb-0.5">TVL</div>
-                  <div className="font-bold text-nucleus-text-primary tabular-nums">{formatUSD(market.tvlUsd)}</div>
+                  <div className="text-[10px] font-bold text-paralend-text-secondary uppercase tracking-wider mb-0.5">TVL</div>
+                  <div className="font-bold text-paralend-text-primary tabular-nums">{formatUSD(market.tvlUsd)}</div>
                 </div>
                 <div>
-                  <div className="text-[10px] font-bold text-nucleus-text-secondary uppercase tracking-wider mb-0.5">Utilization</div>
-                  <div className="font-bold text-nucleus-text-primary tabular-nums">{formatPct(market.utilization)}</div>
+                  <div className="text-[10px] font-bold text-paralend-text-secondary uppercase tracking-wider mb-0.5">Utilization</div>
+                  <div className="font-bold text-paralend-text-primary tabular-nums">{formatPct(market.utilization)}</div>
                 </div>
               </div>
 
               {/* Utilization bar */}
-              <div className="h-2 w-full rounded-full bg-[#FAFAFA] border border-nucleus-border/50 overflow-hidden mb-4">
+              <div className="h-2 w-full rounded-full bg-[#FAFAFA] border border-paralend-border/50 overflow-hidden mb-4">
                 <div
                   className={`h-full rounded-full ${utilizationColor(market.utilization)}`}
                   style={{ width: `${Math.min(market.utilization, 100)}%` }}

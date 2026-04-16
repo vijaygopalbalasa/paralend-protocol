@@ -9,7 +9,7 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        nucleus: {
+        paralend: {
           primary: "#000000",
           "primary-hover": "#333333",
           bg: "#FAFAFA",

@@ -3,7 +3,7 @@ import { PublicKey } from "@solana/web3.js";
 // ─── Market / Position Parameters ────────────────────────────────────────────
 
 /**
- * The five parameters that uniquely identify a Nucleus market.
+ * The five parameters that uniquely identify a Paralend market.
  * market_id = keccak256(collateralMint ++ loanMint ++ collateralOracleFeedId ++
  *                        loanOracleFeedId ++ irm ++ lltv_le_bytes)
  */

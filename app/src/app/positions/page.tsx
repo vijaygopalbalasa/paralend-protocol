@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { formatUSD, formatHealthFactor, healthFactorBg } from "@/lib/utils";
 import { usePositions } from "@/hooks/usePositions";
-import { formatTokenAmount } from "@/lib/nucleus-program";
+import { formatTokenAmount } from "@/lib/paralend-program";
 
 export default function PositionsPage() {
   const { publicKey, connected } = useWallet();
@@ -21,8 +21,8 @@ export default function PositionsPage() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-nucleus-text-primary">My Positions</h1>
-          <p className="text-sm text-nucleus-text-secondary mt-1">
+          <h1 className="text-2xl font-bold text-paralend-text-primary">My Positions</h1>
+          <p className="text-sm text-paralend-text-secondary mt-1">
             All your active lending and borrowing positions across every market.
           </p>
         </div>
@@ -35,15 +35,15 @@ export default function PositionsPage() {
 
       {/* Not connected */}
       {!connected && (
-        <div className="flex flex-col items-center justify-center py-24 gap-5 rounded-xl border border-nucleus-border border-dashed bg-nucleus-card/30">
-          <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-nucleus-card border border-nucleus-border text-3xl">
+        <div className="flex flex-col items-center justify-center py-24 gap-5 rounded-xl border border-paralend-border border-dashed bg-paralend-card/30">
+          <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-paralend-card border border-paralend-border text-3xl">
             ◎
           </div>
           <div className="text-center">
-            <h3 className="text-base font-semibold text-nucleus-text-primary mb-1">
+            <h3 className="text-base font-semibold text-paralend-text-primary mb-1">
               Connect your wallet
             </h3>
-            <p className="text-sm text-nucleus-text-secondary max-w-xs">
+            <p className="text-sm text-paralend-text-secondary max-w-xs">
               Connect a Solana wallet (Phantom, Solflare, Backpack) to view your positions.
             </p>
           </div>
@@ -55,22 +55,22 @@ export default function PositionsPage() {
 
       {/* Connected, loading */}
       {connected && loading && positions.length === 0 && (
-        <div className="flex items-center justify-center py-16 text-nucleus-text-secondary text-sm animate-pulse">
+        <div className="flex items-center justify-center py-16 text-paralend-text-secondary text-sm animate-pulse">
           Loading positions from devnet…
         </div>
       )}
 
       {/* Connected, no positions */}
       {connected && !loading && positions.length === 0 && (
-        <div className="flex flex-col items-center justify-center py-24 gap-5 rounded-xl border border-nucleus-border border-dashed bg-nucleus-card/30">
-          <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-nucleus-card border border-nucleus-border text-3xl">
+        <div className="flex flex-col items-center justify-center py-24 gap-5 rounded-xl border border-paralend-border border-dashed bg-paralend-card/30">
+          <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-paralend-card border border-paralend-border text-3xl">
             ◎
           </div>
           <div className="text-center">
-            <h3 className="text-base font-semibold text-nucleus-text-primary mb-1">
+            <h3 className="text-base font-semibold text-paralend-text-primary mb-1">
               No positions yet
             </h3>
-            <p className="text-sm text-nucleus-text-secondary max-w-xs">
+            <p className="text-sm text-paralend-text-secondary max-w-xs">
               Explore markets to start supplying or borrowing.
             </p>
           </div>
@@ -96,12 +96,12 @@ export default function PositionsPage() {
           ].map((stat) => (
             <div
               key={stat.label}
-              className="rounded-xl border border-nucleus-border bg-nucleus-card px-4 py-3"
+              className="rounded-xl border border-paralend-border bg-paralend-card px-4 py-3"
             >
-              <div className="text-xs text-nucleus-text-secondary uppercase tracking-wide mb-1">
+              <div className="text-xs text-paralend-text-secondary uppercase tracking-wide mb-1">
                 {stat.label}
               </div>
-              <div className="text-lg font-bold text-nucleus-text-primary tabular-nums">
+              <div className="text-lg font-bold text-paralend-text-primary tabular-nums">
                 {stat.value}
               </div>
             </div>
@@ -112,69 +112,69 @@ export default function PositionsPage() {
       {/* Positions table — desktop */}
       {positions.length > 0 && (
         <>
-          <div className="hidden md:block rounded-xl border border-nucleus-border overflow-hidden">
+          <div className="hidden md:block rounded-xl border border-paralend-border overflow-hidden">
             <table className="w-full text-sm">
-              <thead className="bg-nucleus-card border-b border-nucleus-border">
+              <thead className="bg-paralend-card border-b border-paralend-border">
                 <tr>
-                  <th className="text-left py-3 px-5 text-xs font-semibold text-nucleus-text-secondary uppercase tracking-wide">
+                  <th className="text-left py-3 px-5 text-xs font-semibold text-paralend-text-secondary uppercase tracking-wide">
                     Market
                   </th>
-                  <th className="text-right py-3 px-4 text-xs font-semibold text-nucleus-text-secondary uppercase tracking-wide">
+                  <th className="text-right py-3 px-4 text-xs font-semibold text-paralend-text-secondary uppercase tracking-wide">
                     Supplied
                   </th>
-                  <th className="text-right py-3 px-4 text-xs font-semibold text-nucleus-text-secondary uppercase tracking-wide">
+                  <th className="text-right py-3 px-4 text-xs font-semibold text-paralend-text-secondary uppercase tracking-wide">
                     Borrowed
                   </th>
-                  <th className="text-right py-3 px-4 text-xs font-semibold text-nucleus-text-secondary uppercase tracking-wide">
+                  <th className="text-right py-3 px-4 text-xs font-semibold text-paralend-text-secondary uppercase tracking-wide">
                     Collateral
                   </th>
-                  <th className="text-right py-3 px-4 text-xs font-semibold text-nucleus-text-secondary uppercase tracking-wide">
+                  <th className="text-right py-3 px-4 text-xs font-semibold text-paralend-text-secondary uppercase tracking-wide">
                     Health Factor
                   </th>
-                  <th className="text-right py-3 px-5 text-xs font-semibold text-nucleus-text-secondary uppercase tracking-wide">
+                  <th className="text-right py-3 px-5 text-xs font-semibold text-paralend-text-secondary uppercase tracking-wide">
                     Actions
                   </th>
                 </tr>
               </thead>
-              <tbody className="bg-nucleus-bg divide-y divide-nucleus-border/50">
+              <tbody className="bg-paralend-bg divide-y divide-paralend-border/50">
                 {positions.map((pos) => (
                   <tr key={pos.id} className="hover:bg-white/[0.02] transition-colors">
                     <td className="py-4 px-5">
                       <div className="flex items-center gap-3">
                         <div className="flex -space-x-1">
-                          <span className="flex h-8 w-8 items-center justify-center rounded-full bg-nucleus-card border border-nucleus-border text-sm font-bold text-nucleus-text-secondary">
+                          <span className="flex h-8 w-8 items-center justify-center rounded-full bg-paralend-card border border-paralend-border text-sm font-bold text-paralend-text-secondary">
                             {pos.collateralSymbol.slice(0, 2)}
                           </span>
-                          <span className="flex h-8 w-8 items-center justify-center rounded-full bg-nucleus-card border border-nucleus-border text-sm">
+                          <span className="flex h-8 w-8 items-center justify-center rounded-full bg-paralend-card border border-paralend-border text-sm">
                             $
                           </span>
                         </div>
-                        <span className="font-semibold text-nucleus-text-primary">
+                        <span className="font-semibold text-paralend-text-primary">
                           {pos.collateralSymbol} / {pos.loanSymbol}
                         </span>
                       </div>
                     </td>
 
                     <td className="py-4 px-4 text-right">
-                      <div className="text-nucleus-green font-semibold">
+                      <div className="text-paralend-green font-semibold">
                         {pos.supplyAssetsUsd > 0 ? formatUSD(pos.supplyAssetsUsd) : "—"}
                       </div>
                     </td>
 
                     <td className="py-4 px-4 text-right">
-                      <div className={pos.borrowAssetsUsd > 0 ? "text-nucleus-orange font-semibold" : "text-nucleus-text-secondary"}>
+                      <div className={pos.borrowAssetsUsd > 0 ? "text-paralend-orange font-semibold" : "text-paralend-text-secondary"}>
                         {pos.borrowAssetsUsd > 0 ? formatUSD(pos.borrowAssetsUsd) : "—"}
                       </div>
                     </td>
 
                     <td className="py-4 px-4 text-right">
-                      <div className="font-semibold text-nucleus-text-primary">
+                      <div className="font-semibold text-paralend-text-primary">
                         {Number(pos.collateralAmount) > 0
                           ? `${formatTokenAmount(pos.collateralAmount, pos.collateralDecimals, 4)} ${pos.collateralSymbol}`
                           : "—"}
                       </div>
                       {pos.collateralValueUsd > 0 && (
-                        <div className="text-xs text-nucleus-text-secondary">
+                        <div className="text-xs text-paralend-text-secondary">
                           ≈ {formatUSD(pos.collateralValueUsd)}
                         </div>
                       )}
@@ -188,7 +188,7 @@ export default function PositionsPage() {
                           {formatHealthFactor(pos.healthFactor)}
                         </span>
                       ) : (
-                        <span className="text-nucleus-text-secondary text-sm">—</span>
+                        <span className="text-paralend-text-secondary text-sm">—</span>
                       )}
                     </td>
 
@@ -210,10 +210,10 @@ export default function PositionsPage() {
             {positions.map((pos) => (
               <div
                 key={pos.id}
-                className="rounded-xl border border-nucleus-border bg-nucleus-card p-4"
+                className="rounded-xl border border-paralend-border bg-paralend-card p-4"
               >
                 <div className="flex items-center justify-between mb-4">
-                  <span className="font-semibold text-nucleus-text-primary text-sm">
+                  <span className="font-semibold text-paralend-text-primary text-sm">
                     {pos.collateralSymbol} / {pos.loanSymbol}
                   </span>
                   {pos.borrowAssetsUsd > 0 && (
@@ -226,14 +226,14 @@ export default function PositionsPage() {
                 </div>
                 <div className="grid grid-cols-2 gap-3 text-sm mb-4">
                   <div>
-                    <div className="text-xs text-nucleus-text-secondary mb-0.5">Supplied</div>
-                    <div className="font-semibold text-nucleus-green">
+                    <div className="text-xs text-paralend-text-secondary mb-0.5">Supplied</div>
+                    <div className="font-semibold text-paralend-green">
                       {pos.supplyAssetsUsd > 0 ? formatUSD(pos.supplyAssetsUsd) : "—"}
                     </div>
                   </div>
                   <div>
-                    <div className="text-xs text-nucleus-text-secondary mb-0.5">Borrowed</div>
-                    <div className={`font-semibold ${pos.borrowAssetsUsd > 0 ? "text-nucleus-orange" : "text-nucleus-text-secondary"}`}>
+                    <div className="text-xs text-paralend-text-secondary mb-0.5">Borrowed</div>
+                    <div className={`font-semibold ${pos.borrowAssetsUsd > 0 ? "text-paralend-orange" : "text-paralend-text-secondary"}`}>
                       {pos.borrowAssetsUsd > 0 ? formatUSD(pos.borrowAssetsUsd) : "—"}
                     </div>
                   </div>
@@ -252,8 +252,8 @@ export default function PositionsPage() {
       {/* Health Factor legend */}
       {positions.length > 0 && (
         <Card>
-          <div className="flex flex-wrap gap-4 text-xs text-nucleus-text-secondary">
-            <span className="font-semibold text-nucleus-text-primary text-sm">
+          <div className="flex flex-wrap gap-4 text-xs text-paralend-text-secondary">
+            <span className="font-semibold text-paralend-text-primary text-sm">
               Health Factor guide:
             </span>
             {[

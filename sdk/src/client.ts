@@ -16,8 +16,8 @@ import {
   getAssociatedTokenAddressSync,
 } from "@solana/spl-token";
 
-import type { Nucleus } from "../../target/types/nucleus";
-import IDL from "../../target/idl/nucleus.json";
+import type { Paralend } from "../../target/types/paralend";
+import IDL from "../../target/idl/paralend.json";
 
 import { PROGRAM_ID } from "./constants";
 import {
@@ -53,7 +53,7 @@ function bigIntToBN(v: bigint): BN {
 /**
  * Convert an Anchor-decoded Market account to our SDK MarketState.
  */
-function decodeMarket(raw: IdlAccounts<Nucleus>["market"]): MarketState {
+function decodeMarket(raw: IdlAccounts<Paralend>["market"]): MarketState {
   return {
     bump: raw.bump,
     collateralVaultBump: raw.collateralVaultBump,
@@ -84,7 +84,7 @@ function decodeMarket(raw: IdlAccounts<Nucleus>["market"]): MarketState {
  * Convert an Anchor-decoded Position account to our SDK PositionState.
  */
 function decodePosition(
-  raw: IdlAccounts<Nucleus>["position"]
+  raw: IdlAccounts<Paralend>["position"]
 ): PositionState {
   return {
     bump: raw.bump,
@@ -96,10 +96,10 @@ function decodePosition(
   };
 }
 
-// ─── NucleusClient ────────────────────────────────────────────────────────────
+// ─── ParalendClient ────────────────────────────────────────────────────────────
 
-export class NucleusClient {
-  readonly program: Program<Nucleus>;
+export class ParalendClient {
+  readonly program: Program<Paralend>;
   readonly provider: AnchorProvider;
 
   constructor(provider: AnchorProvider, programId: PublicKey = PROGRAM_ID) {
@@ -110,7 +110,7 @@ export class NucleusClient {
       address: programId.toBase58(),
     };
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    this.program = new Program<Nucleus>(idl as any, provider);
+    this.program = new Program<Paralend>(idl as any, provider);
   }
 
   // ─── Account Fetchers ──────────────────────────────────────────────────────

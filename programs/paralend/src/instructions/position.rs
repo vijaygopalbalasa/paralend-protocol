@@ -1,7 +1,7 @@
 use anchor_lang::prelude::*;
 
 use crate::constants::*;
-use crate::errors::NucleusError;
+use crate::errors::ParalendError;
 use crate::state::market::Market;
 use crate::state::position::Position;
 
@@ -72,8 +72,8 @@ pub struct ClosePosition<'info> {
         close = rent_recipient,
         seeds = [SEED_PREFIX, SEED_POSITION, &market_id, owner.key().as_ref()],
         bump = position.bump,
-        constraint = position.owner == owner.key() @ NucleusError::Unauthorized,
-        constraint = position.market_id == market_id @ NucleusError::Unauthorized,
+        constraint = position.owner == owner.key() @ ParalendError::Unauthorized,
+        constraint = position.market_id == market_id @ ParalendError::Unauthorized,
     )]
     pub position: Account<'info, Position>,
 }
@@ -82,7 +82,7 @@ pub fn handle_close_position(ctx: Context<ClosePosition>, _market_id: [u8; 32]) 
     let position = &ctx.accounts.position;
 
     // Verify position is completely empty
-    require!(position.is_empty(), NucleusError::PositionNotEmpty);
+    require!(position.is_empty(), ParalendError::PositionNotEmpty);
 
     // Account closure is handled by Anchor's `close = rent_recipient` constraint
     // No additional logic needed — rent is automatically returned

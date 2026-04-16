@@ -12,7 +12,7 @@ import {
   computeMarketIdFromAccount,
   irmBorrowRatePerSecond,
   makeReadonlyProgram,
-} from "@/lib/nucleus-program";
+} from "@/lib/paralend-program";
 import { BPS, WAD } from "@/lib/constants";
 
 export interface MarketRow {

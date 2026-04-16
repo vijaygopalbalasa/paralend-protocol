@@ -24,7 +24,7 @@ import {
   makeProgram,
   parseTokenAmount,
   toAnchorWallet,
-} from "@/lib/nucleus-program";
+} from "@/lib/paralend-program";
 import {
   cn,
   formatAPY,
@@ -428,7 +428,7 @@ function MarketDetailPageInner() {
   if (loading && !market) {
     return (
       <div className="flex items-center justify-center py-24">
-        <span className="inline-block h-6 w-6 animate-spin rounded-full border-2 border-nucleus-primary border-t-transparent" />
+        <span className="inline-block h-6 w-6 animate-spin rounded-full border-2 border-paralend-primary border-t-transparent" />
       </div>
     );
   }
@@ -436,7 +436,7 @@ function MarketDetailPageInner() {
   if (error || !market) {
     return (
       <div className="flex flex-col items-center justify-center gap-4 py-24">
-        <p className="text-sm text-nucleus-text-secondary">
+        <p className="text-sm text-paralend-text-secondary">
           {error ?? "Market not found."}
         </p>
         <Link href="/markets">
@@ -455,12 +455,12 @@ function MarketDetailPageInner() {
 
   return (
     <div className="flex flex-col gap-6">
-      <nav className="text-sm font-medium text-nucleus-text-secondary">
-        <Link href="/markets" className="hover:text-nucleus-primary transition-colors">
+      <nav className="text-sm font-medium text-paralend-text-secondary">
+        <Link href="/markets" className="hover:text-paralend-primary transition-colors">
           Markets
         </Link>
         <span className="mx-2">/</span>
-        <span className="font-bold text-nucleus-text-primary">
+        <span className="font-bold text-paralend-text-primary">
           {market.collateralSymbol} / {market.loanSymbol}
         </span>
       </nav>
@@ -476,13 +476,13 @@ function MarketDetailPageInner() {
             </span>
           </div>
           <div>
-            <h1 className="text-2xl font-black text-nucleus-text-primary tracking-tight">
+            <h1 className="text-2xl font-black text-paralend-text-primary tracking-tight">
               {market.collateralSymbol} / {market.loanSymbol}
             </h1>
             <div className="mt-1 flex flex-wrap items-center gap-2">
               <Badge variant="gray">LLTV {market.lltv}%</Badge>
               <Badge variant="gray">Fee {(market.feeBps / 100).toFixed(2)}%</Badge>
-              <span className="text-xs font-semibold text-nucleus-text-secondary">
+              <span className="text-xs font-semibold text-paralend-text-secondary">
                 {market.oracleLabel}
               </span>
             </div>
@@ -511,14 +511,14 @@ function MarketDetailPageInner() {
           <Stat
             label="Supply APY"
             value={formatAPY(market.supplyApyPct)}
-            valueClassName="text-nucleus-green font-black tracking-tight text-2xl"
+            valueClassName="text-paralend-green font-black tracking-tight text-2xl"
           />
         </Card>
         <Card noPadding innerClassName="p-5">
           <Stat
             label="Borrow APY"
             value={formatAPY(market.borrowApyPct)}
-            valueClassName="text-nucleus-orange font-black tracking-tight text-2xl"
+            valueClassName="text-paralend-orange font-black tracking-tight text-2xl"
           />
         </Card>
         <Card noPadding innerClassName="p-5">
@@ -526,13 +526,13 @@ function MarketDetailPageInner() {
         </Card>
         <Card noPadding innerClassName="p-5">
           <div className="flex flex-col gap-1">
-            <span className="text-xs font-bold uppercase tracking-wider text-nucleus-text-secondary">
+            <span className="text-xs font-bold uppercase tracking-wider text-paralend-text-secondary">
               Utilization
             </span>
-            <span className="text-2xl font-black tabular-nums text-nucleus-text-primary tracking-tight">
+            <span className="text-2xl font-black tabular-nums text-paralend-text-primary tracking-tight">
               {formatPct(market.utilization)}
             </span>
-            <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-[#FAFAFA] border border-nucleus-border/50">
+            <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-[#FAFAFA] border border-paralend-border/50">
               <div
                 className={`h-full rounded-full ${utilizationColor(market.utilization)} transition-all duration-500`}
                 style={{ width: `${Math.min(market.utilization, 100)}%` }}
@@ -544,7 +544,7 @@ function MarketDetailPageInner() {
 
       <div className="grid grid-cols-1 gap-8 lg:grid-cols-3 mt-4">
         <div className="flex flex-col gap-5 lg:col-span-2">
-          <div className="flex gap-1 rounded-lg border border-nucleus-border bg-gray-50 p-1.5 shadow-inner">
+          <div className="flex gap-1 rounded-lg border border-paralend-border bg-gray-50 p-1.5 shadow-inner">
             {tabs.map((tab) => (
               <button
                 key={tab.id}
@@ -552,8 +552,8 @@ function MarketDetailPageInner() {
                 className={cn(
                   "flex-1 rounded-md py-2.5 text-sm font-bold transition-all",
                   activeTab === tab.id
-                    ? "bg-white text-nucleus-primary shadow-sm ring-1 ring-gray-900/5"
-                    : "text-nucleus-text-secondary hover:text-nucleus-text-primary hover:bg-gray-100/50"
+                    ? "bg-white text-paralend-primary shadow-sm ring-1 ring-gray-900/5"
+                    : "text-paralend-text-secondary hover:text-paralend-text-primary hover:bg-gray-100/50"
                 )}
               >
                 {tab.label}
@@ -563,7 +563,7 @@ function MarketDetailPageInner() {
 
           {activeTab === "supply" && (
             <div className="flex flex-col gap-4">
-              <Card header={<span className="font-semibold text-nucleus-text-primary">Supply {market.loanSymbol}</span>}>
+              <Card header={<span className="font-semibold text-paralend-text-primary">Supply {market.loanSymbol}</span>}>
                 <div className="flex flex-col gap-4">
                   <Input
                     label={`Amount (${market.loanSymbol})`}
@@ -579,10 +579,10 @@ function MarketDetailPageInner() {
                     }
                     hint={`Wallet balance: ${loanBalanceLabel ?? "—"}`}
                   />
-                  <div className="rounded-lg border border-nucleus-border bg-nucleus-bg p-4 text-sm">
-                    <div className="flex justify-between text-nucleus-text-secondary">
+                  <div className="rounded-lg border border-paralend-border bg-paralend-bg p-4 text-sm">
+                    <div className="flex justify-between text-paralend-text-secondary">
                       <span>Your supplied</span>
-                      <span className="font-medium text-nucleus-text-primary">
+                      <span className="font-medium text-paralend-text-primary">
                         {position.supplyAssets > 0n
                           ? `${formatTokenAmount(position.supplyAssets, market.loanDecimals, 6)} ${market.loanSymbol}`
                           : "—"}
@@ -602,7 +602,7 @@ function MarketDetailPageInner() {
                 </div>
               </Card>
 
-              <Card header={<span className="font-semibold text-nucleus-text-primary">Withdraw {market.loanSymbol}</span>}>
+              <Card header={<span className="font-semibold text-paralend-text-primary">Withdraw {market.loanSymbol}</span>}>
                 <div className="flex flex-col gap-4">
                   <Input
                     label={`Amount (${market.loanSymbol})`}
@@ -639,7 +639,7 @@ function MarketDetailPageInner() {
 
           {activeTab === "borrow" && (
             <div className="flex flex-col gap-4">
-              <Card header={<span className="font-semibold text-nucleus-text-primary">Borrow {market.loanSymbol}</span>}>
+              <Card header={<span className="font-semibold text-paralend-text-primary">Borrow {market.loanSymbol}</span>}>
                 <div className="flex flex-col gap-4">
                   <Input
                     label={`Amount (${market.loanSymbol})`}
@@ -650,24 +650,24 @@ function MarketDetailPageInner() {
                     suffix={market.loanSymbol}
                     hint={`Wallet balance: ${loanBalanceLabel ?? "—"}`}
                   />
-                  <div className="rounded-lg border border-nucleus-border bg-nucleus-bg p-4 text-sm">
-                    <div className="flex justify-between text-nucleus-text-secondary">
+                  <div className="rounded-lg border border-paralend-border bg-paralend-bg p-4 text-sm">
+                    <div className="flex justify-between text-paralend-text-secondary">
                       <span>Collateral posted</span>
-                      <span className="font-medium text-nucleus-text-primary">
+                      <span className="font-medium text-paralend-text-primary">
                         {position.collateralAmount > 0n
                           ? `${formatTokenAmount(position.collateralAmount, market.collateralDecimals, 6)} ${market.collateralSymbol}`
                           : "—"}
                       </span>
                     </div>
-                    <div className="mt-2 flex justify-between text-nucleus-text-secondary">
+                    <div className="mt-2 flex justify-between text-paralend-text-secondary">
                       <span>Outstanding debt</span>
-                      <span className="font-medium text-nucleus-text-primary">
+                      <span className="font-medium text-paralend-text-primary">
                         {position.borrowAssets > 0n
                           ? `${formatTokenAmount(position.borrowAssets, market.loanDecimals, 6)} ${market.loanSymbol}`
                           : "—"}
                       </span>
                     </div>
-                    <div className="mt-2 flex items-center justify-between text-nucleus-text-secondary">
+                    <div className="mt-2 flex items-center justify-between text-paralend-text-secondary">
                       <span>Health factor</span>
                       <span
                         className={cn(
@@ -692,7 +692,7 @@ function MarketDetailPageInner() {
                 </div>
               </Card>
 
-              <Card header={<span className="font-semibold text-nucleus-text-primary">Repay {market.loanSymbol}</span>}>
+              <Card header={<span className="font-semibold text-paralend-text-primary">Repay {market.loanSymbol}</span>}>
                 <div className="flex flex-col gap-4">
                   <Input
                     label={`Amount (${market.loanSymbol})`}
@@ -729,7 +729,7 @@ function MarketDetailPageInner() {
 
           {activeTab === "collateral" && (
             <div className="flex flex-col gap-4">
-              <Card header={<span className="font-semibold text-nucleus-text-primary">Deposit {market.collateralSymbol}</span>}>
+              <Card header={<span className="font-semibold text-paralend-text-primary">Deposit {market.collateralSymbol}</span>}>
                 <div className="flex flex-col gap-4">
                   <Input
                     label={`Amount (${market.collateralSymbol})`}
@@ -749,18 +749,18 @@ function MarketDetailPageInner() {
                     }
                     hint={`Wallet balance: ${collateralBalanceLabel ?? "—"}`}
                   />
-                  <div className="rounded-lg border border-nucleus-border bg-nucleus-bg p-4 text-sm">
-                    <div className="flex justify-between text-nucleus-text-secondary">
+                  <div className="rounded-lg border border-paralend-border bg-paralend-bg p-4 text-sm">
+                    <div className="flex justify-between text-paralend-text-secondary">
                       <span>Current collateral</span>
-                      <span className="font-medium text-nucleus-text-primary">
+                      <span className="font-medium text-paralend-text-primary">
                         {position.collateralAmount > 0n
                           ? `${formatTokenAmount(position.collateralAmount, market.collateralDecimals, 6)} ${market.collateralSymbol}`
                           : "—"}
                       </span>
                     </div>
-                    <div className="mt-2 flex justify-between text-nucleus-text-secondary">
+                    <div className="mt-2 flex justify-between text-paralend-text-secondary">
                       <span>Collateral value</span>
-                      <span className="font-medium text-nucleus-text-primary">
+                      <span className="font-medium text-paralend-text-primary">
                         {position.collateralValueUsd > 0
                           ? formatUSD(position.collateralValueUsd)
                           : "—"}
@@ -780,7 +780,7 @@ function MarketDetailPageInner() {
                 </div>
               </Card>
 
-              <Card header={<span className="font-semibold text-nucleus-text-primary">Withdraw {market.collateralSymbol}</span>}>
+              <Card header={<span className="font-semibold text-paralend-text-primary">Withdraw {market.collateralSymbol}</span>}>
                 <div className="flex flex-col gap-4">
                   <Input
                     label={`Amount (${market.collateralSymbol})`}
@@ -804,7 +804,7 @@ function MarketDetailPageInner() {
                         : "—"
                     }`}
                   />
-                  <div className="rounded-lg border border-nucleus-red/20 bg-nucleus-red/5 p-3 text-xs text-nucleus-red/80">
+                  <div className="rounded-lg border border-paralend-red/20 bg-paralend-red/5 p-3 text-xs text-paralend-red/80">
                     Withdrawing collateral can make the position liquidatable if the
                     health factor drops below 1.0.
                   </div>
@@ -825,34 +825,34 @@ function MarketDetailPageInner() {
         </div>
 
         <div className="flex flex-col gap-4">
-          <Card header={<span className="font-semibold text-nucleus-text-primary">Your Position</span>}>
+          <Card header={<span className="font-semibold text-paralend-text-primary">Your Position</span>}>
             <div className="flex flex-col gap-3 text-sm">
               <div className="flex justify-between">
-                <span className="text-nucleus-text-secondary">Supplied</span>
-                <span className="font-medium text-nucleus-text-primary">
+                <span className="text-paralend-text-secondary">Supplied</span>
+                <span className="font-medium text-paralend-text-primary">
                   {position.supplyAssets > 0n
                     ? `${formatTokenAmount(position.supplyAssets, market.loanDecimals, 6)} ${market.loanSymbol}`
                     : "—"}
                 </span>
               </div>
               <div className="flex justify-between">
-                <span className="text-nucleus-text-secondary">Borrowed</span>
-                <span className="font-medium text-nucleus-text-primary">
+                <span className="text-paralend-text-secondary">Borrowed</span>
+                <span className="font-medium text-paralend-text-primary">
                   {position.borrowAssets > 0n
                     ? `${formatTokenAmount(position.borrowAssets, market.loanDecimals, 6)} ${market.loanSymbol}`
                     : "—"}
                 </span>
               </div>
               <div className="flex justify-between">
-                <span className="text-nucleus-text-secondary">Collateral</span>
-                <span className="font-medium text-nucleus-text-primary">
+                <span className="text-paralend-text-secondary">Collateral</span>
+                <span className="font-medium text-paralend-text-primary">
                   {position.collateralAmount > 0n
                     ? `${formatTokenAmount(position.collateralAmount, market.collateralDecimals, 6)} ${market.collateralSymbol}`
                     : "—"}
                 </span>
               </div>
               <div className="flex items-center justify-between">
-                <span className="text-nucleus-text-secondary">Health factor</span>
+                <span className="text-paralend-text-secondary">Health factor</span>
                 <span
                   className={cn(
                     "rounded border px-2 py-0.5 font-bold",
@@ -865,7 +865,7 @@ function MarketDetailPageInner() {
             </div>
           </Card>
 
-          <Card header={<span className="font-semibold text-nucleus-text-primary">Market Parameters</span>}>
+          <Card header={<span className="font-semibold text-paralend-text-primary">Market Parameters</span>}>
             <div className="flex flex-col gap-3 text-sm">
               {[
                 { label: "Collateral", value: market.collateralSymbol },
@@ -877,10 +877,10 @@ function MarketDetailPageInner() {
               ].map((row) => (
                 <div
                   key={row.label}
-                  className="flex items-center justify-between border-b border-nucleus-border/50 py-2 last:border-0"
+                  className="flex items-center justify-between border-b border-paralend-border/50 py-2 last:border-0"
                 >
-                  <span className="text-nucleus-text-secondary">{row.label}</span>
-                  <span className="text-right font-medium text-nucleus-text-primary">
+                  <span className="text-paralend-text-secondary">{row.label}</span>
+                  <span className="text-right font-medium text-paralend-text-primary">
                     {row.value}
                   </span>
                 </div>
@@ -888,27 +888,27 @@ function MarketDetailPageInner() {
             </div>
           </Card>
 
-          <Card header={<span className="font-semibold text-nucleus-text-primary">Liquidation</span>}>
-            <div className="flex flex-col gap-2 text-sm text-nucleus-text-secondary">
+          <Card header={<span className="font-semibold text-paralend-text-primary">Liquidation</span>}>
+            <div className="flex flex-col gap-2 text-sm text-paralend-text-secondary">
               <p>
                 A position becomes liquidatable once its health factor drops below
                 1.0.
               </p>
               <div className="flex justify-between">
                 <span>Collateral price</span>
-                <span className="font-medium text-nucleus-text-primary">
+                <span className="font-medium text-paralend-text-primary">
                   {formatUSD(market.collateralPriceUsd)}
                 </span>
               </div>
               <div className="flex justify-between">
                 <span>Loan price</span>
-                <span className="font-medium text-nucleus-text-primary">
+                <span className="font-medium text-paralend-text-primary">
                   {formatUSD(market.loanPriceUsd)}
                 </span>
               </div>
               <div className="flex justify-between">
                 <span>Current borrowed</span>
-                <span className="font-medium text-nucleus-text-primary">
+                <span className="font-medium text-paralend-text-primary">
                   {formatUSD(market.borrowedUsd)}
                 </span>
               </div>
@@ -925,7 +925,7 @@ export default function MarketDetailPage() {
     <Suspense
       fallback={
         <div className="flex items-center justify-center py-24">
-          <span className="inline-block h-6 w-6 animate-spin rounded-full border-2 border-nucleus-primary border-t-transparent" />
+          <span className="inline-block h-6 w-6 animate-spin rounded-full border-2 border-paralend-primary border-t-transparent" />
         </div>
       }
     >

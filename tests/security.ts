@@ -13,11 +13,11 @@ import {
 } from "@solana/spl-token";
 import { keccak_256 } from "@noble/hashes/sha3";
 import { assert, expect } from "chai";
-import { Nucleus } from "../target/types/nucleus";
+import { Paralend } from "../target/types/paralend";
 
 // ─── Seeds ───────────────────────────────────────────────────────────────────
 
-const SEED_PREFIX = Buffer.from("nucleus");
+const SEED_PREFIX = Buffer.from("paralend");
 const SEED_PROTOCOL = Buffer.from("protocol_state");
 const SEED_MARKET = Buffer.from("market");
 const SEED_POSITION = Buffer.from("position");
@@ -96,7 +96,7 @@ const SOL_PRICE_WAD = (140n * WAD) / 1_000_000_000n;
 describe("security", () => {
   const provider = anchor.AnchorProvider.env();
   anchor.setProvider(provider);
-  const program = anchor.workspace.Nucleus as Program<Nucleus>;
+  const program = anchor.workspace.Paralend as Program<Paralend>;
   const connection = provider.connection;
   const payer = (provider.wallet as anchor.Wallet).payer;
 

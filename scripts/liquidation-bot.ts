@@ -195,7 +195,7 @@ async function main() {
     throw new Error("Run setup-demo-markets.ts and fund-demo.ts before the liquidation bot.");
   }
 
-  console.log(`\n🤖 Nucleus liquidation bot`);
+  console.log(`\n🤖 Paralend liquidation bot`);
   console.log(`   Cluster: ${cluster}`);
   console.log(`   Wallet:  ${payer.publicKey.toBase58()}`);
   console.log(`   Interval: ${pollIntervalMs / 1000}s`);
