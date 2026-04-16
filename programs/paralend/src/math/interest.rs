@@ -1,4 +1,6 @@
-use crate::constants::{BPS, MAX_INTEREST_ACCRUAL_SECONDS, SECONDS_PER_YEAR, WAD};
+use crate::constants::{BPS, MAX_INTEREST_ACCRUAL_SECONDS, WAD};
+#[cfg(test)]
+use crate::constants::SECONDS_PER_YEAR;
 use crate::errors::ParalendError;
 use crate::math::shares::to_shares_down;
 use crate::math::wad::{mul_div_down, w_taylor_compounded, wad_mul_down};

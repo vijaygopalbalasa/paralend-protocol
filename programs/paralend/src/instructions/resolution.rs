@@ -7,11 +7,10 @@ use crate::events;
 use crate::interfaces::oracle::{
     get_loan_price, is_position_healthy, read_price_cache_stale_ok,
 };
-use crate::math::decay::compute_effective_lltv;
 use crate::math::interest::accrue_interest_on_market;
 use crate::math::safe_math::safe_u128_to_u64;
 use crate::math::shares::{to_assets_up, to_shares_down};
-use crate::math::wad::{mul_div_down, mul_div_up};
+use crate::math::wad::mul_div_down;
 use crate::state::irm::LinearIrm;
 use crate::state::market::Market;
 use crate::state::oracle::PriceCache;

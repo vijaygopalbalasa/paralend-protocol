@@ -1,6 +1,6 @@
 use crate::constants::{SECONDS_PER_YEAR, WAD};
 use crate::errors::ParalendError;
-use crate::math::wad::{mul_div_down, wad_mul_down};
+use crate::math::wad::wad_mul_down;
 use anchor_lang::prelude::*;
 
 /// Linear kinked interest rate model

@@ -20,6 +20,7 @@ import {
   deriveLoanVaultPDA,
   derivePositionPDA,
   derivePriceCachePDA,
+  deriveProtocolStatePDA,
   ensureAtaIx,
   formatTokenAmount,
   makeAnchorProvider,
@@ -133,6 +134,7 @@ function MarketDetailPageInner() {
     const loanVault = deriveLoanVaultPDA(market.marketId);
     const collateralVault = deriveCollateralVaultPDA(market.marketId);
     const priceCache = derivePriceCachePDA(market.marketId);
+    const protocolState = deriveProtocolStatePDA();
 
     return {
       owner,
@@ -141,6 +143,7 @@ function MarketDetailPageInner() {
       loanVault,
       collateralVault,
       priceCache,
+      protocolState,
     };
   };
 
@@ -171,7 +174,8 @@ function MarketDetailPageInner() {
     }
 
     await runAction("Supply", async () => {
-      const { owner, program, positionPda, loanVault } = withProgram();
+      const { owner, program, positionPda, loanVault, protocolState } =
+        withProgram();
       const methods = program.methods as any;
       const tx = new Transaction();
       const { address: loanAta, instruction: ensureLoanAtaIx } = ensureAtaIx(
@@ -187,6 +191,7 @@ function MarketDetailPageInner() {
           .supply(Array.from(market.marketId), new BN(amount.toString()), new BN(0))
           .accountsPartial({
             supplier: owner,
+            protocolState,
             market: market.publicKey,
             irm: market.irm,
             position: positionPda,
@@ -259,7 +264,7 @@ function MarketDetailPageInner() {
         positionPda,
         loanVault,
         priceCache,
-        
+        protocolState,
       } = withProgram();
       const methods = program.methods as any;
       const tx = new Transaction();
@@ -276,13 +281,13 @@ function MarketDetailPageInner() {
           .borrow(Array.from(market.marketId), new BN(amount.toString()), new BN(0))
           .accountsPartial({
             borrower: owner,
+            protocolState,
             market: market.publicKey,
             irm: market.irm,
             position: positionPda,
             loanVault,
             receiverLoanAta: loanAta,
             priceCache,
-            
           })
           .instruction()
       );
@@ -346,7 +351,8 @@ function MarketDetailPageInner() {
     }
 
     await runAction("Deposit Collateral", async () => {
-      const { owner, program, positionPda, collateralVault } = withProgram();
+      const { owner, program, positionPda, collateralVault, protocolState } =
+        withProgram();
       const methods = program.methods as any;
       const tx = new Transaction();
       const {
@@ -361,6 +367,7 @@ function MarketDetailPageInner() {
           .supplyCollateral(Array.from(market.marketId), new BN(amount.toString()))
           .accountsPartial({
             depositor: owner,
+            protocolState,
             market: market.publicKey,
             position: positionPda,
             depositorCollateralAta: collateralAta,
@@ -663,13 +670,66 @@ function MarketDetailPageInner() {
                   market.resolutionTimestamp > 0 && remaining <= 1800;
                 const resolved = market.marketStatus === 2 || market.paused;
                 const noOracle = market.collateralPriceWad === 0n;
+
+                // Client-side health preview: mirrors is_position_healthy.
+                // If the user-entered borrow amount would fail the
+                // time-decayed LLTV check on-chain, surface it before we
+                // waste a signature. Uses the same effective-LLTV formula
+                // as the decay chart for visible consistency.
+                let healthBlocker: string | null = null;
+                const amountBase = borrowAmount
+                  ? BigInt(
+                      Math.floor(
+                        parseFloat(borrowAmount) * 10 ** market.loanDecimals
+                      )
+                    )
+                  : 0n;
+                if (amountBase > 0n && !resolved && !inCutoff && !noOracle) {
+                  const WAD_LOCAL = 10n ** 18n;
+                  const BPS_LOCAL = 10_000n;
+                  const MAX_BINARY_LLTV_BPS_LOCAL = 7_000n;
+                  const DECAY_START = 7 * 24 * 3600;
+                  const baseBps = BigInt(
+                    Math.floor(market.baseLltvBps ?? market.lltv * 100)
+                  );
+                  const capped =
+                    baseBps > MAX_BINARY_LLTV_BPS_LOCAL
+                      ? MAX_BINARY_LLTV_BPS_LOCAL
+                      : baseBps;
+                  let effBps: bigint;
+                  if (market.resolutionTimestamp === 0) {
+                    effBps = capped;
+                  } else if (remaining <= 0) {
+                    effBps = 0n;
+                  } else if (remaining >= DECAY_START) {
+                    effBps = capped;
+                  } else {
+                    effBps =
+                      (capped * BigInt(remaining)) / BigInt(DECAY_START);
+                  }
+                  const collateralUsd =
+                    (position.collateralAmount * market.collateralPriceWad) /
+                    WAD_LOCAL;
+                  const futureDebt = position.borrowAssets + amountBase;
+                  const loanUsd =
+                    (futureDebt * market.loanPriceWad + WAD_LOCAL - 1n) /
+                    WAD_LOCAL;
+                  const lhs = collateralUsd * effBps;
+                  const rhs = loanUsd * BPS_LOCAL;
+                  if (loanUsd > 0n && lhs < rhs) {
+                    healthBlocker = `Position would be unhealthy after borrow at the current effective LLTV (${(
+                      Number(effBps) / 100
+                    ).toFixed(1)}%). Reduce the amount or add more collateral.`;
+                  }
+                }
+
                 const blocker = resolved
                   ? "This market is resolved — borrow is closed. Winning positions can redeem; losing positions have been force-closed."
                   : inCutoff
                     ? "Borrow is paused inside the final 30 minutes before resolution. Existing borrowers can still repay and withdraw."
                     : noOracle
                       ? "No attested price yet — the attester daemon has not pushed an initial spot. Borrow unavailable until then."
-                      : null;
+                      : healthBlocker;
                 return blocker ? (
                   <div className="rounded-lg border border-paralend-orange/40 bg-paralend-orange/10 p-3 text-sm font-semibold text-paralend-orange">
                     {blocker}

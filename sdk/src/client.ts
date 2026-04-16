@@ -738,6 +738,70 @@ export class ParalendClient {
   }
 
   /**
+   * Build a `transferOwnership` instruction. Sets `pending_owner` — must be
+   * followed by `acceptOwnership` from the new owner to finalise. Passing
+   * `new_owner == Pubkey::default()` cancels any pending transfer.
+   */
+  async transferOwnershipIx(params: {
+    owner: PublicKey;
+    newOwner: PublicKey;
+  }): Promise<TransactionInstruction> {
+    const { owner, newOwner } = params;
+    const [protocolState] = deriveProtocolStatePDA(this.program.programId);
+
+    return this.program.methods
+      .transferOwnership(newOwner)
+      .accountsPartial({ owner, protocolState })
+      .instruction();
+  }
+
+  /**
+   * Build an `acceptOwnership` instruction. Signer must be the pending owner
+   * set by a prior `transferOwnership` call.
+   */
+  async acceptOwnershipIx(params: {
+    pendingOwner: PublicKey;
+  }): Promise<TransactionInstruction> {
+    const { pendingOwner } = params;
+    const [protocolState] = deriveProtocolStatePDA(this.program.programId);
+
+    return this.program.methods
+      .acceptOwnership()
+      .accountsPartial({ pendingOwner, protocolState })
+      .instruction();
+  }
+
+  /**
+   * Build a `rotateAttester` instruction. Owner-only. Replaces the price
+   * cache's attester pubkey — useful for key compromise or scheduled
+   * key rotation. `new_attester` must be non-default.
+   */
+  async rotateAttesterIx(params: {
+    owner: PublicKey;
+    marketId: Buffer;
+    newAttester: PublicKey;
+  }): Promise<TransactionInstruction> {
+    const { owner, marketId, newAttester } = params;
+    const [protocolState] = deriveProtocolStatePDA(this.program.programId);
+    const [priceCache] = derivePriceCachePDA(
+      marketId,
+      this.program.programId
+    );
+
+    return this.program.methods
+      .rotateAttester(
+        Array.from(marketId) as unknown as number[] & { length: 32 },
+        newAttester
+      )
+      .accountsPartial({
+        owner,
+        protocolState,
+        priceCache,
+      })
+      .instruction();
+  }
+
+  /**
    * Build an `enableLltv` instruction.
    * Only callable by protocol owner.
    */
