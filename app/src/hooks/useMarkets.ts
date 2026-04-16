@@ -21,6 +21,7 @@ export interface MarketRow {
   collateralMint: string;
   loanMint: string;
   lltv: number;
+  baseLltv: number;
   utilization: number;
   supplyApyPct: number;
   borrowApyPct: number;
@@ -33,6 +34,14 @@ export interface MarketRow {
   oracleLabel: string;
   name: string;
   id: string;
+  /** Unix seconds when the Kalshi market resolves. 0 = classical lending market. */
+  resolutionTimestamp: number;
+  /** 0 = Active, 1 = PreResolution, 2 = Resolved. */
+  marketStatus: number;
+  /** 0 = unresolved, 1 = YES won, 2 = NO won. */
+  outcomeBit: number;
+  /** Human-readable Kalshi ticker decoded from the on-chain bytes (trimmed). */
+  kalshiTicker: string;
 }
 
 let pendingFetch: Promise<MarketRow[]> | null = null;
@@ -85,10 +94,18 @@ async function fetchAllMarkets(
       const collateralSymbol =
         marketMeta?.collateralSymbol ?? resolveTokenSymbol(collateralMint);
       const loanSymbol = marketMeta?.loanSymbol ?? resolveTokenSymbol(loanMint);
-      const hasStableLoan =
-        Buffer.from(market.loanOracleFeedId as number[]).every((byte) => byte === 0);
-      const oracleLabel =
-        marketMeta?.oracle ?? (hasStableLoan ? "StaticOracle / $1 stable" : "StaticOracle");
+      const oracleLabel = marketMeta?.oracle ?? "PriceCache (attester EMA)";
+
+      // Decode the on-chain Kalshi ticker bytes — trim NUL padding.
+      const tickerBytes = Buffer.from(market.kalshiTicker as number[]);
+      const trimmed = tickerBytes.slice(
+        0,
+        (() => {
+          const idx = tickerBytes.indexOf(0);
+          return idx === -1 ? tickerBytes.length : idx;
+        })()
+      );
+      const kalshiTicker = trimmed.toString("utf-8");
 
       return {
         publicKey,
@@ -96,6 +113,7 @@ async function fetchAllMarkets(
         collateralMint,
         loanMint,
         lltv: Number(market.lltv) / 100,
+        baseLltv: Number(market.baseLltv) / 100,
         utilization: utilizationPct,
         supplyApyPct,
         borrowApyPct,
@@ -106,8 +124,14 @@ async function fetchAllMarkets(
         collateralSymbol,
         loanSymbol,
         oracleLabel,
-        name: marketMeta?.name ?? `${collateralSymbol} / ${loanSymbol}`,
+        name:
+          marketMeta?.name ??
+          (kalshiTicker || `${collateralSymbol} / ${loanSymbol}`),
         id: publicKey,
+        resolutionTimestamp: Number(market.resolutionTimestamp),
+        marketStatus: Number(market.marketStatus),
+        outcomeBit: Number(market.outcomeBit),
+        kalshiTicker,
       } satisfies MarketRow;
     })
   );

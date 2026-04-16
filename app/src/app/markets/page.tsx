@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { ResolutionCountdown } from "@/components/ResolutionCountdown";
 import { formatUSD, formatAPY, formatPct, utilizationColor } from "@/lib/utils";
 import { useMarkets } from "@/hooks/useMarkets";
 
@@ -23,14 +24,10 @@ export default function MarketsPage() {
         <div>
           <h1 className="text-2xl font-bold text-paralend-text-primary">Markets</h1>
           <p className="text-sm text-paralend-text-secondary mt-1">
-            All permissionless lending markets on Paralend.
+            Borrow USDC against tokenized Kalshi positions. Time-decay LLTV
+            tightens as each event approaches resolution.
           </p>
         </div>
-        <Link href="/create">
-          <Button variant="primary" size="md">
-            + Create Market
-          </Button>
-        </Link>
       </div>
 
       {/* Summary stats */}
@@ -120,12 +117,17 @@ export default function MarketsPage() {
                           $
                         </span>
                       </div>
-                      <div>
-                        <div className="font-bold text-paralend-text-primary tracking-tight">
-                          {market.collateralSymbol} / {market.loanSymbol}
+                      <div className="min-w-0">
+                        <div className="font-bold text-paralend-text-primary tracking-tight truncate max-w-[200px]">
+                          {market.kalshiTicker || `${market.collateralSymbol} / ${market.loanSymbol}`}
                         </div>
-                        <div className="text-xs text-paralend-text-secondary font-mono mt-0.5">
-                          {market.publicKey.slice(0, 8)}…
+                        <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                          <ResolutionCountdown
+                            resolutionTimestamp={market.resolutionTimestamp}
+                            marketStatus={market.marketStatus}
+                            outcomeBit={market.outcomeBit}
+                            compact
+                          />
                         </div>
                       </div>
                     </div>
@@ -203,13 +205,19 @@ export default function MarketsPage() {
               className="rounded-xl border border-paralend-border bg-white p-5 shadow-sm"
             >
               {/* Header */}
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center gap-2">
-                  <span className="font-bold text-paralend-text-primary tracking-tight">
-                    {market.collateralSymbol} / {market.loanSymbol}
+              <div className="flex flex-col gap-2 mb-4">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="font-bold text-paralend-text-primary tracking-tight truncate">
+                    {market.kalshiTicker || `${market.collateralSymbol} / ${market.loanSymbol}`}
                   </span>
+                  <Badge variant="gray">{market.lltv}% LLTV</Badge>
                 </div>
-                <Badge variant="gray">{market.lltv}% LLTV</Badge>
+                <ResolutionCountdown
+                  resolutionTimestamp={market.resolutionTimestamp}
+                  marketStatus={market.marketStatus}
+                  outcomeBit={market.outcomeBit}
+                  compact
+                />
               </div>
 
               {/* Stats grid */}

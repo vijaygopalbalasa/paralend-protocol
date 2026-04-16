@@ -41,9 +41,18 @@ export interface MarketDetail {
   collateralDecimals: number;
   loanDecimals: number;
   lltv: number;
+  baseLltvBps: number;
   feeBps: number;
   paused: boolean;
   oracleLabel: string;
+  /** Kalshi market ticker, trimmed from zero-padding. */
+  kalshiTicker: string;
+  /** Unix seconds. 0 = classical lending market (no time-decay). */
+  resolutionTimestamp: number;
+  /** 0 Active, 1 PreResolution, 2 Resolved. */
+  marketStatus: number;
+  /** 0 unresolved, 1 YES won, 2 NO won. */
+  outcomeBit: number;
   totalSupplyAssets: bigint;
   totalSupplyShares: bigint;
   totalBorrowAssets: bigint;
@@ -233,9 +242,18 @@ export function useMarketDetail(
         collateralDecimals,
         loanDecimals,
         lltv: Number(account.lltv) / 100,
+        baseLltvBps: Number(account.baseLltv),
         feeBps: Number(account.fee),
         paused: account.paused,
         oracleLabel: "PriceCache (EMA, attester-cranked)",
+        kalshiTicker: (() => {
+          const buf = Buffer.from(account.kalshiTicker as number[]);
+          const idx = buf.indexOf(0);
+          return buf.slice(0, idx === -1 ? buf.length : idx).toString("utf-8");
+        })(),
+        resolutionTimestamp: Number(account.resolutionTimestamp),
+        marketStatus: Number(account.marketStatus),
+        outcomeBit: Number(account.outcomeBit),
         totalSupplyAssets,
         totalSupplyShares,
         totalBorrowAssets,

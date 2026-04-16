@@ -10,7 +10,9 @@ import { useConnection, useWallet } from "@solana/wallet-adapter-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { DecayCurveChart } from "@/components/DecayCurveChart";
 import { Input } from "@/components/ui/input";
+import { ResolutionCountdown } from "@/components/ResolutionCountdown";
 import { Stat } from "@/components/ui/stat";
 import { useMarketDetail } from "@/hooks/useMarketDetail";
 import {
@@ -475,11 +477,16 @@ function MarketDetailPageInner() {
           </div>
           <div>
             <h1 className="text-2xl font-black text-paralend-text-primary tracking-tight">
-              {market.collateralSymbol} / {market.loanSymbol}
+              {market.kalshiTicker || `${market.collateralSymbol} / ${market.loanSymbol}`}
             </h1>
             <div className="mt-1 flex flex-wrap items-center gap-2">
               <Badge variant="gray">LLTV {market.lltv}%</Badge>
               <Badge variant="gray">Fee {(market.feeBps / 100).toFixed(2)}%</Badge>
+              <ResolutionCountdown
+                resolutionTimestamp={market.resolutionTimestamp}
+                marketStatus={market.marketStatus}
+                outcomeBit={market.outcomeBit}
+              />
               <span className="text-xs font-semibold text-paralend-text-secondary">
                 {market.oracleLabel}
               </span>
@@ -502,6 +509,14 @@ function MarketDetailPageInner() {
         >
           {notice.message}
         </div>
+      )}
+
+      {market.resolutionTimestamp > 0 && (
+        <DecayCurveChart
+          baseLltvBps={market.baseLltvBps}
+          resolutionTimestamp={market.resolutionTimestamp}
+          marketStatus={market.marketStatus}
+        />
       )}
 
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
