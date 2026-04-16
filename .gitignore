@@ -39,3 +39,4 @@ AGENTS.md
 .cursor/
 .aider*
 copilot-*
+scripts/demo-attester.json
