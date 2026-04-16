@@ -1,5 +1,6 @@
 use crate::constants::{BPS, MAX_ORACLE_AGE, WAD};
 use crate::errors::ParalendError;
+use crate::math::decay::compute_effective_lltv;
 use crate::math::shares::to_assets_up;
 use crate::math::wad::{mul_div_down, mul_div_up};
 use crate::state::market::Market;
@@ -46,9 +47,11 @@ pub fn read_price_cache(
     Ok(cache.ema_price_wad)
 }
 
-/// Compute whether a position is healthy using the *base* LLTV stored on
-/// the market. Callers that need the time-decayed effective LLTV should
-/// use `is_position_healthy_effective` instead (coming in `math/decay.rs`).
+/// Compute whether a position is healthy using the market's *time-decayed*
+/// effective LLTV. This is the canonical health check for Paralend: it
+/// reads `market.base_lltv` + `market.resolution_timestamp` and calls
+/// `compute_effective_lltv` internally so every caller picks up the
+/// near-resolution tightening automatically.
 ///
 /// Price convention: both prices are WAD-scaled USD per base unit.
 /// Callers don't need to worry about token decimals — the oracle price
@@ -60,13 +63,19 @@ pub fn is_position_healthy(
     collateral_price_wad: u128,
     loan_price_wad: u128,
 ) -> Result<bool> {
+    let now = Clock::get()?.unix_timestamp;
+    let effective_lltv = compute_effective_lltv(
+        market.base_lltv,
+        market.resolution_timestamp,
+        now,
+    )?;
     is_position_healthy_at_lltv(
         market,
         collateral,
         borrow_shares,
         collateral_price_wad,
         loan_price_wad,
-        market.lltv as u128,
+        effective_lltv as u128,
     )
 }
 

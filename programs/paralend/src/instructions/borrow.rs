@@ -91,6 +91,23 @@ pub fn handle_borrow(
 
     // Accrue interest before computing shares (price debt accurately)
     let clock = Clock::get()?;
+
+    // Pre-resolution borrow cutoff: no new borrows in the last
+    // POST_BORROW_CUTOFF_SECONDS before a market's resolution. Prevents
+    // last-second leverage against the binary-outcome cliff.
+    if ctx.accounts.market.resolution_timestamp > 0 {
+        let since_now_to_resolution = ctx
+            .accounts
+            .market
+            .resolution_timestamp
+            .checked_sub(clock.unix_timestamp)
+            .unwrap_or(i64::MIN);
+        require!(
+            since_now_to_resolution > POST_BORROW_CUTOFF_SECONDS,
+            ParalendError::MarketNotActive
+        );
+    }
+
     accrue_interest_on_market(
         &mut ctx.accounts.market,
         &ctx.accounts.irm,

@@ -1,3 +1,4 @@
+pub mod decay;
 pub mod interest;
 pub mod safe_math;
 pub mod shares;
