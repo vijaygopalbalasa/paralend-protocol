@@ -7,9 +7,10 @@
 //   - supply / supply_collateral / borrow / repay
 //   - Pre-resolution borrow cutoff (POST_BORROW_CUTOFF_SECONDS)
 //
-// Legacy Nucleus-era tests are archived under tests/legacy/ and will be
-// ported individually as new instructions land (force_close, resolution,
-// liquidate rewrite on Days 9–11).
+// Additional coverage (liquidate, force_close_position, handle_resolution)
+// is planned behind a test-only feature flag that lets `create_market`
+// accept past timestamps for deterministic time-warp scenarios. See the
+// "Open items" section in DEPLOYMENT.md.
 
 import * as anchor from "@coral-xyz/anchor";
 import { Program, BN } from "@coral-xyz/anchor";
