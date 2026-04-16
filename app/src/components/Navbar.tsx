@@ -5,9 +5,11 @@ import { usePathname } from "next/navigation";
 import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
 import { cn } from "@/lib/utils";
 
+// `Create Market` is not a public nav action — markets are registered
+// by the protocol admin via the setup script, not the browser. The
+// /create page still exists for admin use but is intentionally unlinked.
 const NAV_LINKS = [
   { href: "/markets", label: "Markets" },
-  { href: "/create", label: "Create Market" },
   { href: "/positions", label: "My Positions" },
 ];
 

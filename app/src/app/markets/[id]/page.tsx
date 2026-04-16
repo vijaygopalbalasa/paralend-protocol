@@ -652,6 +652,30 @@ function MarketDetailPageInner() {
 
           {activeTab === "borrow" && (
             <div className="flex flex-col gap-4">
+              {(() => {
+                // Mirrors on-chain POST_BORROW_CUTOFF_SECONDS (30 min) +
+                // "awaiting attester" check: block the UI before the
+                // program rejects the tx so users don't burn fees on
+                // guaranteed reverts.
+                const now = Math.floor(Date.now() / 1000);
+                const remaining = market.resolutionTimestamp - now;
+                const inCutoff =
+                  market.resolutionTimestamp > 0 && remaining <= 1800;
+                const resolved = market.marketStatus === 2 || market.paused;
+                const noOracle = market.collateralPriceWad === 0n;
+                const blocker = resolved
+                  ? "This market is resolved — borrow is closed. Winning positions can redeem; losing positions have been force-closed."
+                  : inCutoff
+                    ? "Borrow is paused inside the final 30 minutes before resolution. Existing borrowers can still repay and withdraw."
+                    : noOracle
+                      ? "No attested price yet — the attester daemon has not pushed an initial spot. Borrow unavailable until then."
+                      : null;
+                return blocker ? (
+                  <div className="rounded-lg border border-paralend-orange/40 bg-paralend-orange/10 p-3 text-sm font-semibold text-paralend-orange">
+                    {blocker}
+                  </div>
+                ) : null;
+              })()}
               <Card header={<span className="font-semibold text-paralend-text-primary">Borrow {market.loanSymbol}</span>}>
                 <div className="flex flex-col gap-4">
                   <Input
@@ -697,7 +721,15 @@ function MarketDetailPageInner() {
                     size="lg"
                     fullWidth
                     loading={pendingAction === "Borrow"}
-                    disabled={!borrowAmount}
+                    disabled={
+                      !borrowAmount ||
+                      market.marketStatus === 2 ||
+                      market.paused ||
+                      market.collateralPriceWad === 0n ||
+                      (market.resolutionTimestamp > 0 &&
+                        market.resolutionTimestamp - Math.floor(Date.now() / 1000) <=
+                          1800)
+                    }
                     onClick={handleBorrow}
                   >
                     Borrow {market.loanSymbol}

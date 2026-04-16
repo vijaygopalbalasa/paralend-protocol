@@ -4,13 +4,13 @@ import { SolanaWalletProvider } from "@/components/WalletProvider";
 import { Navbar } from "@/components/Navbar";
 
 export const metadata: Metadata = {
-  title: "Paralend — Permissionless Lending on Solana",
+  title: "Paralend — Credit for Prediction Markets on Solana",
   description:
-    "Create any lending market in 30 seconds. No admin. No whitelist. Just math. The Morpho Blue of Solana.",
+    "Borrow USDC against your tokenized Kalshi YES/NO positions. Time-decay LLTV, onchain resolution, permissionless — the first credit layer for the $20B+ prediction-market collateral pool.",
   openGraph: {
-    title: "Paralend — Permissionless Lending on Solana",
+    title: "Paralend — Credit for Prediction Markets on Solana",
     description:
-      "Create any lending market in 30 seconds. No admin. No whitelist. Just math.",
+      "Borrow USDC against tokenized Kalshi positions. Time-decay LLTV + onchain resolution + force-close window.",
     type: "website",
   },
 };
@@ -38,7 +38,7 @@ export default function RootLayout({
               </span>
               <div className="flex items-center gap-6 text-sm font-medium text-paralend-text-secondary">
                 <a
-                  href="https://github.com"
+                  href="https://github.com/vijaygopalbalasa"
                   target="_blank"
                   rel="noopener noreferrer"
                   className="hover:text-paralend-primary transition-colors"
@@ -46,12 +46,12 @@ export default function RootLayout({
                   GitHub
                 </a>
                 <a
-                  href="https://docs.morpho.org"
+                  href="https://news.kalshi.com/p/kalshi-solana-tokenized-predictions"
                   target="_blank"
                   rel="noopener noreferrer"
                   className="hover:text-paralend-primary transition-colors"
                 >
-                  Docs
+                  Kalshi on Solana
                 </a>
                 <span className="px-2.5 py-1 rounded-full bg-paralend-border/50 text-xs text-paralend-text-secondary font-mono">devnet</span>
               </div>

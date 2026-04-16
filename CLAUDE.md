@@ -1,14 +1,17 @@
-# Paralend — Permissionless Isolated Lending on Solana
+# Paralend — Credit for Prediction Markets on Solana
 
-Colosseum Frontier hackathon (Apr 6 – May 11, 2026). DeFi track. $25K prize + $250K accelerator.
+Colosseum Frontier hackathon (Apr 6 – May 11, 2026).
+Live on devnet at **`2kZNrHd7QkUemYCLFw5dYGQWeKieAUNb5C1FvTjTYiC8`**.
 
-**The pitch:** Morpho Blue earns $132M ARR on Ethereum. Zero equivalent exists on Solana. Kamino V2 claims "permissionless" but requires admin key in practice. Paralend is trustless-first — anyone creates a lending market with 5 parameters in one transaction. No admin, no governance, no whitelist.
+**The pitch.** Kalshi tokenized thousands of their prediction markets on Solana (via DFlow, Dec 2025). Combined with Polymarket that's >$20B/mo of open event-positions sitting as SPL tokens, 0 % of which is borrowable. Paralend is the first credit layer for that pool: deposit your Kalshi YES/NO tokens, borrow USDC at a time-decayed LLTV, repay or get force-closed before resolution. Same mental model as Morpho-against-LSTs — but for an asset class with a resolution cliff, which is why it needs its own protocol.
+
+**Why this is a distinct product, not a Kamino feature.** Binary-outcome collateral breaks every assumption a general lending protocol makes: value can cliff to $0 on resolution, variance explodes as T→0, and there's no Pyth feed for "P(BTC > $150k by Jun 2026)". Paralend ships the five mechanisms specific to this asset class: time-decay LLTV, force-close window, resolution handler, per-market crank-attested price cache, and deterministic post-resolution settlement.
 
 ---
 
 ## CRITICAL RULES FOR CLAUDE
 
-**These rules are mandatory. Violating them causes bugs and wasted time.**
+These rules are mandatory. Violating them causes bugs and wasted time.
 
 ### Rule 1: Read Before Write
 **ALWAYS read the full context of any file before modifying it.**
@@ -24,83 +27,137 @@ When changing instruction signatures (adding/removing accounts or args):
 3. Sync IDL to frontend: `cp target/idl/paralend.json app/src/lib/paralend-idl.json`
 4. Sync types: `cp target/types/paralend.ts app/src/lib/paralend-idl-types.ts`
 5. Update ALL tests that call the instruction
-6. Update SDK client methods
+6. Update SDK client methods (`sdk/src/client.ts`)
 7. Update frontend calls
-8. Run full test suite: `anchor test`
+8. Update scripts (`scripts/*.ts`) that use the SDK
+9. Run `anchor test` and verify green
 
 ### Rule 3: Test Everything Before Deploy
-- `cargo test` must pass 100%
-- `anchor test` must pass 100%
-- Review all TODO/FIXME comments
-- Deployment is expensive (2+ SOL) — only deploy when ready
+- `cargo test --manifest-path programs/paralend/Cargo.toml --lib` must pass 100 %
+- `anchor test` must pass 100 %
+- `tsc --noEmit --project tsconfig.json` green (SDK + scripts)
+- `cd app && npx tsc --noEmit` green (frontend)
+- `anchor deploy` to devnet costs ~4.9 SOL fresh; upgrades similar cost without SOL-saving tricks. Only deploy when ready.
 
 ### Rule 4: Document Mistakes
-Add to MISTAKES.md when errors occur. Learn from them.
+Add to `MISTAKES.md` when errors occur. Learn from them.
 
 ---
 
-## Current Status (Apr 16, 2026)
+## Current Status (Apr 17, 2026)
 
 | Layer | Status | Notes |
 |-------|--------|-------|
-| Anchor program | ✅ Complete | 20/20 integration tests passing |
-| Rust unit tests | ✅ 28/28 passing | math, shares, IRM |
-| TypeScript SDK | ✅ Complete | ParalendClient, PDA helpers, math utils |
-| Next.js frontend | ✅ Built + deployed | Live on Vercel |
-| Demo scripts | ✅ Working | setup-demo-markets, fund-demo, liquidation-bot |
-| GitHub repo | ✅ Private | github.com/vijaygopalbalasa/paralend-protocol |
-| Vercel deploy | ✅ Live | paralend-frontend-67t0tqgai-vijaygopal-balasas-projects.vercel.app |
-| Devnet program | ✅ Deployed | ForUjmX3VzE5EsRfzktF529LToK7vyzx6czH5o1dUTY8 |
-| Demo markets | ✅ Live | wSOL/USDC, JitoSOL/USDC, JUP/USDC with liquidity |
+| Anchor program | ✅ Complete | 25 instructions, full Paralend surface live |
+| Rust unit tests | ✅ 37/37 passing | math (shares, wad, interest, decay), IRM, ID sanity |
+| Integration tests | ✅ 9/9 passing | tests/paralend.ts — init, ownership, PriceCache, supply+borrow |
+| TypeScript SDK | ✅ Complete | `ParalendClient` + all instruction builders |
+| Next.js frontend | ✅ Complete + compiles | landing, markets list (with decay countdown), market detail (with decay curve), positions |
+| Devnet deploy | ✅ Live | `2kZNrHd7QkUemYCLFw5dYGQWeKieAUNb5C1FvTjTYiC8` |
+| Demo markets seeded | ✅ Live (3 markets) | BTC-150K (45d), SOL-300 (8d), NFL-FINAL (18h) |
+| Attester daemon | ✅ Works | `scripts/attester.ts` — 20s interval |
+| Force-close bot | ✅ Works | `scripts/force-close-bot.ts` — 30s interval |
+| On-chain post-audit hardening | ⏳ Committed, queued for next redeploy | See commit `5215d8a` — need ~4.9 SOL to upgrade |
+
+---
+
+## Paralend architecture (what makes it different)
+
+```
+    user (Phantom)
+       │ deposit YES/NO tokens + borrow USDC
+       ▼
+┌──────────────────────────────────────────────────────────┐
+│  Paralend Anchor Program                                 │
+│  ┌──────────────────────────────────────────────────┐    │
+│  │ State                                            │    │
+│  │  • ProtocolState (singleton, owner + attester)   │    │
+│  │  • Market (per Kalshi event)                     │    │
+│  │      - resolution_timestamp, market_status       │    │
+│  │      - base_lltv (capped to 70% for PM)          │    │
+│  │      - kalshi_ticker                             │    │
+│  │  • Position (per user per market)                │    │
+│  │  • LinearIrm (interest rate model)               │    │
+│  │  • PriceCache (EMA oracle, per market)           │    │
+│  └──────────────────────────────────────────────────┘    │
+│  ┌──────────────────────────────────────────────────┐    │
+│  │ Novel instructions                               │    │
+│  │  • register_price_cache / attest_price /         │    │
+│  │    poke_price / rotate_attester                  │    │
+│  │  • force_close_position (2h pre-resolution)      │    │
+│  │  • handle_resolution (attester marks outcome)    │    │
+│  │ Standard lending (supply/borrow/repay/liquidate) │    │
+│  │ + time-decay LLTV on every health check          │    │
+│  └──────────────────────────────────────────────────┘    │
+└──────┬──────────────────────────────┬────────────────────┘
+       │ CPI redeem (post-resolution)  │ read spot
+       ▼                               ▼
+   DFlow CLPs                   off-chain attester daemon
+   (Kalshi YES/NO)              (scripts/attester.ts pulls
+                                 Kalshi REST, pushes on-chain)
+```
+
+**Five mechanisms specific to this asset class** (none are in Kamino / Jupiter Lend):
+
+1. **Time-decay LLTV** (`programs/paralend/src/math/decay.rs`). Effective LLTV ramps linearly from `base_lltv` to 0 over the final 7 days before resolution, capped at 70 % for binary-outcome collateral. Applied at every health check via `interfaces/oracle.rs::is_position_healthy`.
+2. **Force-close window** (`programs/paralend/src/instructions/resolution.rs::handle_force_close_position`). Callable in `[T − 7200 s, T)`. Seizes ALL collateral, bounty scales 50 → 300 bps. Uses stale-tolerant oracle read so a dead attester can't freeze the last clearing path.
+3. **Resolution handler** (`handle_resolution`). Attester flips `market_status = Resolved`, records `outcome_bit`. Market paused — no new borrows or liquidations. Per-position redemption is off-chain via DFlow.
+4. **PriceCache oracle**. Per-market PDA, crank-attested EMA (α = 1/10), ±5 % deviation band bound against BOTH `last_spot` AND `ema` (prevents attester from walking EMA via ratcheting). Staleness = 30 s. `poke_price` extends staleness by one window without changing price when attester is briefly offline. `rotate_attester` (owner-gated) covers key compromise.
+5. **POST_BORROW_CUTOFF**. Hard block on new borrows in the final 30 min before resolution — prevents last-second leverage against the binary cliff even if the decay curve alone would still permit.
 
 ---
 
 ## Toolchain
 
 ```bash
-# Required versions
-solana --version      # agave-cli 3.1.12
-rustc --version       # rustc 1.94.1 (stable)
-anchor --version      # anchor-cli 0.31.1
-
-# Install Agave 3.1.12 (not vanilla Solana CLI 1.18.x — BPF uses bundled Cargo 1.75 which breaks)
-sh -c "$(curl -sSfL https://release.anza.xyz/stable/install)"
-
-# Use rustup stable (NOT 1.79 from rust-toolchain.toml)
-rustup default stable
+solana --version     # agave-cli 3.1.12
+rustc --version      # rustc 1.94.1 stable
+anchor --version     # anchor-cli 0.31.1
+node --version       # 20.x
 ```
 
-**No `rust-toolchain.toml` in this repo.** Deleted — Rust 1.79 breaks edition2024 transitive deps.
+Install agave:
+```bash
+sh -c "$(curl -sSfL https://release.anza.xyz/stable/install)"
+```
+
+No `rust-toolchain.toml` in repo — pinning breaks edition2024 transitive deps.
 
 ---
 
 ## Build Commands
 
 ```bash
-# Build program
+# Build program + refresh IDL
 anchor build
 
-# Run unit tests (math, state) — 28/28 passing
-cargo test --manifest-path programs/paralend/Cargo.toml
+# Rust unit tests (math + IRM + decay) — 37/37 passing
+cargo test --manifest-path programs/paralend/Cargo.toml --lib
 
-# Run integration tests (localnet) — 19/19 passing
+# Integration tests against a fresh localnet validator — 9/9 passing
 anchor test
 
-# Type-check SDK and scripts (not tests — ts-mocha handles those)
-npx tsc --noEmit --project tsconfig.json
+# TS compile checks
+npx tsc --noEmit --project tsconfig.json     # sdk + scripts
+cd app && npx tsc --noEmit                   # frontend
 
-# Type-check frontend
-cd app && npx tsc --noEmit
-
-# Build frontend
-cd app && npm run build
-
-# Deploy to devnet
+# Deploy / upgrade to devnet (needs ~4.9 SOL)
 anchor deploy --provider.cluster devnet
 
-# Generate IDL + types
-anchor build --idl
+# Seed 3 demo markets + attester keypair + PriceCaches
+npx ts-node --project tsconfig.json scripts/setup-demo-markets.ts --cluster=devnet
+
+# Seed lender liquidity + borrower positions
+npx ts-node --project tsconfig.json scripts/fund-demo.ts --cluster=devnet
+
+# Keep attestations fresh (leave running in tmux/pm2)
+npx ts-node --project tsconfig.json scripts/attester.ts --cluster=devnet --interval=20
+
+# Force-close watcher (keep running)
+npx ts-node --project tsconfig.json scripts/force-close-bot.ts --cluster=devnet --interval=30
 ```
+
+Full procedure in **`DEPLOYMENT.md`**.
 
 ---
 
@@ -108,92 +165,86 @@ anchor build --idl
 
 ```
 colosseum-frontier/
-  Anchor.toml
-  Cargo.toml                        # workspace
-  tsconfig.json                     # covers sdk/ + scripts/ only (NOT app/ or tests/)
-  programs/paralend/
-    Cargo.toml                      # no solana-program direct dep (zeroize conflict)
+  Anchor.toml                          # programs.devnet = 2kZNrHd7...
+  Cargo.toml                           # workspace
+  DEPLOYMENT.md                        # step-by-step devnet runbook
+  CLAUDE.md                            # this file
+  programs/paralend/                   # Anchor program
+    Cargo.toml
     src/
-      lib.rs                        # declare_id!, program entry
-      constants.rs                  # WAD, BPS, seeds, VIRTUAL_SHARES, MAX_*
-      errors.rs                     # ParalendError (26 codes)
-      events.rs                     # Anchor events
+      lib.rs                           # 25 instructions
+      constants.rs                     # WAD, BPS, caps, seeds
+      errors.rs                        # ParalendError (30+ codes)
+      events.rs                        # Anchor events
       math/
         mod.rs
-        safe_math.rs                # checked ops
-        wad.rs                      # mul_div_down/up, wad_mul_*, w_taylor_compounded
-        shares.rs                   # to_shares_down/up, to_assets_down/up
-        interest.rs                 # accrue_interest_on_market, compute_utilization
+        wad.rs                         # mul_div_{up,down}, wad_mul_*, w_taylor_compounded
+        shares.rs                      # ERC4626-style virtual-offset share math
+        interest.rs                    # accrue_interest_on_market (skips resolved markets)
+        decay.rs                       # compute_effective_lltv — the novel piece
+        safe_math.rs
       state/
         mod.rs
-        protocol.rs                 # ProtocolState PDA (singleton)
-        market.rs                   # Market PDA + compute_market_id
-        position.rs                 # Position PDA (per user per market)
-        irm.rs                      # LinearIrm PDA
+        protocol.rs                    # ProtocolState PDA
+        market.rs                      # Market PDA + resolution_timestamp + kalshi_ticker
+        position.rs                    # Position PDA
+        irm.rs                         # LinearIrm PDA
+        oracle.rs                      # PriceCache PDA (replaces StaticOracle)
+      interfaces/
+        oracle.rs                      # read_price_cache{,_stale_ok} + is_position_healthy
       instructions/
         mod.rs
-        admin.rs                    # initialize_protocol, enable_lltv, enable_irm, set_fee
-        market.rs                   # create_irm, create_market (+ vault init)
-        position.rs                 # create_position
-        supply.rs                   # supply, withdraw
-        collateral.rs               # supply_collateral, withdraw_collateral
-        borrow.rs                   # borrow, repay
-        liquidate.rs                # liquidate (LIF calc, bad debt socialization)
-        utils.rs                    # accrue_interest_ix, claim_fees
-        flash_loan.rs               # flash_loan_start/end (same-tx atomic)
-      interfaces/
-        oracle.rs                   # StaticOracle (localnet) + get_loan_price helpers
-  sdk/src/
-    constants.ts                    # WAD, BPS, seeds, PROGRAM_ID
-    pdas.ts                         # 7 derive*PDA functions (findProgramAddressSync)
-    math.ts                         # computeMarketId, shares math, APY, health factor, IRM
-    types.ts                        # MarketState, PositionState, IrmState, etc.
-    client.ts                       # ParalendClient class — fetch + instruction builders
-    index.ts                        # barrel re-export
+        admin.rs                       # init, ownership, price cache, rotate_attester
+        market.rs                      # create_irm, create_market (with resolution_ts + ticker)
+        position.rs                    # create_position, close_position
+        supply.rs                      # supply, withdraw
+        collateral.rs                  # supply_collateral, withdraw_collateral
+        borrow.rs                      # borrow (POST_BORROW_CUTOFF enforced), repay
+        liquidate.rs                   # liquidate (blocked if paused OR in force-close window)
+        resolution.rs                  # force_close_position, handle_resolution
+        utils.rs                       # accrue_interest, claim_fees
+  sdk/src/                             # TypeScript SDK
+    constants.ts                       # PROGRAM_ID, WAD, BPS, seeds
+    types.ts                           # MarketState, PositionState, PriceCacheState
+    pdas.ts                            # derive*PDA helpers
+    math.ts                            # shares math + computeMarketId
+    client.ts                          # ParalendClient — every instruction builder
+    index.ts                           # barrel re-export
   scripts/
-    setup-demo-markets.ts           # creates 3 demo markets + oracles on devnet
-    fund-demo.ts                    # mints tokens, supplies liquidity, creates positions
-    liquidation-bot.ts              # polls positions, liquidates unhealthy ones
-  app/
+    demo-common.ts                     # shared helpers + DEMO_MARKETS definitions
+    setup-demo-markets.ts              # idempotent devnet seeder
+    fund-demo.ts                       # per-market lender + borrower flows
+    attester.ts                        # price attestation daemon (20s)
+    force-close-bot.ts                 # force_close_position watcher (30s)
+    demo-{mints,deployment,wallets,attester,config}.json   # generated artefacts (gitignored)
+  app/                                 # Next.js 14 frontend
     src/
-      app/                          # Next.js App Router pages
-        page.tsx                    # landing — hero, stats, comparison table
-        markets/page.tsx            # markets table (live chain data via useMarkets hook)
-        markets/[id]/page.tsx       # supply/borrow/collateral tabs, market params
-        create/page.tsx             # 5-field market creation form + LLTV slider
-        positions/page.tsx          # user positions with health factors (usePositions hook)
+      app/
+        layout.tsx, globals.css
+        page.tsx                       # landing — Paralend pitch
+        markets/page.tsx               # markets list + compact countdown
+        markets/[id]/page.tsx          # detail — decay curve + countdown + tabs
+        positions/page.tsx             # user positions
+        create/page.tsx                # admin-only stub (public nav removed)
       hooks/
-        useMarkets.ts               # polls program.account.market.all() every 30s
-        usePositions.ts             # memcmp filter on owner field, computes health factor
-      lib/
-        constants.ts                # PROGRAM_ID, WAD, BPS, DEMO_MARKETS, TOKEN_META
-        paralend-idl.json            # copy of target/idl/paralend.json for Next.js
-        paralend-idl-types.ts        # copy of target/types/paralend.ts
-        paralend-rpc.ts              # server-side getAllMarkets, getProtocolStats
-        utils.ts                    # cn(), formatUSD(), formatAPY(), formatHealthFactor()
+        useMarkets.ts, useMarketDetail.ts, usePositions.ts
       components/
-        WalletProvider.tsx          # Phantom+Solflare adapters, autoConnect
-        Navbar.tsx                  # sticky nav, WalletMultiButton
-        ui/                         # button, card, input, badge, stat primitives
+        Navbar.tsx, WalletProvider.tsx
+        DecayCurveChart.tsx            # pure SVG, no Recharts dep
+        ResolutionCountdown.tsx        # live countdown + phase badge
+        ui/                            # Button, Card, Badge, Stat, Input
+      lib/
+        paralend-idl.json              # copy of target/idl/paralend.json
+        paralend-idl-types.ts          # copy of target/types/paralend.ts
+        paralend-program.ts            # client SDK helpers
+        paralend-rpc.ts                # server-side read helpers
+        demo-config.{ts,json}          # markets metadata surfaced to UI
+        decay.ts                       # TS mirror of math/decay.rs
+        constants.ts                   # frontend constants
+        utils.ts                       # cn(), format helpers
   tests/
-    paralend.ts                      # 19 integration tests (run via anchor test / ts-mocha)
+    paralend.ts                        # 9 integration tests — full happy path
 ```
-
----
-
-## Known TypeScript Gotchas
-
-### Root tsconfig scope
-The root `tsconfig.json` covers **only** `sdk/src/`, `scripts/`, and `migrations/`. It deliberately **excludes** `tests/` and `app/`:
-
-- `tests/` is compiled by ts-mocha at runtime via `anchor test`. Anchor 0.31's `.accounts()` type uses discriminated unions — TypeScript rejects multi-key objects but they work correctly at runtime.
-- `app/` has its own `tsconfig.json` with `jsx: preserve`, `dom` lib, path aliases.
-
-### Anchor 0.31 `.accounts()` typing
-In Anchor 0.31, `.accounts()` expects discriminated unions (one key at a time) for strict type safety. Tests use `.accounts()` multi-key which works at runtime but triggers TS2353. Tests pass 19/19. If you add new tests, either use `.accountsPartial()` (accepts partial objects) or add `// @ts-ignore`.
-
-### getAllMarkets() and market IDs
-`ParalendClient.getAllMarkets()` returns `publicKey` (the account address) but `marketId` is a 32-byte zero buffer because the `Market` account doesn't store its own ID. Use `computeMarketId(params)` to get the real ID from known params.
 
 ---
 
@@ -204,29 +255,31 @@ In Anchor 0.31, `.accounts()` expects discriminated unions (one key at a time) f
 seeds = [b"paralend", b"protocol_state"]
 
 // Market
-// market_id = keccak256(collateral_mint || loan_mint || collateral_oracle_feed_id || loan_oracle_feed_id || irm || lltv.to_le_bytes())
+// market_id = keccak256(collateral_mint || loan_mint || coll_feed || loan_feed || irm || lltv_le)
 seeds = [b"paralend", b"market", &market_id]
 
-// Vault token accounts (owned by Market PDA via CPI)
+// Market vaults
 seeds = [b"paralend", b"collateral_vault", &market_id]
-seeds = [b"paralend", b"loan_vault", &market_id]
+seeds = [b"paralend", b"loan_vault",       &market_id]
 
 // Position (per user per market)
-// memcmp filter for owner: offset = 8 (disc) + 1 (bump) + 32 (market_id) = 41
 seeds = [b"paralend", b"position", &market_id, owner.as_ref()]
 
 // LinearIrm
-seeds = [b"paralend", b"linear_irm", admin.as_ref(), &nonce.to_le_bytes()]
+seeds = [b"paralend", b"linear_irm", admin.as_ref(), &nonce_le_bytes]
 
-// StaticOracle (localnet only)
-seeds = [b"paralend", b"static_oracle", &feed_id]
+// PriceCache (per market — new in Paralend)
+seeds = [b"paralend", b"price_cache", &market_id]
+
+// ResolutionRecord (reserved for post-MVP per-position settlement)
+seeds = [b"paralend", b"resolution_record", &market_id]
 ```
 
 ---
 
-## Share Math Conventions
+## Share Math Convention
 
-All accounting uses u128. Rounding **always favors the protocol**:
+All accounting uses u128. Rounding **always favours the protocol**:
 
 | Operation | Direction | Why |
 |-----------|-----------|-----|
@@ -235,211 +288,74 @@ All accounting uses u128. Rounding **always favors the protocol**:
 | Borrow: assets → shares | Round UP | User owes more shares |
 | Repay: shares → assets | Round UP | User pays more assets |
 
-**Inflation attack protection:** `VIRTUAL_SHARES = 1_000_000`, `VIRTUAL_ASSETS = 1`
-
-Formula: `shares = (assets * (total_shares + VIRTUAL_SHARES)) / (total_assets + VIRTUAL_ASSETS)`
+First-depositor defense: `VIRTUAL_SHARES = 1_000_000`, `VIRTUAL_ASSETS = 1`.
 
 ---
 
-## Interest Rate Model
-
-Kinked IRM stored as LinearIrm PDA. All rates WAD-scaled per-second.
+## Time-decay LLTV (novel)
 
 ```
-0% util → 0% APY
-80% util (kink) → ~4% APY borrow
-100% util → ~50% APY borrow
+effective_lltv =
+  | base_lltv (capped at 70%)        if resolution_timestamp == 0
+  |                                    OR remaining >= 7 days
+  | base_lltv * remaining / 7d        if 0 < remaining < 7 days
+  | 0                                  if remaining <= 0
 ```
 
-Default params (as WAD-scaled per-second rates):
-- `base_rate = 0`
-- `slope1 = WAD * 5 / 100 / 31_536_000`   (5% APY per unit of utilization below kink)
-- `slope2 = WAD * 230 / 100 / 31_536_000`  (230% APY per unit above kink)
-- `kink = WAD * 80 / 100`                  (80%)
+Rust impl: `programs/paralend/src/math/decay.rs::compute_effective_lltv`.
+TS mirror: `app/src/lib/decay.ts::computeEffectiveLltvBps`.
+Rendered in UI: `app/src/components/DecayCurveChart.tsx` (pure SVG).
 
-Interest accrual is **lazy** — happens on every instruction that touches a market, not on a crank.
+The function is the single shared source of truth — `is_position_healthy` in `interfaces/oracle.rs` calls it on every borrow / withdraw / liquidate / force-close, and the chart on the market detail page samples the exact same function for N future timestamps. No divergence possible between the chart and the on-chain reality.
 
 ---
 
-## Oracle
+## Oracle convention
 
-- **Production:** Pyth pull oracle (`PriceUpdateV2`). Staleness: 60 seconds. Confidence: reject if `conf > price * 5%`.
-- **Localnet/Testing:** `StaticOracle` PDA — admin-updatable price, lets us stage liquidations.
-- Markets store `collateral_oracle_feed_id: [u8; 32]` and `loan_oracle_feed_id: [u8; 32]`. All-zeros loan feed = assume $1/token (stablecoin shortcut, handles decimals via `WAD / 10^decimals`).
-
----
-
-## Liquidation
-
-```
-health_factor = (collateral_value * lltv) / (debt_value * BPS)
-// healthy if >= BPS (i.e., >= 1.0 in BPS space)
-
-lif = min(BPS * 115 / 100, BPS * BPS / (BPS - (BPS - lltv) * 30 / 100))
-// Liquidation Incentive Factor
-
-repaid_assets = seized_collateral * collateral_price * BPS / (loan_price * lif)
-```
-
-Bad debt socialization: if collateral=0 but borrow_shares remain after liquidation, subtract remaining debt from `total_supply_assets` (socializes loss across suppliers).
+- **Production:** `PriceCache` PDA, one per market. Attester-cranked EMA (α = 1/10). ±5 % deviation bound on both `last_spot` and `ema`. `MAX_ORACLE_AGE = 30 s`. `rotate_attester` handles compromise.
+- **Development:** attester daemon (`scripts/attester.ts`) does a bounded random walk around the initial price for visual EMA motion. In production this would pull from Kalshi's public REST API (no auth required for market prices) or from DFlow's onchain CLP state.
+- **Stale-tolerant variant:** `read_price_cache_stale_ok` — used only by `force_close_position`. Reasoning in `interfaces/oracle.rs`.
 
 ---
 
-## Dependency Notes
+## Liquidation + Force-close
 
-```toml
-# Cargo.toml — programs/paralend
-[dependencies]
-anchor-lang = { version = "0.31.1", features = ["init-if-needed"] }
-anchor-spl = "0.31.1"
-# NO explicit solana-program — causes zeroize version conflict
-# Access via: anchor_lang::solana_program::keccak, etc.
-```
+**Regular liquidation** (`instructions/liquidate.rs`):
+- Blocked when `market.paused` (post-resolution) OR inside the 2h force-close window (canonical clearing path in that window is `force_close_position`).
+- LIF formula: `raw_lif = BPS² / (BPS − LIF_CURSOR × (BPS − lltv) / BPS)`, capped at `MAX_LIF = 115 %`.
+- Bad-debt socialization: if `position.collateral == 0 && borrow_shares > 0`, residual debt subtracts from `total_supply_assets`.
+
+**Force-close** (`instructions/resolution.rs::handle_force_close_position`):
+- Callable in `[T_resolution − 7200s, T_resolution)`.
+- Seizes ALL collateral (binary-outcome, no partial seizure UX).
+- Bounty scales 50 → 300 bps across the window (incentive to act early).
+- Same bad-debt path as regular liquidation.
 
 ---
 
-## Week-by-Week Plan
+## Week Plan
 
 | Week | Focus | Status |
 |------|-------|--------|
-| 1 | Core Anchor program | ✅ Complete (19/19 tests) |
-| 2 | SDK + frontend + devnet deploy | ✅ SDK+frontend done; devnet pending SOL |
-| 3 | Polish, real oracle integration | Pending |
-| 4 | Flash loans demo, liquidation bot live | Partially done (code written) |
-| 5 | Demo video + submit | Pending |
-
-### Week 1 — Done
-- [x] **Day 1** — Math (wad, shares, interest), state structs, admin + market + position instructions
-- [x] **Day 2** — supply_collateral, withdraw_collateral, StaticOracle (localnet)
-- [x] **Day 3** — supply, withdraw (lender), share accounting, accrue_interest crank
-- [x] **Day 4** — borrow, repay (with health check via StaticOracle)
-- [x] **Day 5** — liquidate (LIF calc, bad debt socialization), full instruction surface complete
-- [x] **Day 6** — 19/19 integration tests passing (full flow + flash loans + liquidation)
-
-### Week 2 — Done
-- [x] TypeScript SDK (`sdk/src/`) — ParalendClient, PDA helpers, math utils, APY calculations, zero tsc errors
-- [x] Demo scripts (`scripts/`) — setup-demo-markets.ts, fund-demo.ts, liquidation-bot.ts
-- [x] Next.js frontend (`app/`) — markets, positions, create, home pages with live chain data hooks
-- [x] GitHub repo — private, at github.com/vijaygopalbalasa/paralend-protocol
-- [x] Vercel deployment — live at paralend-frontend-cuu50kx4x-vijaygopal-balasas-projects.vercel.app
-- [x] Detective audit — 6 bugs fixed (see commit e910cb4)
-- [ ] Devnet program deploy — blocked on 4.25 SOL (faucet rate-limited)
+| 1 | Pivot from Nucleus (isolated lending) to Paralend (PM credit) | ✅ Done |
+| 2 | Implement decay + resolution + PriceCache | ✅ Done |
+| 3 | Frontend, SDK, scripts, devnet deploy | ✅ Done |
+| 3.5 | Post-audit hardening (this batch) — queued for redeploy | ⏳ Awaiting SOL |
+| 4 | Polish + demo video + Colosseum Frontier submission | TODO |
 
 ---
 
-## Competitive Differentiation
+## Open items
 
-**When judges ask "What about Kamino V2?":**
-
-> "Kamino V2 requires an admin key to create markets — it's a curated product. Paralend is a protocol: the market address is the keccak hash of its 5 parameters. There is no admin, no governance, no ability to pause a specific market. It's the same difference as Compound vs Morpho."
-
-**Key numbers for the pitch:**
-- Morpho Blue: $132M ARR on Ethereum, $5.8-13B TVL
-- Kamino V2: All markets team-curated in practice
-- Paralend: First truly permissionless isolated lending on Solana
+- Redeploy the hardening batch (commit `5215d8a`) once deploy wallet is topped up (~4.9 SOL).
+- Re-seed markets (setup-demo-markets is idempotent + uses fresh resolution timestamps per run).
+- Record 30-second demo video emphasising decay-curve + countdown + force-close flow.
+- Write submission deck / README for Colosseum.
+- (Stretch) Wire real Kalshi mainnet YES/NO mints into the setup script behind a `--mainnet` flag.
+- (Stretch) Add a `close_position`/force-close button to `/positions` so demo audience can trigger force-close from the UI.
 
 ---
 
-## Demo Script (3 min)
+## MISTAKES.md hygiene
 
-1. **0:00-0:15** — Landing page with live TVL. Hook: "Kamino takes months to list a new token. Paralend takes 30 seconds."
-2. **0:15-0:45** — Create JUP/USDC market live. 5 fields. 400ms confirmation. **This is the wow moment.**
-3. **0:45-1:30** — Supply 5000 USDC. Switch wallet, post JUP collateral, borrow 3000 USDC. Show health factor.
-4. **1:30-2:00** — Liquidate pre-staged unhealthy position.
-5. **2:00-2:30** — Positions page with health factors.
-6. **2:30-3:00** — Close: "$132M ARR on Ethereum. Zero on Solana. Paralend is it."
-
----
-
-## Program ID
-
-```
-ForUjmX3VzE5EsRfzktF529LToK7vyzx6czH5o1dUTY8  (devnet — deployed Apr 16, 2026)
-```
-
----
-
-## Devnet Deployment (Complete)
-
-**Live demo markets:**
-- wSOL / USDC — 25k USDC supplied, 3k borrowed
-- JitoSOL / USDC — 25k USDC supplied  
-- JUP / USDC — created, needs liquidity
-
-**Frontend:** https://paralend-frontend-67t0tqgai-vijaygopal-balasas-projects.vercel.app
-
-### Redeploy (if needed)
-```bash
-export PATH="$HOME/.local/share/solana/install/active_release/bin:$PATH"
-~/.cargo/bin/anchor build
-~/.cargo/bin/anchor deploy --provider.cluster devnet
-```
-
-### After deploy — update Program ID in 4 places
-```bash
-# 1. programs/paralend/src/lib.rs — declare_id!("NEW_ID")
-# 2. Anchor.toml — [programs.devnet] paralend = "NEW_ID"
-# 3. sdk/src/constants.ts — PROGRAM_ID = new PublicKey("NEW_ID")
-# 4. app/src/lib/constants.ts — PROGRAM_ID = "NEW_ID"
-```
-
-### Create demo markets
-```bash
-export HELIUS_RPC_URL="https://devnet.helius-rpc.com/?api-key=YOUR_KEY"
-npx ts-node --project tsconfig.json scripts/setup-demo-markets.ts --cluster=devnet
-npx ts-node --project tsconfig.json scripts/fund-demo.ts --cluster=devnet
-```
-
-### Update Vercel env and redeploy
-```bash
-cd app
-vercel env add NEXT_PUBLIC_RPC_URL production
-# Enter: https://devnet.helius-rpc.com/?api-key=YOUR_KEY
-vercel --prod
-```
-
-### Start liquidation bot
-```bash
-# Keep running in background for demo — liquidates unhealthy positions
-npx ts-node --project tsconfig.json scripts/liquidation-bot.ts --cluster=devnet &
-```
-
----
-
-## Known Limitations (Intentionally Deferred)
-
-These features are documented but not implemented. They are acceptable for hackathon demo but should be added for production:
-
-### 1. Fee-on-Transfer Token Support (Medium Priority)
-- **What:** Detect and handle tokens that take fees on transfer (e.g., some rebasing tokens)
-- **Why deferred:** Demo uses standard SPL tokens. Complex to implement correctly.
-- **Risk:** Accounting mismatch if fee-on-transfer token is used as loan/collateral.
-- **TODO location:** `programs/paralend/src/instructions/supply.rs`, `collateral.rs`
-
-### 2. Cross-Market Flash Loan Isolation (Low Priority)
-- **What:** Prevent flash loans from being used to manipulate other markets
-- **Why deferred:** Single-market demo. Attacker would need significant capital anyway.
-- **Risk:** Sophisticated attacker could manipulate oracle prices across markets.
-- **TODO location:** `programs/paralend/src/instructions/flash_loan.rs`
-
----
-
-## Test Requirements
-
-Every instruction MUST have:
-1. **Happy path test** — successful execution with valid inputs
-2. **Error case tests** — verify each possible error condition
-3. **Access control test** — unauthorized callers are rejected
-4. **Edge case tests** — zero amounts, max values, boundary conditions
-
-Test file structure:
-```
-tests/
-  paralend.ts           # Main integration tests (happy paths)
-  security.ts          # Security-focused tests (pause, staleness, access)
-  errors.ts            # Negative tests (all error codes)
-  edge-cases.ts        # Boundary conditions, precision, overflow
-```
-
-Run all tests: `anchor test`
-Run specific file: `anchor test -- --grep "security"`
+If you hit a bug that wastes > 10 min, add a one-line entry to `MISTAKES.md` so future Claude sessions don't repeat it. The whole file is a cost-of-rediscovery avoidance tool.

@@ -78,8 +78,6 @@ export async function getAllMarkets(): Promise<MarketView[]> {
         const collateralSymbol =
           marketMeta?.collateralSymbol ?? resolveTokenSymbol(collateralMint);
         const loanSymbol = marketMeta?.loanSymbol ?? resolveTokenSymbol(loanMint);
-        const hasStableLoan =
-          Buffer.from(market.loanOracleFeedId as number[]).every((byte) => byte === 0);
 
         return {
           publicKey,
@@ -88,9 +86,7 @@ export async function getAllMarkets(): Promise<MarketView[]> {
           collateralSymbol,
           loanSymbol,
           name: marketMeta?.name ?? `${collateralSymbol} / ${loanSymbol}`,
-          oracleLabel:
-            marketMeta?.oracle ??
-            (hasStableLoan ? "StaticOracle / $1 stable" : "StaticOracle"),
+          oracleLabel: marketMeta?.oracle ?? "PriceCache (attester EMA)",
           lltv: Number(market.lltv) / 100,
           feeBps: Number(market.fee),
           totalSupplyAssets: Number(totalSupply),

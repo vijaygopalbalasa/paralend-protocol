@@ -12,6 +12,10 @@ export interface DemoTokenConfig {
 
 export interface DemoMarketConfig {
   name: string;
+  /** Kalshi ticker (UTF-8, decoded from on-chain bytes). */
+  kalshiTicker?: string;
+  /** Unix seconds when the PM resolves. 0 = classical lending market. */
+  resolutionTimestamp?: number;
   marketId: string;
   collateralMint: string;
   loanMint: string;
@@ -21,16 +25,21 @@ export interface DemoMarketConfig {
   lltv: number;
   feeBps: number;
   irm: string;
+  /** PriceCache PDA (per-market oracle). Optional for backwards compat. */
+  priceCache?: string;
   collateralOracleFeedId?: string;
   loanOracleFeedId?: string;
-  collateralOracle: string;
-  loanOracle: string;
+  // Legacy Nucleus-era fields kept OPTIONAL so re-seeded demo configs
+  // (which no longer populate them) don't crash type checks.
+  collateralOracle?: string;
+  loanOracle?: string;
 }
 
 export interface DemoConfig {
   cluster: string;
   programId: string;
   generatedAt: string;
+  attester?: string;
   primaryWallet?: string;
   liquidationTarget?: string;
   tokens: Record<string, DemoTokenConfig>;
