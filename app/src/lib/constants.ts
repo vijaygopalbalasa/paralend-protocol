@@ -1,7 +1,7 @@
 // Use the string for server components; create PublicKey in client code as needed
 export const PROGRAM_ID =
   process.env.NEXT_PUBLIC_PROGRAM_ID ??
-  "ForUjmX3VzE5EsRfzktF529LToK7vyzx6czH5o1dUTY8";
+  "2kZNrHd7QkUemYCLFw5dYGQWeKieAUNb5C1FvTjTYiC8";
 export const NETWORK = "devnet";
 export const RPC_ENDPOINT =
   process.env.NEXT_PUBLIC_RPC_URL ?? "https://api.devnet.solana.com";
@@ -12,8 +12,12 @@ export const BPS = 10_000n;
 export const VIRTUAL_SHARES = 1_000_000n;
 export const VIRTUAL_ASSETS = 1n;
 export const MAX_FEE_BPS = 2_500; // 25%
-export const FLASH_LOAN_FEE_BPS = 5; // 0.05%
 export const SECONDS_PER_YEAR = BigInt(31_536_000);
+
+// Paralend — prediction-market credit specifics
+export const MAX_BINARY_LLTV = 7_000; // 70% cap
+export const FORCE_CLOSE_WINDOW_SECONDS = 7_200; // 2h pre-resolution
+export const POST_BORROW_CUTOFF_SECONDS = 1_800; // 30min pre-resolution
 
 // Common LLTV presets (in BPS, i.e. 8600 = 86%)
 export const LLTV_PRESETS = [

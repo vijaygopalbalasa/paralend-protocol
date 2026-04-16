@@ -60,17 +60,23 @@ pub struct Market {
     /// Market-level pause flag
     pub paused: bool,
 
-    /// Flash loan reentrancy lock (0=unlocked, 1=locked)
-    pub flash_loan_lock: u8,
+    /// Market lifecycle status (0=Active, 1=PreResolution, 2=Resolved)
+    pub market_status: u8,
 
-    /// Amount borrowed in the active flash loan, if any
-    pub flash_loan_amount: u64,
+    /// Outcome bit after resolution (0=unresolved, 1=YES won, 2=NO won)
+    pub outcome_bit: u8,
 
-    /// Caller that initiated the active flash loan
-    pub flash_loan_caller: Pubkey,
+    /// Unix timestamp when this prediction market resolves. 0 = no scheduled resolution.
+    pub resolution_timestamp: i64,
+
+    /// Base liquidation LTV in BPS — effective LLTV decays as resolution approaches.
+    pub base_lltv: u64,
+
+    /// Kalshi market ticker (e.g., "KXNBAFINAL-26MAYLAL") — display metadata.
+    pub kalshi_ticker: [u8; 48],
 
     /// Reserved for future use
-    pub reserved: [u8; 24],
+    pub reserved: [u8; 16],
 }
 
 impl Market {
@@ -94,21 +100,16 @@ impl Market {
         + 16 // pending_fee_shares
         + 8  // last_update
         + 1  // paused
-        + 1  // flash_loan_lock
-        + 8  // flash_loan_amount
-        + 32 // flash_loan_caller
-        + 24; // reserved
+        + 1  // market_status
+        + 1  // outcome_bit
+        + 8  // resolution_timestamp
+        + 8  // base_lltv
+        + 48 // kalshi_ticker
+        + 16; // reserved
 
     /// Check if the market has available liquidity for borrowing/withdrawal
     pub fn available_liquidity(&self) -> u128 {
         self.total_supply_assets.saturating_sub(self.total_borrow_assets)
-    }
-
-    /// Clear all flash-loan state after a successful repayment.
-    pub fn clear_flash_loan_state(&mut self) {
-        self.flash_loan_lock = 0;
-        self.flash_loan_amount = 0;
-        self.flash_loan_caller = Pubkey::default();
     }
 }
 

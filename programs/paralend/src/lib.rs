@@ -11,7 +11,6 @@ pub mod state;
 use instructions::admin::*;
 use instructions::borrow::*;
 use instructions::collateral::*;
-use instructions::flash_loan::*;
 use instructions::liquidate::*;
 use instructions::market::*;
 use instructions::position::*;
@@ -177,24 +176,6 @@ pub mod paralend {
         shares: u128,
     ) -> Result<()> {
         instructions::borrow::handle_repay(ctx, market_id, assets, shares)
-    }
-
-    // ─── Flash Loans ────────────────────────────────────────
-
-    pub fn flash_loan_start(
-        ctx: Context<FlashLoanStart>,
-        market_id: [u8; 32],
-        amount: u64,
-    ) -> Result<()> {
-        instructions::flash_loan::handle_flash_loan_start(ctx, market_id, amount)
-    }
-
-    pub fn flash_loan_end(
-        ctx: Context<FlashLoanEnd>,
-        market_id: [u8; 32],
-        amount: u64,
-    ) -> Result<()> {
-        instructions::flash_loan::handle_flash_loan_end(ctx, market_id, amount)
     }
 
     // ─── Liquidate ──────────────────────────────────────────

@@ -74,9 +74,11 @@ function decodeMarket(raw: IdlAccounts<Paralend>["market"]): MarketState {
     pendingFeeShares: bnToBigInt(raw.pendingFeeShares),
     lastUpdate: bnToBigInt(raw.lastUpdate),
     paused: raw.paused,
-    flashLoanLock: raw.flashLoanLock,
-    flashLoanAmount: bnToBigInt(raw.flashLoanAmount),
-    flashLoanCaller: raw.flashLoanCaller,
+    marketStatus: raw.marketStatus,
+    outcomeBit: raw.outcomeBit,
+    resolutionTimestamp: bnToBigInt(raw.resolutionTimestamp),
+    baseLltv: bnToBigInt(raw.baseLltv),
+    kalshiTicker: Array.from(raw.kalshiTicker),
   };
 }
 
@@ -711,72 +713,6 @@ export class ParalendClient {
         liquidatorCollateralAta,
         collateralOracle,
         loanOracle,
-        tokenProgram: TOKEN_PROGRAM_ID,
-      })
-      .instruction();
-  }
-
-  /**
-   * Build a `flashLoanStart` instruction.
-   */
-  async flashLoanStartIx(params: {
-    marketId: Buffer;
-    amount: bigint;
-    caller: PublicKey;
-    recipient: PublicKey;
-  }): Promise<TransactionInstruction> {
-    const { marketId, amount, caller, recipient } = params;
-    const [marketPda] = deriveMarketPDA(marketId, this.program.programId);
-    const [loanVaultPda] = deriveLoanVaultPDA(marketId, this.program.programId);
-    const market = await this.getMarket(marketId);
-    const recipientLoanAta = getAssociatedTokenAddressSync(
-      market.loanMint,
-      recipient
-    );
-
-    return this.program.methods
-      .flashLoanStart(
-        Array.from(marketId) as unknown as number[] & { length: 32 },
-        bigIntToBN(amount)
-      )
-      .accountsPartial({
-        caller,
-        market: marketPda,
-        loanVault: loanVaultPda,
-        recipientLoanAta,
-        tokenProgram: TOKEN_PROGRAM_ID,
-      })
-      .instruction();
-  }
-
-  /**
-   * Build a `flashLoanEnd` instruction.
-   */
-  async flashLoanEndIx(params: {
-    marketId: Buffer;
-    amount: bigint;
-    caller: PublicKey;
-    repayer: PublicKey;
-  }): Promise<TransactionInstruction> {
-    const { marketId, amount, caller, repayer } = params;
-    const [marketPda] = deriveMarketPDA(marketId, this.program.programId);
-    const [loanVaultPda] = deriveLoanVaultPDA(marketId, this.program.programId);
-    const market = await this.getMarket(marketId);
-    const repayerLoanAta = getAssociatedTokenAddressSync(
-      market.loanMint,
-      repayer
-    );
-
-    return this.program.methods
-      .flashLoanEnd(
-        Array.from(marketId) as unknown as number[] & { length: 32 },
-        bigIntToBN(amount)
-      )
-      .accountsPartial({
-        caller,
-        market: marketPda,
-        loanVault: loanVaultPda,
-        repayerLoanAta,
         tokenProgram: TOKEN_PROGRAM_ID,
       })
       .instruction();

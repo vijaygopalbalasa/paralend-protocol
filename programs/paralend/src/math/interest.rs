@@ -157,10 +157,12 @@ mod tests {
             pending_fee_shares: 0,
             last_update: 0,
             paused: false,
-            flash_loan_lock: 0,
-            flash_loan_amount: 0,
-            flash_loan_caller: Pubkey::default(),
-            reserved: [0u8; 24],
+            market_status: 0,
+            outcome_bit: 0,
+            resolution_timestamp: 0,
+            base_lltv: 8600,
+            kalshi_ticker: [0u8; 48],
+            reserved: [0u8; 16],
         }
     }
 

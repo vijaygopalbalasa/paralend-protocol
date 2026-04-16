@@ -1194,293 +1194,6 @@ export type Paralend = {
       ]
     },
     {
-      "name": "flashLoanEnd",
-      "discriminator": [
-        178,
-        170,
-        2,
-        78,
-        240,
-        23,
-        190,
-        178
-      ],
-      "accounts": [
-        {
-          "name": "caller",
-          "signer": true
-        },
-        {
-          "name": "market",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  112,
-                  97,
-                  114,
-                  97,
-                  108,
-                  101,
-                  110,
-                  100
-                ]
-              },
-              {
-                "kind": "const",
-                "value": [
-                  109,
-                  97,
-                  114,
-                  107,
-                  101,
-                  116
-                ]
-              },
-              {
-                "kind": "arg",
-                "path": "marketId"
-              }
-            ]
-          }
-        },
-        {
-          "name": "loanVault",
-          "docs": [
-            "Destination: market's loan vault (receives repayment + fee)"
-          ],
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  112,
-                  97,
-                  114,
-                  97,
-                  108,
-                  101,
-                  110,
-                  100
-                ]
-              },
-              {
-                "kind": "const",
-                "value": [
-                  108,
-                  111,
-                  97,
-                  110,
-                  95,
-                  118,
-                  97,
-                  117,
-                  108,
-                  116
-                ]
-              },
-              {
-                "kind": "arg",
-                "path": "marketId"
-              }
-            ]
-          }
-        },
-        {
-          "name": "repayerLoanAta",
-          "docs": [
-            "Source: repayer's loan token account"
-          ],
-          "writable": true
-        },
-        {
-          "name": "tokenProgram",
-          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
-        }
-      ],
-      "args": [
-        {
-          "name": "marketId",
-          "type": {
-            "array": [
-              "u8",
-              32
-            ]
-          }
-        },
-        {
-          "name": "amount",
-          "type": "u64"
-        }
-      ]
-    },
-    {
-      "name": "flashLoanStart",
-      "discriminator": [
-        160,
-        231,
-        42,
-        170,
-        22,
-        80,
-        126,
-        186
-      ],
-      "accounts": [
-        {
-          "name": "caller",
-          "signer": true
-        },
-        {
-          "name": "protocolState",
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  112,
-                  97,
-                  114,
-                  97,
-                  108,
-                  101,
-                  110,
-                  100
-                ]
-              },
-              {
-                "kind": "const",
-                "value": [
-                  112,
-                  114,
-                  111,
-                  116,
-                  111,
-                  99,
-                  111,
-                  108,
-                  95,
-                  115,
-                  116,
-                  97,
-                  116,
-                  101
-                ]
-              }
-            ]
-          }
-        },
-        {
-          "name": "market",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  112,
-                  97,
-                  114,
-                  97,
-                  108,
-                  101,
-                  110,
-                  100
-                ]
-              },
-              {
-                "kind": "const",
-                "value": [
-                  109,
-                  97,
-                  114,
-                  107,
-                  101,
-                  116
-                ]
-              },
-              {
-                "kind": "arg",
-                "path": "marketId"
-              }
-            ]
-          }
-        },
-        {
-          "name": "loanVault",
-          "docs": [
-            "Source: market's loan vault"
-          ],
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  112,
-                  97,
-                  114,
-                  97,
-                  108,
-                  101,
-                  110,
-                  100
-                ]
-              },
-              {
-                "kind": "const",
-                "value": [
-                  108,
-                  111,
-                  97,
-                  110,
-                  95,
-                  118,
-                  97,
-                  117,
-                  108,
-                  116
-                ]
-              },
-              {
-                "kind": "arg",
-                "path": "marketId"
-              }
-            ]
-          }
-        },
-        {
-          "name": "recipientLoanAta",
-          "docs": [
-            "Destination: recipient's loan token account"
-          ],
-          "writable": true
-        },
-        {
-          "name": "tokenProgram",
-          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
-        }
-      ],
-      "args": [
-        {
-          "name": "marketId",
-          "type": {
-            "array": [
-              "u8",
-              32
-            ]
-          }
-        },
-        {
-          "name": "amount",
-          "type": "u64"
-        }
-      ]
-    },
-    {
       "name": "initializeProtocol",
       "discriminator": [
         188,
@@ -3248,33 +2961,58 @@ export type Paralend = {
     },
     {
       "code": 6024,
-      "name": "flashLoanLocked",
-      "msg": "Flash loan is locked"
-    },
-    {
-      "code": 6025,
       "name": "feeExceedsMax",
       "msg": "Fee exceeds maximum"
     },
     {
-      "code": 6026,
+      "code": 6025,
       "name": "oracleFeedMismatch",
       "msg": "Oracle feed ID does not match market configuration"
     },
     {
+      "code": 6026,
+      "name": "positionNotEmpty",
+      "msg": "Position is not empty and cannot be closed"
+    },
+    {
       "code": 6027,
-      "name": "flashLoanCallerMismatch",
-      "msg": "Flash loan caller does not match the starter"
+      "name": "marketNotActive",
+      "msg": "Market is not active (may be in pre-resolution or resolved)"
     },
     {
       "code": 6028,
-      "name": "flashLoanAmountMismatch",
-      "msg": "Flash loan repayment amount does not match the borrowed principal"
+      "name": "marketResolved",
+      "msg": "Market is already resolved"
     },
     {
       "code": 6029,
-      "name": "positionNotEmpty",
-      "msg": "Position is not empty and cannot be closed"
+      "name": "resolutionTooEarly",
+      "msg": "Resolution cannot happen yet — T_resolution not reached"
+    },
+    {
+      "code": 6030,
+      "name": "forceCloseWindowClosed",
+      "msg": "Force-close window is closed"
+    },
+    {
+      "code": 6031,
+      "name": "lltvDecayViolation",
+      "msg": "Time-decay LLTV violation — position unhealthy under effective LLTV"
+    },
+    {
+      "code": 6032,
+      "name": "priceDeviationExceeded",
+      "msg": "Oracle spot deviates more than permitted band from EMA"
+    },
+    {
+      "code": 6033,
+      "name": "attesterNotAuthorized",
+      "msg": "Caller is not the registered attester"
+    },
+    {
+      "code": 6034,
+      "name": "invalidOutcome",
+      "msg": "Invalid outcome bit (must be 1=YES or 2=NO)"
     }
   ],
   "types": [
@@ -3695,25 +3433,44 @@ export type Paralend = {
             "type": "bool"
           },
           {
-            "name": "flashLoanLock",
+            "name": "marketStatus",
             "docs": [
-              "Flash loan reentrancy lock (0=unlocked, 1=locked)"
+              "Market lifecycle status (0=Active, 1=PreResolution, 2=Resolved)"
             ],
             "type": "u8"
           },
           {
-            "name": "flashLoanAmount",
+            "name": "outcomeBit",
             "docs": [
-              "Amount borrowed in the active flash loan, if any"
+              "Outcome bit after resolution (0=unresolved, 1=YES won, 2=NO won)"
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "resolutionTimestamp",
+            "docs": [
+              "Unix timestamp when this prediction market resolves. 0 = no scheduled resolution."
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "baseLltv",
+            "docs": [
+              "Base liquidation LTV in BPS — effective LLTV decays as resolution approaches."
             ],
             "type": "u64"
           },
           {
-            "name": "flashLoanCaller",
+            "name": "kalshiTicker",
             "docs": [
-              "Caller that initiated the active flash loan"
+              "Kalshi market ticker (e.g., \"KXNBAFINAL-26MAYLAL\") — display metadata."
             ],
-            "type": "pubkey"
+            "type": {
+              "array": [
+                "u8",
+                48
+              ]
+            }
           },
           {
             "name": "reserved",
@@ -3723,7 +3480,7 @@ export type Paralend = {
             "type": {
               "array": [
                 "u8",
-                24
+                16
               ]
             }
           }

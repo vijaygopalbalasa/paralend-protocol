@@ -80,21 +80,37 @@ pub enum ParalendError {
     #[msg("Invalid IRM configuration")]
     InvalidIrmConfig, // 6023
 
-    #[msg("Flash loan is locked")]
-    FlashLoanLocked, // 6024
-
     #[msg("Fee exceeds maximum")]
-    FeeExceedsMax, // 6025
+    FeeExceedsMax, // 6024
 
     #[msg("Oracle feed ID does not match market configuration")]
-    OracleFeedMismatch, // 6026
-
-    #[msg("Flash loan caller does not match the starter")]
-    FlashLoanCallerMismatch, // 6027
-
-    #[msg("Flash loan repayment amount does not match the borrowed principal")]
-    FlashLoanAmountMismatch, // 6028
+    OracleFeedMismatch, // 6025
 
     #[msg("Position is not empty and cannot be closed")]
-    PositionNotEmpty, // 6029
+    PositionNotEmpty, // 6026
+
+    // Paralend-specific errors (6030-6049)
+    #[msg("Market is not active (may be in pre-resolution or resolved)")]
+    MarketNotActive, // 6027
+
+    #[msg("Market is already resolved")]
+    MarketResolved, // 6028
+
+    #[msg("Resolution cannot happen yet — T_resolution not reached")]
+    ResolutionTooEarly, // 6029
+
+    #[msg("Force-close window is closed")]
+    ForceCloseWindowClosed, // 6030
+
+    #[msg("Time-decay LLTV violation — position unhealthy under effective LLTV")]
+    LltvDecayViolation, // 6031
+
+    #[msg("Oracle spot deviates more than permitted band from EMA")]
+    PriceDeviationExceeded, // 6032
+
+    #[msg("Caller is not the registered attester")]
+    AttesterNotAuthorized, // 6033
+
+    #[msg("Invalid outcome bit (must be 1=YES or 2=NO)")]
+    InvalidOutcome, // 6034
 }

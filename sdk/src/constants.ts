@@ -2,7 +2,7 @@ import { PublicKey } from "@solana/web3.js";
 
 // Program address
 export const PROGRAM_ID = new PublicKey(
-  "ForUjmX3VzE5EsRfzktF529LToK7vyzx6czH5o1dUTY8"
+  "2kZNrHd7QkUemYCLFw5dYGQWeKieAUNb5C1FvTjTYiC8"
 );
 
 // Fixed-point arithmetic constants
@@ -23,7 +23,15 @@ export const MAX_ORACLE_AGE = 60; // seconds
 export const MAX_FEE_BPS = BigInt(2_500); // 25%
 export const MAX_LIF = BigInt(11_500); // 115%
 export const LIF_CURSOR = BigInt(3_000); // 30%
-export const FLASH_LOAN_FEE_BPS = BigInt(5); // 0.05%
+
+// Paralend — prediction-market credit specifics
+export const MAX_BINARY_LLTV = BigInt(7_000); // 70% cap on prediction-market collateral
+export const MAX_PRICE_DEVIATION_BPS = BigInt(500); // 5% — EMA vs spot deviation band
+export const EMA_HALF_LIFE_SLOTS = BigInt(150); // ~60s on Solana (400ms slot)
+export const FORCE_CLOSE_WINDOW_SECONDS = 7_200; // 2h pre-resolution window
+export const POST_BORROW_CUTOFF_SECONDS = 1_800; // 30min pre-resolution no-borrow
+export const LIQUIDATOR_BOUNTY_MIN_BPS = BigInt(50); // 0.5%
+export const LIQUIDATOR_BOUNTY_MAX_BPS = BigInt(300); // 3.0%
 
 // PDA seeds (Buffer for use with findProgramAddressSync)
 export const SEED_PREFIX = Buffer.from("paralend");

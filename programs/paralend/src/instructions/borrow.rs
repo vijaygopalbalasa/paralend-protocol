@@ -38,7 +38,6 @@ pub struct Borrow<'info> {
         seeds = [SEED_PREFIX, SEED_MARKET, &market_id],
         bump = market.bump,
         constraint = !market.paused @ ParalendError::MarketPaused,
-        constraint = market.flash_loan_lock == 0 @ ParalendError::FlashLoanLocked,
     )]
     pub market: Box<Account<'info, Market>>,
 
@@ -202,7 +201,6 @@ pub struct Repay<'info> {
         mut,
         seeds = [SEED_PREFIX, SEED_MARKET, &market_id],
         bump = market.bump,
-        constraint = market.flash_loan_lock == 0 @ ParalendError::FlashLoanLocked,
     )]
     pub market: Box<Account<'info, Market>>,
 

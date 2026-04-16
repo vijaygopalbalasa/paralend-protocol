@@ -170,10 +170,12 @@ pub fn handle_create_market(
     market.pending_fee_shares = 0;
     market.last_update = Clock::get()?.unix_timestamp;
     market.paused = false;
-    market.flash_loan_lock = 0;
-    market.flash_loan_amount = 0;
-    market.flash_loan_caller = Pubkey::default();
-    market.reserved = [0u8; 24];
+    market.market_status = 0; // Active
+    market.outcome_bit = 0;
+    market.resolution_timestamp = 0; // Set later via register_resolution (0 = no scheduled resolution)
+    market.base_lltv = lltv;
+    market.kalshi_ticker = [0u8; 48];
+    market.reserved = [0u8; 16];
 
     // Increment market count
     let protocol_state = &mut ctx.accounts.protocol_state;

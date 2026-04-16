@@ -1,7 +1,6 @@
 pub mod admin;
 pub mod borrow;
 pub mod collateral;
-pub mod flash_loan;
 pub mod liquidate;
 pub mod market;
 pub mod position;

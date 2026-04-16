@@ -67,12 +67,16 @@ export interface MarketState {
   lastUpdate: bigint;
   /** Market-level pause flag */
   paused: boolean;
-  /** Flash loan reentrancy lock (0 = unlocked, 1 = locked) */
-  flashLoanLock: number;
-  /** Active flash-loan principal */
-  flashLoanAmount: bigint;
-  /** Active flash-loan caller */
-  flashLoanCaller: PublicKey;
+  /** Market lifecycle status (0 = Active, 1 = PreResolution, 2 = Resolved) */
+  marketStatus: number;
+  /** Outcome bit after resolution (0 = unresolved, 1 = YES won, 2 = NO won) */
+  outcomeBit: number;
+  /** Unix timestamp when this prediction market resolves. 0 = no scheduled resolution */
+  resolutionTimestamp: bigint;
+  /** Base liquidation LTV in BPS — effective LLTV decays as resolution approaches */
+  baseLltv: bigint;
+  /** Kalshi market ticker bytes (UTF-8, zero-padded to 48 bytes) */
+  kalshiTicker: number[];
 }
 
 /**
