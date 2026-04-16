@@ -121,16 +121,22 @@ export interface IrmState extends IrmParams {
 }
 
 /**
- * Deserialized StaticOracle account (localnet / devnet testing).
+ * Deserialized PriceCache account (per-market oracle).
+ * Mirrors programs/paralend/src/state/oracle.rs.
  */
-export interface StaticOracleState {
+export interface PriceCacheState {
   bump: number;
-  /** Feed ID — must match market's oracle feed ID */
+  marketId: number[];
+  /** Feed ID — must match market's `collateral_oracle_feed_id`. */
   feedId: number[];
-  /** USD price per base unit, WAD-scaled */
-  priceWad: bigint;
-  /** Only this account can update the price */
-  admin: PublicKey;
+  /** Only this key can push attestations via `attest_price`. */
+  attester: PublicKey;
+  /** Smoothed EMA price, WAD-scaled USD per base unit. */
+  emaPriceWad: bigint;
+  /** Last attested spot, retained for ±5 % deviation checks. */
+  lastSpotWad: bigint;
+  lastUpdateSlot: bigint;
+  lastUpdateTs: bigint;
 }
 
 /**
