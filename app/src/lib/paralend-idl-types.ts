@@ -1030,6 +1030,19 @@ export type Paralend = {
         {
           "name": "fee",
           "type": "u64"
+        },
+        {
+          "name": "resolutionTimestamp",
+          "type": "i64"
+        },
+        {
+          "name": "kalshiTicker",
+          "type": {
+            "array": [
+              "u8",
+              48
+            ]
+          }
         }
       ]
     },
@@ -1275,6 +1288,391 @@ export type Paralend = {
         {
           "name": "lltv",
           "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "forceClosePosition",
+      "discriminator": [
+        109,
+        177,
+        151,
+        242,
+        227,
+        130,
+        79,
+        37
+      ],
+      "accounts": [
+        {
+          "name": "liquidator",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "market",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  97,
+                  114,
+                  97,
+                  108,
+                  101,
+                  110,
+                  100
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  97,
+                  114,
+                  107,
+                  101,
+                  116
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "marketId"
+              }
+            ]
+          }
+        },
+        {
+          "name": "irm"
+        },
+        {
+          "name": "borrowerPosition",
+          "docs": [
+            "Borrower whose position is being force-closed."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  97,
+                  114,
+                  97,
+                  108,
+                  101,
+                  110,
+                  100
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  111,
+                  115,
+                  105,
+                  116,
+                  105,
+                  111,
+                  110
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "marketId"
+              },
+              {
+                "kind": "account",
+                "path": "borrower"
+              }
+            ]
+          }
+        },
+        {
+          "name": "borrower"
+        },
+        {
+          "name": "liquidatorLoanAta",
+          "docs": [
+            "Liquidator's loan token account — debt repayment source"
+          ],
+          "writable": true
+        },
+        {
+          "name": "loanVault",
+          "docs": [
+            "Market's loan vault — debt repayment destination"
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  97,
+                  114,
+                  97,
+                  108,
+                  101,
+                  110,
+                  100
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
+                  108,
+                  111,
+                  97,
+                  110,
+                  95,
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "marketId"
+              }
+            ]
+          }
+        },
+        {
+          "name": "collateralVault",
+          "docs": [
+            "Market's collateral vault — seized collateral source"
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  97,
+                  114,
+                  97,
+                  108,
+                  101,
+                  110,
+                  100
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  108,
+                  108,
+                  97,
+                  116,
+                  101,
+                  114,
+                  97,
+                  108,
+                  95,
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "marketId"
+              }
+            ]
+          }
+        },
+        {
+          "name": "liquidatorCollateralAta",
+          "docs": [
+            "Liquidator's collateral token account — seized collateral destination"
+          ],
+          "writable": true
+        },
+        {
+          "name": "priceCache",
+          "docs": [
+            "PriceCache for collateral valuation"
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  97,
+                  114,
+                  97,
+                  108,
+                  101,
+                  110,
+                  100
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  114,
+                  105,
+                  99,
+                  101,
+                  95,
+                  99,
+                  97,
+                  99,
+                  104,
+                  101
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "marketId"
+              }
+            ]
+          }
+        },
+        {
+          "name": "tokenProgram",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        }
+      ],
+      "args": [
+        {
+          "name": "marketId",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "handleResolution",
+      "discriminator": [
+        33,
+        41,
+        10,
+        164,
+        87,
+        210,
+        243,
+        110
+      ],
+      "accounts": [
+        {
+          "name": "attester",
+          "signer": true
+        },
+        {
+          "name": "market",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  97,
+                  114,
+                  97,
+                  108,
+                  101,
+                  110,
+                  100
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  97,
+                  114,
+                  107,
+                  101,
+                  116
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "marketId"
+              }
+            ]
+          }
+        },
+        {
+          "name": "priceCache",
+          "docs": [
+            "Attester authorization is enforced via the PriceCache: only the",
+            "registered attester for this market can finalise resolution."
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  97,
+                  114,
+                  97,
+                  108,
+                  101,
+                  110,
+                  100
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  114,
+                  105,
+                  99,
+                  101,
+                  95,
+                  99,
+                  97,
+                  99,
+                  104,
+                  101
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "marketId"
+              }
+            ]
+          }
+        }
+      ],
+      "args": [
+        {
+          "name": "marketId",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "outcomeBit",
+          "type": "u8"
         }
       ]
     },
@@ -3246,6 +3644,19 @@ export type Paralend = {
       ]
     },
     {
+      "name": "marketResolved",
+      "discriminator": [
+        89,
+        67,
+        230,
+        95,
+        143,
+        106,
+        199,
+        202
+      ]
+    },
+    {
       "name": "ownershipTransferAccepted",
       "discriminator": [
         170,
@@ -3269,6 +3680,19 @@ export type Paralend = {
         64,
         235,
         29
+      ]
+    },
+    {
+      "name": "positionForceClosed",
+      "discriminator": [
+        169,
+        152,
+        228,
+        17,
+        218,
+        207,
+        1,
+        119
       ]
     },
     {
@@ -4046,6 +4470,31 @@ export type Paralend = {
       }
     },
     {
+      "name": "marketResolved",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "marketId",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "outcomeBit",
+            "type": "u8"
+          },
+          {
+            "name": "atTimestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
       "name": "ownershipTransferAccepted",
       "type": {
         "kind": "struct",
@@ -4140,6 +4589,55 @@ export type Paralend = {
                 64
               ]
             }
+          }
+        ]
+      }
+    },
+    {
+      "name": "positionForceClosed",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "marketId",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "liquidator",
+            "type": "pubkey"
+          },
+          {
+            "name": "borrower",
+            "type": "pubkey"
+          },
+          {
+            "name": "seizedCollateral",
+            "type": "u128"
+          },
+          {
+            "name": "repaidAssets",
+            "type": "u128"
+          },
+          {
+            "name": "repaidShares",
+            "type": "u128"
+          },
+          {
+            "name": "bountyBps",
+            "type": "u64"
+          },
+          {
+            "name": "badDebtAssets",
+            "type": "u128"
+          },
+          {
+            "name": "badDebtShares",
+            "type": "u128"
           }
         ]
       }

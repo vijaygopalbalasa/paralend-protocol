@@ -1024,6 +1024,19 @@
         {
           "name": "fee",
           "type": "u64"
+        },
+        {
+          "name": "resolution_timestamp",
+          "type": "i64"
+        },
+        {
+          "name": "kalshi_ticker",
+          "type": {
+            "array": [
+              "u8",
+              48
+            ]
+          }
         }
       ]
     },
@@ -1269,6 +1282,391 @@
         {
           "name": "lltv",
           "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "force_close_position",
+      "discriminator": [
+        109,
+        177,
+        151,
+        242,
+        227,
+        130,
+        79,
+        37
+      ],
+      "accounts": [
+        {
+          "name": "liquidator",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "market",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  97,
+                  114,
+                  97,
+                  108,
+                  101,
+                  110,
+                  100
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  97,
+                  114,
+                  107,
+                  101,
+                  116
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "market_id"
+              }
+            ]
+          }
+        },
+        {
+          "name": "irm"
+        },
+        {
+          "name": "borrower_position",
+          "docs": [
+            "Borrower whose position is being force-closed."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  97,
+                  114,
+                  97,
+                  108,
+                  101,
+                  110,
+                  100
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  111,
+                  115,
+                  105,
+                  116,
+                  105,
+                  111,
+                  110
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "market_id"
+              },
+              {
+                "kind": "account",
+                "path": "borrower"
+              }
+            ]
+          }
+        },
+        {
+          "name": "borrower"
+        },
+        {
+          "name": "liquidator_loan_ata",
+          "docs": [
+            "Liquidator's loan token account — debt repayment source"
+          ],
+          "writable": true
+        },
+        {
+          "name": "loan_vault",
+          "docs": [
+            "Market's loan vault — debt repayment destination"
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  97,
+                  114,
+                  97,
+                  108,
+                  101,
+                  110,
+                  100
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
+                  108,
+                  111,
+                  97,
+                  110,
+                  95,
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "market_id"
+              }
+            ]
+          }
+        },
+        {
+          "name": "collateral_vault",
+          "docs": [
+            "Market's collateral vault — seized collateral source"
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  97,
+                  114,
+                  97,
+                  108,
+                  101,
+                  110,
+                  100
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  108,
+                  108,
+                  97,
+                  116,
+                  101,
+                  114,
+                  97,
+                  108,
+                  95,
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "market_id"
+              }
+            ]
+          }
+        },
+        {
+          "name": "liquidator_collateral_ata",
+          "docs": [
+            "Liquidator's collateral token account — seized collateral destination"
+          ],
+          "writable": true
+        },
+        {
+          "name": "price_cache",
+          "docs": [
+            "PriceCache for collateral valuation"
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  97,
+                  114,
+                  97,
+                  108,
+                  101,
+                  110,
+                  100
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  114,
+                  105,
+                  99,
+                  101,
+                  95,
+                  99,
+                  97,
+                  99,
+                  104,
+                  101
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "market_id"
+              }
+            ]
+          }
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        }
+      ],
+      "args": [
+        {
+          "name": "market_id",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "handle_resolution",
+      "discriminator": [
+        33,
+        41,
+        10,
+        164,
+        87,
+        210,
+        243,
+        110
+      ],
+      "accounts": [
+        {
+          "name": "attester",
+          "signer": true
+        },
+        {
+          "name": "market",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  97,
+                  114,
+                  97,
+                  108,
+                  101,
+                  110,
+                  100
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  97,
+                  114,
+                  107,
+                  101,
+                  116
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "market_id"
+              }
+            ]
+          }
+        },
+        {
+          "name": "price_cache",
+          "docs": [
+            "Attester authorization is enforced via the PriceCache: only the",
+            "registered attester for this market can finalise resolution."
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  97,
+                  114,
+                  97,
+                  108,
+                  101,
+                  110,
+                  100
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  114,
+                  105,
+                  99,
+                  101,
+                  95,
+                  99,
+                  97,
+                  99,
+                  104,
+                  101
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "market_id"
+              }
+            ]
+          }
+        }
+      ],
+      "args": [
+        {
+          "name": "market_id",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "outcome_bit",
+          "type": "u8"
         }
       ]
     },
@@ -3240,6 +3638,19 @@
       ]
     },
     {
+      "name": "MarketResolved",
+      "discriminator": [
+        89,
+        67,
+        230,
+        95,
+        143,
+        106,
+        199,
+        202
+      ]
+    },
+    {
       "name": "OwnershipTransferAccepted",
       "discriminator": [
         170,
@@ -3263,6 +3674,19 @@
         64,
         235,
         29
+      ]
+    },
+    {
+      "name": "PositionForceClosed",
+      "discriminator": [
+        169,
+        152,
+        228,
+        17,
+        218,
+        207,
+        1,
+        119
       ]
     },
     {
@@ -4040,6 +4464,31 @@
       }
     },
     {
+      "name": "MarketResolved",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "market_id",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "outcome_bit",
+            "type": "u8"
+          },
+          {
+            "name": "at_timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
       "name": "OwnershipTransferAccepted",
       "type": {
         "kind": "struct",
@@ -4134,6 +4583,55 @@
                 64
               ]
             }
+          }
+        ]
+      }
+    },
+    {
+      "name": "PositionForceClosed",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "market_id",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "liquidator",
+            "type": "pubkey"
+          },
+          {
+            "name": "borrower",
+            "type": "pubkey"
+          },
+          {
+            "name": "seized_collateral",
+            "type": "u128"
+          },
+          {
+            "name": "repaid_assets",
+            "type": "u128"
+          },
+          {
+            "name": "repaid_shares",
+            "type": "u128"
+          },
+          {
+            "name": "bounty_bps",
+            "type": "u64"
+          },
+          {
+            "name": "bad_debt_assets",
+            "type": "u128"
+          },
+          {
+            "name": "bad_debt_shares",
+            "type": "u128"
           }
         ]
       }

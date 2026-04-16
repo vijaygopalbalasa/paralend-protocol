@@ -135,3 +135,23 @@ pub struct PriceCachePoked {
     pub market_id: [u8; 32],
     pub slot: u64,
 }
+
+#[event]
+pub struct PositionForceClosed {
+    pub market_id: [u8; 32],
+    pub liquidator: Pubkey,
+    pub borrower: Pubkey,
+    pub seized_collateral: u128,
+    pub repaid_assets: u128,
+    pub repaid_shares: u128,
+    pub bounty_bps: u64,
+    pub bad_debt_assets: u128,
+    pub bad_debt_shares: u128,
+}
+
+#[event]
+pub struct MarketResolved {
+    pub market_id: [u8; 32],
+    pub outcome_bit: u8,
+    pub at_timestamp: i64,
+}

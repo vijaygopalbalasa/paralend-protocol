@@ -61,7 +61,9 @@ pub fn handle_create_irm(
     loan_oracle_feed_id: [u8; 32],
     irm_key: Pubkey,
     lltv: u64,
-    fee: u64
+    fee: u64,
+    resolution_timestamp: i64,
+    kalshi_ticker: [u8; 48]
 )]
 pub struct CreateMarket<'info> {
     #[account(mut)]
@@ -123,6 +125,8 @@ pub fn handle_create_market(
     irm_key: Pubkey,
     lltv: u64,
     fee: u64,
+    resolution_timestamp: i64,
+    kalshi_ticker: [u8; 48],
 ) -> Result<()> {
     require!(lltv > 0 && lltv < BPS, ParalendError::InvalidLltv);
 
@@ -172,9 +176,11 @@ pub fn handle_create_market(
     market.paused = false;
     market.market_status = 0; // Active
     market.outcome_bit = 0;
-    market.resolution_timestamp = 0; // Set later via register_resolution (0 = no scheduled resolution)
+    // resolution_timestamp = 0 → classical lending (no time-decay). Any
+    // non-zero value arms the decay curve + force-close window.
+    market.resolution_timestamp = resolution_timestamp;
     market.base_lltv = lltv;
-    market.kalshi_ticker = [0u8; 48];
+    market.kalshi_ticker = kalshi_ticker;
     market.reserved = [0u8; 16];
 
     // Increment market count

@@ -4,5 +4,6 @@ pub mod collateral;
 pub mod liquidate;
 pub mod market;
 pub mod position;
+pub mod resolution;
 pub mod supply;
 pub mod utils;

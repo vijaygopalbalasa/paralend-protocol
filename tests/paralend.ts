@@ -279,6 +279,13 @@ describe("Paralend", () => {
     [collateralVault] = deriveCollateralVault(marketId, program.programId);
     [loanVault] = deriveLoanVault(marketId, program.programId);
 
+    // Create a market with a ~14-day future resolution — far enough out
+    // that time-decay doesn't bite the happy-path borrow below. A dedicated
+    // decay test (Day 8) will exercise the near-resolution tightening.
+    const resolutionTs = Math.floor(Date.now() / 1000) + 14 * 24 * 3600;
+    const ticker = Buffer.alloc(48);
+    ticker.write("BTC-150K-JUN2026-TEST", "utf-8");
+
     await program.methods
       .createMarket(
         Array.from(marketId) as unknown as number[] & { length: 32 },
@@ -286,7 +293,9 @@ describe("Paralend", () => {
         Array.from(LOAN_FEED_ID) as unknown as number[] & { length: 32 },
         irmPda,
         new BN(LLTV.toString()),
-        new BN(FEE_BPS.toString())
+        new BN(FEE_BPS.toString()),
+        new BN(resolutionTs),
+        Array.from(ticker) as unknown as number[] & { length: 48 }
       )
       // @ts-ignore
       .accountsPartial({
@@ -308,7 +317,7 @@ describe("Paralend", () => {
     assert.equal(m.baseLltv.toString(), LLTV.toString());
     assert.equal(m.marketStatus, 0);
     assert.equal(m.outcomeBit, 0);
-    assert.equal(m.resolutionTimestamp.toString(), "0");
+    assert.equal(m.resolutionTimestamp.toString(), resolutionTs.toString());
   });
 
   it("registers price cache + attester, seeds initial EMA", async () => {

@@ -14,6 +14,7 @@ use instructions::collateral::*;
 use instructions::liquidate::*;
 use instructions::market::*;
 use instructions::position::*;
+use instructions::resolution::*;
 use instructions::supply::*;
 use instructions::utils::*;
 
@@ -103,6 +104,8 @@ pub mod paralend {
         irm_key: Pubkey,
         lltv: u64,
         fee: u64,
+        resolution_timestamp: i64,
+        kalshi_ticker: [u8; 48],
     ) -> Result<()> {
         instructions::market::handle_create_market(
             ctx,
@@ -112,6 +115,8 @@ pub mod paralend {
             irm_key,
             lltv,
             fee,
+            resolution_timestamp,
+            kalshi_ticker,
         )
     }
 
@@ -208,5 +213,22 @@ pub mod paralend {
         seized_collateral: u64,
     ) -> Result<()> {
         instructions::liquidate::handle_liquidate(ctx, market_id, seized_collateral)
+    }
+
+    // ─── Resolution (prediction-market specific) ─────────────
+
+    pub fn force_close_position(
+        ctx: Context<ForceClosePosition>,
+        market_id: [u8; 32],
+    ) -> Result<()> {
+        instructions::resolution::handle_force_close_position(ctx, market_id)
+    }
+
+    pub fn handle_resolution(
+        ctx: Context<HandleResolution>,
+        market_id: [u8; 32],
+        outcome_bit: u8,
+    ) -> Result<()> {
+        instructions::resolution::handle_resolution(ctx, market_id, outcome_bit)
     }
 }
