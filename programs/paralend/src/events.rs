@@ -113,3 +113,25 @@ pub struct OwnershipTransferAccepted {
     pub old_owner: Pubkey,
     pub new_owner: Pubkey,
 }
+
+#[event]
+pub struct PriceCacheRegistered {
+    pub market_id: [u8; 32],
+    pub feed_id: [u8; 32],
+    pub attester: Pubkey,
+    pub initial_price_wad: u128,
+}
+
+#[event]
+pub struct PriceAttested {
+    pub market_id: [u8; 32],
+    pub spot_wad: u128,
+    pub ema_wad: u128,
+    pub slot: u64,
+}
+
+#[event]
+pub struct PriceCachePoked {
+    pub market_id: [u8; 32],
+    pub slot: u64,
+}

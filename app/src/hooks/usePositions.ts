@@ -9,7 +9,7 @@ import {
   bnToBigInt,
   calculateHealthFactor,
   deriveMarketPDA,
-  deriveStaticOraclePDA,
+  derivePriceCachePDA,
   getProgramId,
   makeReadonlyProgram,
   toAssetsDown,
@@ -98,32 +98,27 @@ export function usePositions(pollMs = 15_000) {
               ? toAssetsUp(borrowShares, totalBorrowAssets, totalBorrowShares)
               : 0n;
 
-          const collateralOracleFeed = Buffer.from(
-            market.collateralOracleFeedId as number[]
-          );
-          const collateralOracle = deriveStaticOraclePDA(collateralOracleFeed);
-          let collateralPriceWad = oracleCache.get(collateralOracle.toBase58());
+          // Collateral price comes from the per-market PriceCache PDA.
+          // A missing cache (freshly-created market with no attestation yet)
+          // falls back to 0 so the UI renders "pending" rather than crashing.
+          const priceCachePda = derivePriceCachePDA(marketId);
+          const cacheKey = priceCachePda.toBase58();
+          let collateralPriceWad = oracleCache.get(cacheKey);
           if (collateralPriceWad === undefined) {
-            const oracle = await program.account.staticOracle.fetch(collateralOracle);
-            collateralPriceWad = bnToBigInt(oracle.priceWad);
-            oracleCache.set(collateralOracle.toBase58(), collateralPriceWad);
+            try {
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              const cacheAccount = await (program.account as any).priceCache.fetch(
+                priceCachePda
+              );
+              collateralPriceWad = bnToBigInt(cacheAccount.emaPriceWad);
+            } catch {
+              collateralPriceWad = 0n;
+            }
+            oracleCache.set(cacheKey, collateralPriceWad);
           }
 
-          let loanPriceWad: bigint;
-          const loanFeed = Buffer.from(market.loanOracleFeedId as number[]);
-          if (loanFeed.every((byte) => byte === 0)) {
-            loanPriceWad = WAD / 10n ** BigInt(loanDecimals);
-          } else {
-            const loanOracle = deriveStaticOraclePDA(loanFeed);
-            const cacheKey = loanOracle.toBase58();
-            let cached = oracleCache.get(cacheKey);
-            if (cached === undefined) {
-              const oracle = await program.account.staticOracle.fetch(loanOracle);
-              cached = bnToBigInt(oracle.priceWad);
-              oracleCache.set(cacheKey, cached);
-            }
-            loanPriceWad = cached;
-          }
+          // USDC-only loan side: $1 per full token.
+          const loanPriceWad = WAD / 10n ** BigInt(loanDecimals);
 
           const supplyAssetsUsd =
             Number((supplyAssets * loanPriceWad) / WAD) / 10 ** loanDecimals;

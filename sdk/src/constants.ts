@@ -17,7 +17,7 @@ export const VIRTUAL_ASSETS = BigInt(1);
 export const SECONDS_PER_YEAR = BigInt(31_536_000);
 
 // Oracle
-export const MAX_ORACLE_AGE = 60; // seconds
+export const MAX_ORACLE_AGE = 30; // seconds — tightened for Paralend
 
 // Protocol limits
 export const MAX_FEE_BPS = BigInt(2_500); // 25%
@@ -41,4 +41,5 @@ export const SEED_POSITION = Buffer.from("position");
 export const SEED_COLLATERAL_VAULT = Buffer.from("collateral_vault");
 export const SEED_LOAN_VAULT = Buffer.from("loan_vault");
 export const SEED_LINEAR_IRM = Buffer.from("linear_irm");
-export const SEED_STATIC_ORACLE = Buffer.from("static_oracle");
+export const SEED_PRICE_CACHE = Buffer.from("price_cache");
+export const SEED_RESOLUTION_RECORD = Buffer.from("resolution_record");

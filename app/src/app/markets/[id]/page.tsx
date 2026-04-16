@@ -17,7 +17,7 @@ import {
   deriveCollateralVaultPDA,
   deriveLoanVaultPDA,
   derivePositionPDA,
-  deriveStaticOraclePDA,
+  derivePriceCachePDA,
   ensureAtaIx,
   formatTokenAmount,
   makeAnchorProvider,
@@ -130,8 +130,7 @@ function MarketDetailPageInner() {
     const positionPda = derivePositionPDA(market.marketId, owner);
     const loanVault = deriveLoanVaultPDA(market.marketId);
     const collateralVault = deriveCollateralVaultPDA(market.marketId);
-    const collateralOracle = deriveStaticOraclePDA(market.collateralOracleFeedId);
-    const loanOracle = deriveStaticOraclePDA(market.loanOracleFeedId);
+    const priceCache = derivePriceCachePDA(market.marketId);
 
     return {
       owner,
@@ -139,8 +138,7 @@ function MarketDetailPageInner() {
       positionPda,
       loanVault,
       collateralVault,
-      collateralOracle,
-      loanOracle,
+      priceCache,
     };
   };
 
@@ -258,8 +256,8 @@ function MarketDetailPageInner() {
         program,
         positionPda,
         loanVault,
-        collateralOracle,
-        loanOracle,
+        priceCache,
+        
       } = withProgram();
       const methods = program.methods as any;
       const tx = new Transaction();
@@ -281,8 +279,8 @@ function MarketDetailPageInner() {
             position: positionPda,
             loanVault,
             receiverLoanAta: loanAta,
-            collateralOracle,
-            loanOracle,
+            priceCache,
+            
           })
           .instruction()
       );
@@ -391,8 +389,8 @@ function MarketDetailPageInner() {
         program,
         positionPda,
         collateralVault,
-        collateralOracle,
-        loanOracle,
+        priceCache,
+        
       } = withProgram();
       const methods = program.methods as any;
       const tx = new Transaction();
@@ -414,8 +412,8 @@ function MarketDetailPageInner() {
             position: positionPda,
             collateralVault,
             receiverCollateralAta: collateralAta,
-            collateralOracle,
-            loanOracle,
+            priceCache,
+            
           })
           .instruction()
       );

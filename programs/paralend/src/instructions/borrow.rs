@@ -4,13 +4,13 @@ use anchor_spl::token::{self, Token, TokenAccount, Transfer};
 use crate::constants::*;
 use crate::errors::ParalendError;
 use crate::events;
-use crate::interfaces::oracle::{get_loan_price, is_position_healthy, read_static_oracle_price};
+use crate::interfaces::oracle::{get_loan_price, is_position_healthy, read_price_cache};
 use crate::math::interest::accrue_interest_on_market;
 use crate::math::safe_math::safe_u128_to_u64;
 use crate::math::shares::{to_assets_up, to_shares_up};
 use crate::state::irm::LinearIrm;
 use crate::state::market::Market;
-use crate::state::oracle::StaticOracle;
+use crate::state::oracle::PriceCache;
 use crate::state::position::Position;
 use crate::state::protocol::ProtocolState;
 
@@ -70,13 +70,13 @@ pub struct Borrow<'info> {
     )]
     pub receiver_loan_ata: Account<'info, TokenAccount>,
 
-    /// Collateral price oracle — needed for post-borrow health check
-    /// CHECK: feed_id validated against market.collateral_oracle_feed_id in handler
-    pub collateral_oracle: Account<'info, StaticOracle>,
-
-    /// Loan price oracle — or stablecoin $1 if market.loan_oracle_feed_id == [0u8; 32]
-    /// CHECK: feed_id validated in handler (skipped if all-zero = stablecoin)
-    pub loan_oracle: Account<'info, StaticOracle>,
+    /// Collateral PriceCache — EMA of attested Kalshi/DFlow prices. Binds to
+    /// (market_id, collateral_oracle_feed_id) and staleness-checked.
+    #[account(
+        seeds = [SEED_PREFIX, SEED_PRICE_CACHE, &market_id],
+        bump = price_cache.bump,
+    )]
+    pub price_cache: Account<'info, PriceCache>,
 
     pub token_program: Program<'info, Token>,
 }
@@ -136,11 +136,12 @@ pub fn handle_borrow(
         .ok_or_else(|| error!(ParalendError::MathOverflow))?;
 
     // Health check AFTER updating state (position must be healthy post-borrow)
-    let collateral_price_wad = read_static_oracle_price(
-        &ctx.accounts.collateral_oracle,
+    let collateral_price_wad = read_price_cache(
+        &ctx.accounts.price_cache,
         &ctx.accounts.market.collateral_oracle_feed_id,
+        &market_id,
     )?;
-    let loan_price_wad = get_loan_price(&ctx.accounts.market, &ctx.accounts.loan_oracle)?;
+    let loan_price_wad = get_loan_price(&ctx.accounts.market)?;
 
     let healthy = is_position_healthy(
         &ctx.accounts.market,

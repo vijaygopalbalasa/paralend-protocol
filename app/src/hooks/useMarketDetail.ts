@@ -13,7 +13,7 @@ import {
   calculateUtilization,
   computeMarketIdFromAccount,
   derivePositionPDA,
-  deriveStaticOraclePDA,
+  derivePriceCachePDA,
   getProgramId,
   getTokenBalance,
   irmBorrowRatePerSecond,
@@ -133,22 +133,24 @@ export function useMarketDetail(
         (Number(utilization) / Number(WAD)) *
         (1 - Number(account.fee) / Number(BPS));
 
-      const collateralOracle = deriveStaticOraclePDA(collateralOracleFeedId);
-      const collateralOracleAccount = await program.account.staticOracle.fetch(
-        collateralOracle
-      );
-      const collateralPriceWad = bnToBigInt(collateralOracleAccount.priceWad);
+      // Collateral price comes from the per-market PriceCache (EMA of
+      // attester-pushed Kalshi/DFlow spots). Best-effort read: if the cache
+      // hasn't been registered yet (freshly-created markets), surface 0 so
+      // the UI can render a "pending attestation" state rather than crash.
+      const priceCachePda = derivePriceCachePDA(marketId);
+      let collateralPriceWad = 0n;
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const cacheAccount = await (program.account as any).priceCache.fetch(
+          priceCachePda
+        );
+        collateralPriceWad = bnToBigInt(cacheAccount.emaPriceWad);
+      } catch {
+        collateralPriceWad = 0n;
+      }
 
-      const hasStableLoan = loanOracleFeedId.every((byte) => byte === 0);
-      const loanPriceWad = hasStableLoan
-        ? WAD / 10n ** BigInt(loanDecimals)
-        : bnToBigInt(
-            (
-              await program.account.staticOracle.fetch(
-                deriveStaticOraclePDA(loanOracleFeedId)
-              )
-            ).priceWad
-          );
+      // Loan side is USDC for Paralend — always $1 per full token.
+      const loanPriceWad = WAD / 10n ** BigInt(loanDecimals);
 
       let position = {
         publicKey: null as string | null,
@@ -233,7 +235,7 @@ export function useMarketDetail(
         lltv: Number(account.lltv) / 100,
         feeBps: Number(account.fee),
         paused: account.paused,
-        oracleLabel: hasStableLoan ? "StaticOracle / $1 stable" : "StaticOracle",
+        oracleLabel: "PriceCache (EMA, attester-cranked)",
         totalSupplyAssets,
         totalSupplyShares,
         totalBorrowAssets,

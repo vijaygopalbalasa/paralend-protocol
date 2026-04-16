@@ -7,8 +7,9 @@ import {
   SEED_MARKET,
   SEED_POSITION,
   SEED_PREFIX,
+  SEED_PRICE_CACHE,
   SEED_PROTOCOL,
-  SEED_STATIC_ORACLE,
+  SEED_RESOLUTION_RECORD,
 } from "./constants";
 
 /**
@@ -105,15 +106,29 @@ export function deriveLinearIrmPDA(
 }
 
 /**
- * Derive the StaticOracle PDA for a given feed ID.
- * Seeds: ["paralend", "static_oracle", feedId]
+ * Derive the PriceCache PDA for a given market.
+ * Seeds: ["paralend", "price_cache", marketId]
  */
-export function deriveStaticOraclePDA(
-  feedId: Buffer,
+export function derivePriceCachePDA(
+  marketId: Buffer,
   programId: PublicKey = PROGRAM_ID
 ): [PublicKey, number] {
   return PublicKey.findProgramAddressSync(
-    [SEED_PREFIX, SEED_STATIC_ORACLE, feedId],
+    [SEED_PREFIX, SEED_PRICE_CACHE, marketId],
+    programId
+  );
+}
+
+/**
+ * Derive the ResolutionRecord PDA for a given market.
+ * Seeds: ["paralend", "resolution_record", marketId]
+ */
+export function deriveResolutionRecordPDA(
+  marketId: Buffer,
+  programId: PublicKey = PROGRAM_ID
+): [PublicKey, number] {
+  return PublicKey.findProgramAddressSync(
+    [SEED_PREFIX, SEED_RESOLUTION_RECORD, marketId],
     programId
   );
 }

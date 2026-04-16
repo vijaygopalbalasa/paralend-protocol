@@ -3,26 +3,39 @@ use crate::errors::ParalendError;
 use crate::math::shares::to_assets_up;
 use crate::math::wad::{mul_div_down, mul_div_up};
 use crate::state::market::Market;
-use crate::state::oracle::StaticOracle;
+use crate::state::oracle::PriceCache;
 use anchor_lang::prelude::*;
 
-/// Read price from a StaticOracle account.
-/// Returns price_wad: USD per base unit, WAD-scaled.
-/// Validates that the oracle's feed_id matches the expected feed and price is not stale.
-pub fn read_static_oracle_price(
-    oracle: &Account<StaticOracle>,
+/// Read collateral price from the market's PriceCache.
+/// Enforces feed_id binding + staleness check against `MAX_ORACLE_AGE`.
+///
+/// Returns `price_wad`: USD per base unit, WAD-scaled.
+pub fn read_price_cache(
+    cache: &Account<PriceCache>,
     expected_feed_id: &[u8; 32],
+    expected_market_id: &[u8; 32],
 ) -> Result<u128> {
     require!(
-        oracle.feed_id == *expected_feed_id,
+        cache.market_id == *expected_market_id,
         ParalendError::OracleFeedMismatch
     );
-    require!(oracle.price_wad > 0, ParalendError::OraclePriceNonPositive);
+    require!(
+        cache.feed_id == *expected_feed_id,
+        ParalendError::OracleFeedMismatch
+    );
+    require!(
+        cache.ema_price_wad > 0,
+        ParalendError::OraclePriceNonPositive
+    );
+    require!(
+        cache.last_update_ts > 0,
+        ParalendError::OraclePriceStale
+    );
 
-    // Check staleness
-    let current_time = Clock::get()?.unix_timestamp;
-    let age = current_time
-        .checked_sub(oracle.last_update)
+    // Staleness: reject reads older than MAX_ORACLE_AGE seconds.
+    let now = Clock::get()?.unix_timestamp;
+    let age = now
+        .checked_sub(cache.last_update_ts)
         .ok_or_else(|| error!(ParalendError::MathOverflow))?;
     require!(age >= 0, ParalendError::OraclePriceStale);
     require!(
@@ -30,23 +43,42 @@ pub fn read_static_oracle_price(
         ParalendError::OraclePriceStale
     );
 
-    Ok(oracle.price_wad)
+    Ok(cache.ema_price_wad)
 }
 
-/// Compute the collateral USD value and loan USD value for a position,
-/// then check if the position is healthy (collateral * lltv >= debt * BPS).
-///
-/// Returns `true` if healthy, `false` if unhealthy (liquidatable).
+/// Compute whether a position is healthy using the *base* LLTV stored on
+/// the market. Callers that need the time-decayed effective LLTV should
+/// use `is_position_healthy_effective` instead (coming in `math/decay.rs`).
 ///
 /// Price convention: both prices are WAD-scaled USD per base unit.
-/// This means callers don't need to worry about token decimals —
-/// the oracle price already accounts for them.
+/// Callers don't need to worry about token decimals — the oracle price
+/// already accounts for them.
 pub fn is_position_healthy(
     market: &Market,
     collateral: u128,
     borrow_shares: u128,
     collateral_price_wad: u128,
     loan_price_wad: u128,
+) -> Result<bool> {
+    is_position_healthy_at_lltv(
+        market,
+        collateral,
+        borrow_shares,
+        collateral_price_wad,
+        loan_price_wad,
+        market.lltv as u128,
+    )
+}
+
+/// Health check parameterised by the effective LLTV in BPS.
+/// Used by the time-decay resolution logic to pass a tightened LLTV.
+pub fn is_position_healthy_at_lltv(
+    market: &Market,
+    collateral: u128,
+    borrow_shares: u128,
+    collateral_price_wad: u128,
+    loan_price_wad: u128,
+    effective_lltv_bps: u128,
 ) -> Result<bool> {
     if borrow_shares == 0 {
         return Ok(true);
@@ -71,9 +103,9 @@ pub fn is_position_healthy(
         return Ok(true);
     }
 
-    // Healthy if: collateral_usd * lltv >= loan_usd * BPS
+    // Healthy if: collateral_usd * lltv_bps >= loan_usd * BPS
     let lhs = collateral_usd
-        .checked_mul(market.lltv as u128)
+        .checked_mul(effective_lltv_bps)
         .ok_or_else(|| error!(ParalendError::MathOverflow))?;
     let rhs = loan_usd
         .checked_mul(BPS as u128)
@@ -83,22 +115,16 @@ pub fn is_position_healthy(
 }
 
 /// Get the loan price for a market.
-/// If loan_oracle_feed_id is all-zeros (stablecoin), returns $1 per base unit WAD-scaled.
-/// Otherwise reads from the provided oracle account and validates the feed_id.
-pub fn get_loan_price(
-    market: &Market,
-    loan_oracle: &Account<StaticOracle>,
-) -> Result<u128> {
-    if market.loan_oracle_feed_id == [0u8; 32] {
-        // Stablecoin: $1 per full token → WAD / 10^decimals per base unit
-        let decimals_factor = 10u128
-            .checked_pow(market.loan_decimals as u32)
-            .ok_or_else(|| error!(ParalendError::MathOverflow))?;
-        let price = WAD
-            .checked_div(decimals_factor)
-            .ok_or_else(|| error!(ParalendError::DivisionByZero))?;
-        Ok(price)
-    } else {
-        read_static_oracle_price(loan_oracle, &market.loan_oracle_feed_id)
-    }
+/// For Paralend the loan side is USDC only — MVP hardcodes $1 per whole
+/// token and derives per-base-unit WAD-scaled price from loan decimals.
+/// The `loan_oracle_feed_id` field on Market is kept for v2 when non-USDC
+/// loan assets might be added (it's expected to be all-zeros today).
+pub fn get_loan_price(market: &Market) -> Result<u128> {
+    let decimals_factor = 10u128
+        .checked_pow(market.loan_decimals as u32)
+        .ok_or_else(|| error!(ParalendError::MathOverflow))?;
+    let price = WAD
+        .checked_div(decimals_factor)
+        .ok_or_else(|| error!(ParalendError::DivisionByZero))?;
+    Ok(price)
 }

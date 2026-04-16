@@ -3,7 +3,8 @@ use anchor_lang::prelude::*;
 use crate::constants::*;
 use crate::errors::ParalendError;
 use crate::events;
-use crate::state::oracle::StaticOracle;
+use crate::state::market::Market;
+use crate::state::oracle::PriceCache;
 use crate::state::protocol::ProtocolState;
 
 /// Initialize the protocol singleton.
@@ -222,15 +223,14 @@ pub fn handle_set_fee(ctx: Context<SetFee>, _market_id: [u8; 32], fee: u64) -> R
     Ok(())
 }
 
-// ─── Static Oracle (interim until PriceCache lands) ───────────────────────────
+// ─── PriceCache (crank-attested oracle) ───────────────────────────────────────
 
-/// Create a StaticOracle PDA. Owner-gated to prevent the permissionless-oracle
-/// critical (attacker becomes price admin). Will be replaced by the crank-
-/// attested PriceCache oracle in a follow-up commit; kept here to preserve
-/// test coverage during the migration.
+/// Register a PriceCache PDA for a market. Owner-only. Binds the cache
+/// to the market's collateral feed_id and designates an attester pubkey.
+/// Seeds it with an initial price that serves as the first EMA sample.
 #[derive(Accounts)]
-#[instruction(feed_id: [u8; 32])]
-pub struct CreateStaticOracle<'info> {
+#[instruction(market_id: [u8; 32])]
+pub struct RegisterPriceCache<'info> {
     #[account(mut)]
     pub payer: Signer<'info>,
 
@@ -241,54 +241,176 @@ pub struct CreateStaticOracle<'info> {
     )]
     pub protocol_state: Account<'info, ProtocolState>,
 
+    /// Market this cache will serve. Binds the cache's feed_id to
+    /// `market.collateral_oracle_feed_id`.
+    #[account(
+        seeds = [SEED_PREFIX, SEED_MARKET, &market_id],
+        bump = market.bump,
+    )]
+    pub market: Account<'info, Market>,
+
     #[account(
         init,
         payer = payer,
-        space = StaticOracle::SPACE,
-        seeds = [SEED_PREFIX, SEED_STATIC_ORACLE, &feed_id],
+        space = PriceCache::SPACE,
+        seeds = [SEED_PREFIX, SEED_PRICE_CACHE, &market_id],
         bump,
     )]
-    pub oracle: Account<'info, StaticOracle>,
+    pub price_cache: Account<'info, PriceCache>,
 
     pub system_program: Program<'info, System>,
 }
 
-pub fn handle_create_static_oracle(
-    ctx: Context<CreateStaticOracle>,
-    feed_id: [u8; 32],
+pub fn handle_register_price_cache(
+    ctx: Context<RegisterPriceCache>,
+    market_id: [u8; 32],
+    attester: Pubkey,
     initial_price_wad: u128,
 ) -> Result<()> {
-    require!(initial_price_wad > 0, ParalendError::OraclePriceNonPositive);
+    require!(
+        initial_price_wad > 0,
+        ParalendError::OraclePriceNonPositive
+    );
 
-    let oracle = &mut ctx.accounts.oracle;
-    oracle.bump = ctx.bumps.oracle;
-    oracle.feed_id = feed_id;
-    oracle.price_wad = initial_price_wad;
-    oracle.admin = ctx.accounts.payer.key();
-    oracle.last_update = Clock::get()?.unix_timestamp;
+    let market = &ctx.accounts.market;
+    let clock = Clock::get()?;
+
+    let cache = &mut ctx.accounts.price_cache;
+    cache.bump = ctx.bumps.price_cache;
+    cache.market_id = market_id;
+    cache.feed_id = market.collateral_oracle_feed_id;
+    cache.attester = attester;
+    cache.ema_price_wad = initial_price_wad;
+    cache.last_spot_wad = initial_price_wad;
+    cache.last_update_slot = clock.slot;
+    cache.last_update_ts = clock.unix_timestamp;
+    cache.reserved = [0u8; 64];
+
+    emit!(events::PriceCacheRegistered {
+        market_id,
+        feed_id: market.collateral_oracle_feed_id,
+        attester,
+        initial_price_wad,
+    });
 
     Ok(())
 }
 
-/// Update the price on a StaticOracle. Only the oracle's admin can call this.
+/// Attest a new spot price. Signer must be the registered `attester`.
+/// Deviation-checked vs the last spot (±MAX_PRICE_DEVIATION_BPS) and folded
+/// into the EMA with a fixed 10 % weight per attestation.
 #[derive(Accounts)]
-pub struct SetStaticOraclePrice<'info> {
-    pub admin: Signer<'info>,
+#[instruction(market_id: [u8; 32])]
+pub struct AttestPrice<'info> {
+    pub attester: Signer<'info>,
 
     #[account(
         mut,
-        constraint = oracle.admin == admin.key() @ ParalendError::Unauthorized,
+        seeds = [SEED_PREFIX, SEED_PRICE_CACHE, &market_id],
+        bump = price_cache.bump,
+        constraint = price_cache.attester == attester.key() @ ParalendError::AttesterNotAuthorized,
     )]
-    pub oracle: Account<'info, StaticOracle>,
+    pub price_cache: Account<'info, PriceCache>,
 }
 
-pub fn handle_set_static_oracle_price(
-    ctx: Context<SetStaticOraclePrice>,
-    new_price_wad: u128,
+pub fn handle_attest_price(
+    ctx: Context<AttestPrice>,
+    _market_id: [u8; 32],
+    new_spot_wad: u128,
 ) -> Result<()> {
-    require!(new_price_wad > 0, ParalendError::OraclePriceNonPositive);
-    let oracle = &mut ctx.accounts.oracle;
-    oracle.price_wad = new_price_wad;
-    oracle.last_update = Clock::get()?.unix_timestamp;
+    require!(
+        new_spot_wad > 0,
+        ParalendError::OraclePriceNonPositive
+    );
+
+    let cache = &mut ctx.accounts.price_cache;
+    let clock = Clock::get()?;
+
+    // Deviation check against last spot (skipped on the first attestation
+    // after registration — bootstrap edge case covered by init seeding).
+    if cache.last_spot_wad > 0 {
+        let prev = cache.last_spot_wad;
+        let band = prev
+            .checked_mul(MAX_PRICE_DEVIATION_BPS as u128)
+            .ok_or_else(|| error!(ParalendError::MathOverflow))?
+            .checked_div(BPS as u128)
+            .ok_or_else(|| error!(ParalendError::DivisionByZero))?;
+        let diff = if new_spot_wad > prev {
+            new_spot_wad - prev
+        } else {
+            prev - new_spot_wad
+        };
+        require!(diff <= band, ParalendError::PriceDeviationExceeded);
+    }
+
+    // Linear EMA with fixed alpha = 10 % (new spot weighted 1/10).
+    // Closed-form: ema_new = (ema_old * 9 + spot) / 10.
+    // Precision note: intermediate u128 can hold prices up to ~3.4e38 so
+    // (ema * 9) fits comfortably for any realistic WAD-scaled price.
+    let ema_new = if cache.ema_price_wad == 0 {
+        new_spot_wad
+    } else {
+        cache
+            .ema_price_wad
+            .checked_mul(9)
+            .ok_or_else(|| error!(ParalendError::MathOverflow))?
+            .checked_add(new_spot_wad)
+            .ok_or_else(|| error!(ParalendError::MathOverflow))?
+            / 10
+    };
+
+    cache.last_spot_wad = new_spot_wad;
+    cache.ema_price_wad = ema_new;
+    cache.last_update_slot = clock.slot;
+    cache.last_update_ts = clock.unix_timestamp;
+
+    emit!(events::PriceAttested {
+        market_id: cache.market_id,
+        spot_wad: new_spot_wad,
+        ema_wad: ema_new,
+        slot: clock.slot,
+    });
+
+    Ok(())
+}
+
+/// Permissionless crank to bump `last_update_ts` without changing the price.
+/// Useful when the attester is briefly offline and a consumer would otherwise
+/// hit the staleness guard. Records current slot but does NOT update the
+/// EMA (no new price info). Rejects if last attested price is > 2×MAX age
+/// (forces a real attestation rather than zombie-keeping-alive).
+#[derive(Accounts)]
+#[instruction(market_id: [u8; 32])]
+pub struct PokePrice<'info> {
+    #[account(
+        mut,
+        seeds = [SEED_PREFIX, SEED_PRICE_CACHE, &market_id],
+        bump = price_cache.bump,
+    )]
+    pub price_cache: Account<'info, PriceCache>,
+}
+
+pub fn handle_poke_price(
+    ctx: Context<PokePrice>,
+    _market_id: [u8; 32],
+) -> Result<()> {
+    let cache = &mut ctx.accounts.price_cache;
+    let clock = Clock::get()?;
+
+    // Only honour pokes if the last attest was within 2× the staleness
+    // threshold — otherwise we'd mask a dead oracle.
+    let since_attest = clock.unix_timestamp.saturating_sub(cache.last_update_ts);
+    require!(
+        since_attest >= 0 && (since_attest as u64) <= MAX_ORACLE_AGE * 2,
+        ParalendError::OraclePriceStale
+    );
+
+    // No change to prices; only refresh slot stamp for observability.
+    cache.last_update_slot = clock.slot;
+    emit!(events::PriceCachePoked {
+        market_id: cache.market_id,
+        slot: clock.slot,
+    });
+
     Ok(())
 }

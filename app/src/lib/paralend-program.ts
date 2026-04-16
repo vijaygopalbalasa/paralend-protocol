@@ -52,7 +52,7 @@ const SEED_MARKET = Buffer.from("market");
 const SEED_POSITION = Buffer.from("position");
 const SEED_COLLATERAL_VAULT = Buffer.from("collateral_vault");
 const SEED_LOAN_VAULT = Buffer.from("loan_vault");
-const SEED_STATIC_ORACLE = Buffer.from("static_oracle");
+const SEED_PRICE_CACHE = Buffer.from("price_cache");
 
 export function getProgramId(): PublicKey {
   return new PublicKey(PROGRAM_ID);
@@ -215,12 +215,12 @@ export function deriveCollateralVaultPDA(
   )[0];
 }
 
-export function deriveStaticOraclePDA(
-  feedId: Buffer,
+export function derivePriceCachePDA(
+  marketId: Buffer,
   programId = getProgramId()
 ): PublicKey {
   return PublicKey.findProgramAddressSync(
-    [SEED_PREFIX, SEED_STATIC_ORACLE, feedId],
+    [SEED_PREFIX, SEED_PRICE_CACHE, marketId],
     programId
   )[0];
 }

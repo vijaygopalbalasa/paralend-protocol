@@ -52,19 +52,30 @@ pub mod paralend {
         instructions::admin::handle_accept_ownership(ctx)
     }
 
-    pub fn create_static_oracle(
-        ctx: Context<CreateStaticOracle>,
-        feed_id: [u8; 32],
+    pub fn register_price_cache(
+        ctx: Context<RegisterPriceCache>,
+        market_id: [u8; 32],
+        attester: Pubkey,
         initial_price_wad: u128,
     ) -> Result<()> {
-        instructions::admin::handle_create_static_oracle(ctx, feed_id, initial_price_wad)
+        instructions::admin::handle_register_price_cache(
+            ctx,
+            market_id,
+            attester,
+            initial_price_wad,
+        )
     }
 
-    pub fn set_static_oracle_price(
-        ctx: Context<SetStaticOraclePrice>,
-        new_price_wad: u128,
+    pub fn attest_price(
+        ctx: Context<AttestPrice>,
+        market_id: [u8; 32],
+        new_spot_wad: u128,
     ) -> Result<()> {
-        instructions::admin::handle_set_static_oracle_price(ctx, new_price_wad)
+        instructions::admin::handle_attest_price(ctx, market_id, new_spot_wad)
+    }
+
+    pub fn poke_price(ctx: Context<PokePrice>, market_id: [u8; 32]) -> Result<()> {
+        instructions::admin::handle_poke_price(ctx, market_id)
     }
 
     pub fn set_fee(ctx: Context<SetFee>, market_id: [u8; 32], fee: u64) -> Result<()> {

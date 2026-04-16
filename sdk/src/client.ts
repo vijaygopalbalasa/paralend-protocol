@@ -26,8 +26,8 @@ import {
   deriveLoanVaultPDA,
   deriveMarketPDA,
   derivePositionPDA,
+  derivePriceCachePDA,
   deriveProtocolStatePDA,
-  deriveStaticOraclePDA,
 } from "./pdas";
 import type { MarketState, PositionState } from "./types";
 import { computeMarketId } from "./math";
@@ -487,27 +487,21 @@ export class ParalendClient {
   /**
    * Build a `withdrawCollateral` instruction.
    *
-   * Withdraws `amount` collateral tokens from the market vault to `receiverCollateralAta`.
-   * Requires oracle accounts for the post-withdrawal health check if the position has debt.
-   *
-   * @param owner               Signer — position owner
-   * @param receiver            Destination for collateral tokens
-   * @param collateralOracle    StaticOracle (or Pyth) PDA for the collateral
-   * @param loanOracle          StaticOracle (or Pyth) PDA for the loan
+   * Withdraws `amount` collateral tokens from the market vault. When the
+   * position carries debt, the on-chain health check reads from the
+   * market's PriceCache PDA (derived automatically).
    */
   async withdrawCollateralIx(params: {
     marketId: Buffer;
     amount: bigint;
     owner: PublicKey;
     receiver: PublicKey;
-    collateralOracle: PublicKey;
-    loanOracle: PublicKey;
   }): Promise<TransactionInstruction> {
-    const { marketId, amount, owner, receiver, collateralOracle, loanOracle } =
-      params;
+    const { marketId, amount, owner, receiver } = params;
     const [marketPda] = deriveMarketPDA(marketId);
     const [positionPda] = derivePositionPDA(marketId, owner);
     const [collateralVaultPda] = deriveCollateralVaultPDA(marketId);
+    const [priceCachePda] = derivePriceCachePDA(marketId);
 
     const market = await this.getMarket(marketId);
     const receiverCollateralAta = getAssociatedTokenAddressSync(
@@ -527,39 +521,31 @@ export class ParalendClient {
         position: positionPda,
         collateralVault: collateralVaultPda,
         receiverCollateralAta,
-        collateralOracle,
-        loanOracle,
+        priceCache: priceCachePda,
         tokenProgram: TOKEN_PROGRAM_ID,
       })
       .instruction();
   }
 
   /**
-   * Build a `borrow` instruction.
+   * Build a `borrow` instruction. The post-borrow health check reads the
+   * market's PriceCache (derived from marketId, not passed by caller).
    *
-   * Borrows `assets` loan tokens into `receiverLoanAta`. Requires collateral
-   * already posted. Post-borrow health check is enforced on-chain.
-   *
-   * @param borrower            Signer — must own the position
-   * @param receiver            Destination for borrowed tokens
-   * @param collateralOracle    Oracle PDA for collateral price
-   * @param loanOracle          Oracle PDA for loan price
-   * @param maxShares           Max debt shares willing to take on (slippage protection, default 0n = no check)
+   * @param maxShares  Max debt shares willing to take on (slippage protection;
+   *                   0n = no check).
    */
   async borrowIx(params: {
     marketId: Buffer;
     assets: bigint;
     borrower: PublicKey;
     receiver: PublicKey;
-    collateralOracle: PublicKey;
-    loanOracle: PublicKey;
     maxShares?: bigint;
   }): Promise<TransactionInstruction> {
-    const { marketId, assets, borrower, receiver, collateralOracle, loanOracle, maxShares = 0n } =
-      params;
+    const { marketId, assets, borrower, receiver, maxShares = 0n } = params;
     const [marketPda] = deriveMarketPDA(marketId);
     const [positionPda] = derivePositionPDA(marketId, borrower);
     const [loanVaultPda] = deriveLoanVaultPDA(marketId);
+    const [priceCachePda] = derivePriceCachePDA(marketId);
 
     const market = await this.getMarket(marketId);
     const receiverLoanAta = getAssociatedTokenAddressSync(
@@ -580,8 +566,7 @@ export class ParalendClient {
         position: positionPda,
         loanVault: loanVaultPda,
         receiverLoanAta,
-        collateralOracle,
-        loanOracle,
+        priceCache: priceCachePda,
         tokenProgram: TOKEN_PROGRAM_ID,
       })
       .instruction();
@@ -657,24 +642,15 @@ export class ParalendClient {
   }
 
   /**
-   * Build a `liquidate` instruction.
+   * Build a `liquidate` instruction. PriceCache is derived from marketId.
    */
   async liquidateIx(params: {
     marketId: Buffer;
     seizedCollateral: bigint;
     liquidator: PublicKey;
     borrower: PublicKey;
-    collateralOracle: PublicKey;
-    loanOracle: PublicKey;
   }): Promise<TransactionInstruction> {
-    const {
-      marketId,
-      seizedCollateral,
-      liquidator,
-      borrower,
-      collateralOracle,
-      loanOracle,
-    } = params;
+    const { marketId, seizedCollateral, liquidator, borrower } = params;
     const [marketPda] = deriveMarketPDA(marketId, this.program.programId);
     const [positionPda] = derivePositionPDA(
       marketId,
@@ -683,6 +659,10 @@ export class ParalendClient {
     );
     const [loanVaultPda] = deriveLoanVaultPDA(marketId, this.program.programId);
     const [collateralVaultPda] = deriveCollateralVaultPDA(
+      marketId,
+      this.program.programId
+    );
+    const [priceCachePda] = derivePriceCachePDA(
       marketId,
       this.program.programId
     );
@@ -711,8 +691,7 @@ export class ParalendClient {
         loanVault: loanVaultPda,
         collateralVault: collateralVaultPda,
         liquidatorCollateralAta,
-        collateralOracle,
-        loanOracle,
+        priceCache: priceCachePda,
         tokenProgram: TOKEN_PROGRAM_ID,
       })
       .instruction();
@@ -819,46 +798,84 @@ export class ParalendClient {
    * Build a `createStaticOracle` instruction.
    * Creates a StaticOracle PDA for testing.
    */
-  async createStaticOracleIx(params: {
+  /**
+   * Build a `registerPriceCache` instruction. Owner-only. Creates the
+   * per-market PriceCache PDA and seeds it with an initial price.
+   */
+  async registerPriceCacheIx(params: {
     payer: PublicKey;
-    feedId: Buffer;
+    marketId: Buffer;
+    attester: PublicKey;
     initialPriceWad: bigint;
-  }): Promise<{ instruction: TransactionInstruction; oraclePda: PublicKey }> {
-    const { payer, feedId, initialPriceWad } = params;
-    const [oraclePda] = deriveStaticOraclePDA(feedId, this.program.programId);
+  }): Promise<{ instruction: TransactionInstruction; priceCachePda: PublicKey }> {
+    const { payer, marketId, attester, initialPriceWad } = params;
+    const [protocolState] = deriveProtocolStatePDA(this.program.programId);
+    const [marketPda] = deriveMarketPDA(marketId, this.program.programId);
+    const [priceCachePda] = derivePriceCachePDA(
+      marketId,
+      this.program.programId
+    );
 
     const instruction = await this.program.methods
-      .createStaticOracle(
-        Array.from(feedId) as unknown as number[] & { length: 32 },
+      .registerPriceCache(
+        Array.from(marketId) as unknown as number[] & { length: 32 },
+        attester,
         bigIntToBN(initialPriceWad)
       )
       .accountsPartial({
         payer,
-        oracle: oraclePda,
+        protocolState,
+        market: marketPda,
+        priceCache: priceCachePda,
         systemProgram: SystemProgram.programId,
       })
       .instruction();
 
-    return { instruction, oraclePda };
+    return { instruction, priceCachePda };
   }
 
   /**
-   * Build a `setStaticOraclePrice` instruction.
-   * Only callable by oracle admin.
+   * Build an `attestPrice` instruction. Signer must be the cache's attester.
    */
-  async setStaticOraclePriceIx(params: {
-    admin: PublicKey;
-    feedId: Buffer;
-    newPriceWad: bigint;
+  async attestPriceIx(params: {
+    attester: PublicKey;
+    marketId: Buffer;
+    newSpotWad: bigint;
   }): Promise<TransactionInstruction> {
-    const { admin, feedId, newPriceWad } = params;
-    const [oraclePda] = deriveStaticOraclePDA(feedId, this.program.programId);
+    const { attester, marketId, newSpotWad } = params;
+    const [priceCachePda] = derivePriceCachePDA(
+      marketId,
+      this.program.programId
+    );
 
     return this.program.methods
-      .setStaticOraclePrice(bigIntToBN(newPriceWad))
+      .attestPrice(
+        Array.from(marketId) as unknown as number[] & { length: 32 },
+        bigIntToBN(newSpotWad)
+      )
       .accountsPartial({
-        admin,
-        oracle: oraclePda,
+        attester,
+        priceCache: priceCachePda,
+      })
+      .instruction();
+  }
+
+  /**
+   * Build a permissionless `pokePrice` instruction (crank slot stamp only).
+   */
+  async pokePriceIx(params: {
+    marketId: Buffer;
+  }): Promise<TransactionInstruction> {
+    const { marketId } = params;
+    const [priceCachePda] = derivePriceCachePDA(
+      marketId,
+      this.program.programId
+    );
+
+    return this.program.methods
+      .pokePrice(Array.from(marketId) as unknown as number[] & { length: 32 })
+      .accountsPartial({
+        priceCache: priceCachePda,
       })
       .instruction();
   }

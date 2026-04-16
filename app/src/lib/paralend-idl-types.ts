@@ -139,6 +139,81 @@ export type Paralend = {
       ]
     },
     {
+      "name": "attestPrice",
+      "discriminator": [
+        47,
+        211,
+        127,
+        29,
+        91,
+        178,
+        117,
+        133
+      ],
+      "accounts": [
+        {
+          "name": "attester",
+          "signer": true
+        },
+        {
+          "name": "priceCache",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  97,
+                  114,
+                  97,
+                  108,
+                  101,
+                  110,
+                  100
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  114,
+                  105,
+                  99,
+                  101,
+                  95,
+                  99,
+                  97,
+                  99,
+                  104,
+                  101
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "marketId"
+              }
+            ]
+          }
+        }
+      ],
+      "args": [
+        {
+          "name": "marketId",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "newSpotWad",
+          "type": "u128"
+        }
+      ]
+    },
+    {
       "name": "borrow",
       "discriminator": [
         228,
@@ -326,16 +401,48 @@ export type Paralend = {
           "writable": true
         },
         {
-          "name": "collateralOracle",
+          "name": "priceCache",
           "docs": [
-            "Collateral price oracle — needed for post-borrow health check"
-          ]
-        },
-        {
-          "name": "loanOracle",
-          "docs": [
-            "Loan price oracle — or stablecoin $1 if market.loan_oracle_feed_id == [0u8; 32]"
-          ]
+            "Collateral PriceCache — EMA of attested Kalshi/DFlow prices. Binds to",
+            "(market_id, collateral_oracle_feed_id) and staleness-checked."
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  97,
+                  114,
+                  97,
+                  108,
+                  101,
+                  110,
+                  100
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  114,
+                  105,
+                  99,
+                  101,
+                  95,
+                  99,
+                  97,
+                  99,
+                  104,
+                  101
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "marketId"
+              }
+            ]
+          }
         },
         {
           "name": "tokenProgram",
@@ -1042,127 +1149,6 @@ export type Paralend = {
       ]
     },
     {
-      "name": "createStaticOracle",
-      "discriminator": [
-        9,
-        14,
-        31,
-        5,
-        192,
-        27,
-        199,
-        170
-      ],
-      "accounts": [
-        {
-          "name": "payer",
-          "writable": true,
-          "signer": true
-        },
-        {
-          "name": "protocolState",
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  112,
-                  97,
-                  114,
-                  97,
-                  108,
-                  101,
-                  110,
-                  100
-                ]
-              },
-              {
-                "kind": "const",
-                "value": [
-                  112,
-                  114,
-                  111,
-                  116,
-                  111,
-                  99,
-                  111,
-                  108,
-                  95,
-                  115,
-                  116,
-                  97,
-                  116,
-                  101
-                ]
-              }
-            ]
-          }
-        },
-        {
-          "name": "oracle",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  112,
-                  97,
-                  114,
-                  97,
-                  108,
-                  101,
-                  110,
-                  100
-                ]
-              },
-              {
-                "kind": "const",
-                "value": [
-                  115,
-                  116,
-                  97,
-                  116,
-                  105,
-                  99,
-                  95,
-                  111,
-                  114,
-                  97,
-                  99,
-                  108,
-                  101
-                ]
-              },
-              {
-                "kind": "arg",
-                "path": "feedId"
-              }
-            ]
-          }
-        },
-        {
-          "name": "systemProgram",
-          "address": "11111111111111111111111111111111"
-        }
-      ],
-      "args": [
-        {
-          "name": "feedId",
-          "type": {
-            "array": [
-              "u8",
-              32
-            ]
-          }
-        },
-        {
-          "name": "initialPriceWad",
-          "type": "u128"
-        }
-      ]
-    },
-    {
       "name": "enableIrm",
       "discriminator": [
         186,
@@ -1581,16 +1567,47 @@ export type Paralend = {
           "writable": true
         },
         {
-          "name": "collateralOracle",
+          "name": "priceCache",
           "docs": [
-            "Collateral price oracle"
-          ]
-        },
-        {
-          "name": "loanOracle",
-          "docs": [
-            "Loan price oracle (or stablecoin $1 if market.loan_oracle_feed_id == [0u8; 32])"
-          ]
+            "Collateral PriceCache (EMA of attested Kalshi/DFlow prices)."
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  97,
+                  114,
+                  97,
+                  108,
+                  101,
+                  110,
+                  100
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  114,
+                  105,
+                  99,
+                  101,
+                  95,
+                  99,
+                  97,
+                  99,
+                  104,
+                  101
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "marketId"
+              }
+            ]
+          }
         },
         {
           "name": "tokenProgram",
@@ -1610,6 +1627,235 @@ export type Paralend = {
         {
           "name": "seizedCollateral",
           "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "pokePrice",
+      "discriminator": [
+        118,
+        36,
+        242,
+        97,
+        231,
+        213,
+        139,
+        144
+      ],
+      "accounts": [
+        {
+          "name": "priceCache",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  97,
+                  114,
+                  97,
+                  108,
+                  101,
+                  110,
+                  100
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  114,
+                  105,
+                  99,
+                  101,
+                  95,
+                  99,
+                  97,
+                  99,
+                  104,
+                  101
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "marketId"
+              }
+            ]
+          }
+        }
+      ],
+      "args": [
+        {
+          "name": "marketId",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "registerPriceCache",
+      "discriminator": [
+        168,
+        197,
+        108,
+        105,
+        242,
+        56,
+        121,
+        30
+      ],
+      "accounts": [
+        {
+          "name": "payer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "protocolState",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  97,
+                  114,
+                  97,
+                  108,
+                  101,
+                  110,
+                  100
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  114,
+                  111,
+                  116,
+                  111,
+                  99,
+                  111,
+                  108,
+                  95,
+                  115,
+                  116,
+                  97,
+                  116,
+                  101
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "market",
+          "docs": [
+            "Market this cache will serve. Binds the cache's feed_id to",
+            "`market.collateral_oracle_feed_id`."
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  97,
+                  114,
+                  97,
+                  108,
+                  101,
+                  110,
+                  100
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  97,
+                  114,
+                  107,
+                  101,
+                  116
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "marketId"
+              }
+            ]
+          }
+        },
+        {
+          "name": "priceCache",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  97,
+                  114,
+                  97,
+                  108,
+                  101,
+                  110,
+                  100
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  114,
+                  105,
+                  99,
+                  101,
+                  95,
+                  99,
+                  97,
+                  99,
+                  104,
+                  101
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "marketId"
+              }
+            ]
+          }
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "marketId",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "attester",
+          "type": "pubkey"
+        },
+        {
+          "name": "initialPriceWad",
+          "type": "u128"
         }
       ]
     },
@@ -1898,35 +2144,6 @@ export type Paralend = {
         {
           "name": "fee",
           "type": "u64"
-        }
-      ]
-    },
-    {
-      "name": "setStaticOraclePrice",
-      "discriminator": [
-        220,
-        43,
-        40,
-        250,
-        125,
-        177,
-        244,
-        157
-      ],
-      "accounts": [
-        {
-          "name": "admin",
-          "signer": true
-        },
-        {
-          "name": "oracle",
-          "writable": true
-        }
-      ],
-      "args": [
-        {
-          "name": "newPriceWad",
-          "type": "u128"
         }
       ]
     },
@@ -2773,19 +2990,48 @@ export type Paralend = {
           "writable": true
         },
         {
-          "name": "collateralOracle",
+          "name": "priceCache",
           "docs": [
-            "Collateral price oracle (StaticOracle for localnet; Pyth on mainnet Day 5)",
-            "Only read if position has debt."
-          ]
-        },
-        {
-          "name": "loanOracle",
-          "docs": [
-            "Loan price oracle (StaticOracle for localnet; Pyth on mainnet Day 5)",
-            "Only read if position has debt AND market.loan_oracle_feed_id != [0u8; 32].",
-            "For stablecoin loan markets (loan_oracle_feed_id = [0u8; 32]), price = $1/full_token."
-          ]
+            "Collateral PriceCache (EMA of attested Kalshi/DFlow prices).",
+            "Only consumed if the position has outstanding debt."
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  97,
+                  114,
+                  97,
+                  108,
+                  101,
+                  110,
+                  100
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  114,
+                  105,
+                  99,
+                  101,
+                  95,
+                  99,
+                  97,
+                  99,
+                  104,
+                  101
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "marketId"
+              }
+            ]
+          }
         },
         {
           "name": "tokenProgram",
@@ -2850,6 +3096,19 @@ export type Paralend = {
       ]
     },
     {
+      "name": "priceCache",
+      "discriminator": [
+        198,
+        211,
+        186,
+        101,
+        228,
+        22,
+        101,
+        190
+      ]
+    },
+    {
       "name": "protocolState",
       "discriminator": [
         33,
@@ -2860,19 +3119,6 @@ export type Paralend = {
         140,
         195,
         248
-      ]
-    },
-    {
-      "name": "staticOracle",
-      "discriminator": [
-        175,
-        136,
-        24,
-        165,
-        2,
-        52,
-        163,
-        211
       ]
     }
   ],
@@ -3018,6 +3264,45 @@ export type Paralend = {
         64,
         235,
         29
+      ]
+    },
+    {
+      "name": "priceAttested",
+      "discriminator": [
+        211,
+        56,
+        224,
+        100,
+        215,
+        82,
+        198,
+        184
+      ]
+    },
+    {
+      "name": "priceCachePoked",
+      "discriminator": [
+        82,
+        125,
+        198,
+        18,
+        104,
+        96,
+        17,
+        162
+      ]
+    },
+    {
+      "name": "priceCacheRegistered",
+      "discriminator": [
+        61,
+        164,
+        107,
+        5,
+        230,
+        196,
+        230,
+        140
       ]
     },
     {
@@ -3855,6 +4140,198 @@ export type Paralend = {
       }
     },
     {
+      "name": "priceAttested",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "marketId",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "spotWad",
+            "type": "u128"
+          },
+          {
+            "name": "emaWad",
+            "type": "u128"
+          },
+          {
+            "name": "slot",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "priceCache",
+      "docs": [
+        "Crank-attested price cache for a market's collateral mint.",
+        "",
+        "One PriceCache exists per Paralend market. A permissioned off-chain",
+        "attester (typically a daemon reading the Kalshi REST API) pushes recent",
+        "spot prices via `attest_price`. Each attestation is:",
+        "1. deviation-checked against the previous EMA (reject if > 5%)",
+        "2. folded into an exponentially-weighted moving average",
+        "3. timestamped for staleness checks on reads",
+        "",
+        "Consumers (borrow, withdraw_collateral, liquidate) read `ema_price_wad`",
+        "and reject if `last_update_ts` is older than `MAX_ORACLE_AGE` seconds.",
+        "",
+        "Price convention (unchanged from v1):",
+        "price_wad = USD per **base unit** of collateral, WAD-scaled (1e18)",
+        "",
+        "Example: Kalshi YES token at $0.42 (6 decimals) →",
+        "price_wad = 0.42 * 1e18 / 1e6 = 420_000_000_000"
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "bump",
+            "docs": [
+              "PDA bump seed."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "marketId",
+            "docs": [
+              "Which market this cache covers (32-byte market_id)."
+            ],
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "feedId",
+            "docs": [
+              "Kalshi/DFlow feed identifier — must match `market.collateral_oracle_feed_id`."
+            ],
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "attester",
+            "docs": [
+              "Only this key can push new spot prices via `attest_price`.",
+              "For MVP this is a single keypair or multisig; v2 moves to an",
+              "on-chain DFlow CLP TWAP that needs no attester."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "emaPriceWad",
+            "docs": [
+              "Exponentially-weighted moving average price, WAD-scaled.",
+              "Consumers read this field."
+            ],
+            "type": "u128"
+          },
+          {
+            "name": "lastSpotWad",
+            "docs": [
+              "Last attested spot, kept for deviation bounding on the next attestation."
+            ],
+            "type": "u128"
+          },
+          {
+            "name": "lastUpdateSlot",
+            "docs": [
+              "Slot of the last attestation (0 before first push)."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "lastUpdateTs",
+            "docs": [
+              "Unix timestamp of the last attestation (used for staleness checks)."
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "reserved",
+            "docs": [
+              "Reserved for future fields (alpha, hysteresis, etc.)."
+            ],
+            "type": {
+              "array": [
+                "u8",
+                64
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "priceCachePoked",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "marketId",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "slot",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "priceCacheRegistered",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "marketId",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "feedId",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "attester",
+            "type": "pubkey"
+          },
+          {
+            "name": "initialPriceWad",
+            "type": "u128"
+          }
+        ]
+      }
+    },
+    {
       "name": "protocolInitialized",
       "type": {
         "kind": "struct",
@@ -3999,68 +4476,6 @@ export type Paralend = {
           {
             "name": "shares",
             "type": "u128"
-          }
-        ]
-      }
-    },
-    {
-      "name": "staticOracle",
-      "docs": [
-        "Static oracle account for localnet testing and devnet demos.",
-        "",
-        "On mainnet, oracle prices come from Pyth PriceUpdateV2 accounts (Day 5).",
-        "This account lets us set arbitrary prices in tests and stage liquidation scenarios.",
-        "",
-        "Price convention:",
-        "price_wad = USD value per **base unit** (smallest denomination), WAD-scaled (1e18)",
-        "",
-        "Examples:",
-        "SOL at $140, 9 decimals → price_wad = 140 * 1e18 / 1e9 = 140_000_000_000",
-        "USDC at $1,  6 decimals → price_wad = 1   * 1e18 / 1e6 = 1_000_000_000_000",
-        "BTC at $95k, 8 decimals → price_wad = 95_000 * 1e18 / 1e8 = 950_000_000_000_000"
-      ],
-      "type": {
-        "kind": "struct",
-        "fields": [
-          {
-            "name": "bump",
-            "docs": [
-              "PDA bump seed"
-            ],
-            "type": "u8"
-          },
-          {
-            "name": "feedId",
-            "docs": [
-              "Feed ID — must match market.collateral_oracle_feed_id or loan_oracle_feed_id"
-            ],
-            "type": {
-              "array": [
-                "u8",
-                32
-              ]
-            }
-          },
-          {
-            "name": "priceWad",
-            "docs": [
-              "USD price per base unit, WAD-scaled"
-            ],
-            "type": "u128"
-          },
-          {
-            "name": "admin",
-            "docs": [
-              "Only this account can update the price"
-            ],
-            "type": "pubkey"
-          },
-          {
-            "name": "lastUpdate",
-            "docs": [
-              "Unix timestamp of last price update (for staleness checks)"
-            ],
-            "type": "i64"
           }
         ]
       }
