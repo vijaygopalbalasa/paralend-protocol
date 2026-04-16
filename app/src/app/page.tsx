@@ -32,33 +32,39 @@ export default async function HomePage() {
           </span>
 
           <h1 className="max-w-3xl text-5xl sm:text-6xl md:text-7xl font-black tracking-tight text-paralend-text-primary leading-tight">
-            Permissionless <span className="text-paralend-primary underline decoration-4 underline-offset-4 decoration-paralend-border">Lending</span>{" "}
-            on Solana
+            Borrow USDC against your{" "}
+            <span className="text-paralend-primary underline decoration-4 underline-offset-4 decoration-paralend-border">
+              Kalshi
+            </span>{" "}
+            positions
           </h1>
 
           <p className="max-w-xl text-lg sm:text-xl text-paralend-text-secondary leading-relaxed font-medium">
-            Create any isolated lending market in one transaction. No token listing
-            committee. No governance delay. Just deterministic market creation and
-            immutable risk parameters.
+            The first credit layer for tokenized prediction markets on
+            Solana. Deposit YES/NO shares as collateral, borrow against
+            them, keep the upside of the event while your capital works
+            elsewhere.
           </p>
 
           <div className="flex flex-col sm:flex-row gap-4 mt-4">
             <Link href="/markets">
               <Button size="lg" variant="primary" className="px-8 text-lg hover:-translate-y-0.5">
-                Launch App
+                Explore Markets
               </Button>
             </Link>
-            <Link href="/create">
+            <Link href="/positions">
               <Button size="lg" variant="secondary" className="px-8 text-lg hover:-translate-y-0.5">
-                Create Market
+                My Positions
               </Button>
             </Link>
           </div>
 
           <p className="text-sm text-paralend-text-secondary mt-4 font-medium">
-            Inspired by{" "}
-            <span className="text-paralend-text-primary font-bold">Morpho Blue</span>
-            {" "}— zero equivalent on Solana. Until now.
+            Powered by{" "}
+            <span className="text-paralend-text-primary font-bold">Kalshi</span>
+            {" "}tokenized contracts via{" "}
+            <span className="text-paralend-text-primary font-bold">DFlow</span>
+            {" "}— $20B prediction-market collateral, 0% borrowable. Until now.
           </p>
         </div>
       </section>
@@ -82,11 +88,13 @@ export default async function HomePage() {
       <section className="flex flex-col gap-10 mt-12 bg-white rounded-2xl border border-paralend-border p-8 sm:p-12 shadow-sm">
         <div className="text-center">
           <h2 className="text-3xl sm:text-4xl font-black text-paralend-text-primary tracking-tight">
-            While Kamino curates.{" "}
-            <span className="text-paralend-primary">Paralend creates.</span>
+            Kamino lends against liquid staking.{" "}
+            <span className="text-paralend-primary">
+              Paralend lends against events.
+            </span>
           </h2>
           <p className="mt-3 text-paralend-text-secondary text-lg font-medium">
-            The same difference as Compound vs Morpho.
+            Kalshi's $11B/mo of tokenized positions, finally productive capital.
           </p>
         </div>
 
@@ -98,7 +106,7 @@ export default async function HomePage() {
                 <th className="text-center py-4 px-6 text-paralend-text-secondary font-bold">
                   <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-md bg-white border border-paralend-border shadow-sm">
                     <span className="h-2 w-2 rounded-full bg-paralend-yellow" />
-                    Kamino V2
+                    Kamino / Jup Lend
                   </div>
                 </th>
                 <th className="text-center py-4 px-6">
@@ -112,34 +120,34 @@ export default async function HomePage() {
             <tbody className="divide-y divide-paralend-border">
               {[
                 {
-                  label: "Who creates markets",
-                  kamino: "Team only",
-                  paralend: "Anyone",
+                  label: "Collateral type",
+                  kamino: "LSTs, stables, majors",
+                  paralend: "Kalshi YES / NO tokens",
                 },
                 {
-                  label: "Admin key required",
-                  kamino: "Yes",
-                  paralend: "No",
+                  label: "Valuation curve",
+                  kamino: "Static LLTV",
+                  paralend: "Time-decay to resolution",
                 },
                 {
-                  label: "Time to list new token",
-                  kamino: "Weeks",
-                  paralend: "30 seconds",
+                  label: "Handles binary outcomes",
+                  kamino: "No",
+                  paralend: "Force-close + auto-settle",
                 },
                 {
-                  label: "Market address",
-                  kamino: "Assigned by team",
-                  paralend: "keccak256 of params",
+                  label: "Event-market TAM on Solana",
+                  kamino: "n/a",
+                  paralend: "$20B+ untapped",
                 },
                 {
-                  label: "Pause/upgrade risk",
-                  kamino: "Yes — admin controlled",
-                  paralend: "None — immutable",
+                  label: "Oracle dependency",
+                  kamino: "Pyth / Switchboard",
+                  paralend: "DFlow CLP + attester EMA",
                 },
                 {
-                  label: "Governance",
-                  kamino: "Multisig",
-                  paralend: "None needed",
+                  label: "What happens at resolution",
+                  kamino: "n/a",
+                  paralend: "Winners redeem 1:1, losers socialised",
                 },
               ].map((row) => (
                 <tr
@@ -164,26 +172,26 @@ export default async function HomePage() {
 
       <section className="flex flex-col gap-10 mt-12 bg-white rounded-2xl border border-paralend-border p-8 sm:p-12 shadow-sm">
         <h2 className="text-3xl font-black text-paralend-text-primary text-center tracking-tight">
-          Three actions. One protocol.
+          Three steps. One capital-efficient bet.
         </h2>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
           {[
             {
               step: "01",
-              title: "Create a Market",
-              body: "Pick any collateral, any loan token, set an LLTV and IRM. One transaction. The market address is deterministic — derived from your 5 parameters.",
-              cta: { label: "Create Market", href: "/create" },
+              title: "Deposit a Kalshi position",
+              body: "Bring YES or NO tokens from a Kalshi market on Solana (via DFlow). They stay as collateral on Paralend until you repay — the upside of the event is still yours.",
+              cta: { label: "Explore Markets", href: "/markets" },
             },
             {
               step: "02",
-              title: "Supply or Borrow",
-              body: "Supply loan tokens to earn yield. Post collateral and borrow against it. Interest accrues lazily on every interaction — no crank required.",
-              cta: { label: "Browse Markets", href: "/markets" },
+              title: "Borrow USDC",
+              body: "Borrow against your position at a time-aware LLTV. The safety margin tightens as resolution approaches — no silent liquidations, no surprises.",
+              cta: { label: "Open a Position", href: "/markets" },
             },
             {
               step: "03",
-              title: "Manage Risk",
-              body: "Monitor health factors across all your positions. Liquidators earn a bonus up to 15% for keeping the protocol solvent. Bad debt is socialized.",
+              title: "Repay or redeem",
+              body: "Repay any time before the force-close window. When the market resolves, winners redeem 1:1 for USDC through DFlow; losers' debt is socialised across lenders.",
               cta: { label: "My Positions", href: "/positions" },
             },
           ].map((card) => (
