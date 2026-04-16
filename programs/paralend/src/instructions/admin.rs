@@ -6,10 +6,15 @@ use crate::events;
 use crate::state::oracle::StaticOracle;
 use crate::state::protocol::ProtocolState;
 
-/// Initialize the protocol singleton
+/// Initialize the protocol singleton.
+/// The `payer` must equal the desired `owner`. This prevents a front-run
+/// where an attacker races the deployer's init tx and hijacks permanent
+/// protocol ownership.
 #[derive(Accounts)]
+#[instruction(owner: Pubkey, _fee_recipient: Pubkey)]
 pub struct InitializeProtocol<'info> {
-    #[account(mut)]
+    /// Payer must match the owner argument (enforced in handler).
+    #[account(mut, constraint = payer.key() == owner @ ParalendError::Unauthorized)]
     pub payer: Signer<'info>,
 
     #[account(
@@ -29,6 +34,14 @@ pub fn handle_initialize_protocol(
     owner: Pubkey,
     fee_recipient: Pubkey,
 ) -> Result<()> {
+    // Defensive: account constraint already enforces this, but the handler
+    // asserts invariant so any constraint change can't silently break it.
+    require_keys_eq!(
+        ctx.accounts.payer.key(),
+        owner,
+        ParalendError::Unauthorized
+    );
+
     let state = &mut ctx.accounts.protocol_state;
     state.bump = ctx.bumps.protocol_state;
     state.owner = owner;
@@ -45,6 +58,68 @@ pub fn handle_initialize_protocol(
     emit!(events::ProtocolInitialized {
         owner,
         fee_recipient,
+    });
+
+    Ok(())
+}
+
+// ─── Two-step ownership transfer ─────────────────────────────────────────────
+
+/// Current owner proposes a new owner. Does not change ownership; only sets
+/// `pending_owner`. The new owner must call `accept_ownership` to finalize.
+/// Passing `new_owner = Pubkey::default()` cancels any pending transfer.
+#[derive(Accounts)]
+pub struct TransferOwnership<'info> {
+    pub owner: Signer<'info>,
+
+    #[account(
+        mut,
+        seeds = [SEED_PREFIX, SEED_PROTOCOL],
+        bump = protocol_state.bump,
+        constraint = protocol_state.owner == owner.key() @ ParalendError::Unauthorized,
+    )]
+    pub protocol_state: Account<'info, ProtocolState>,
+}
+
+pub fn handle_transfer_ownership(
+    ctx: Context<TransferOwnership>,
+    new_owner: Pubkey,
+) -> Result<()> {
+    let state = &mut ctx.accounts.protocol_state;
+    state.pending_owner = new_owner;
+
+    emit!(events::OwnershipTransferInitiated {
+        old_owner: state.owner,
+        pending_owner: new_owner,
+    });
+
+    Ok(())
+}
+
+/// Pending owner accepts the transfer. Swaps `owner` and clears `pending_owner`.
+#[derive(Accounts)]
+pub struct AcceptOwnership<'info> {
+    pub pending_owner: Signer<'info>,
+
+    #[account(
+        mut,
+        seeds = [SEED_PREFIX, SEED_PROTOCOL],
+        bump = protocol_state.bump,
+        constraint = protocol_state.pending_owner == pending_owner.key() @ ParalendError::Unauthorized,
+    )]
+    pub protocol_state: Account<'info, ProtocolState>,
+}
+
+pub fn handle_accept_ownership(ctx: Context<AcceptOwnership>) -> Result<()> {
+    let state = &mut ctx.accounts.protocol_state;
+    let old_owner = state.owner;
+    let new_owner = state.pending_owner;
+    state.owner = new_owner;
+    state.pending_owner = Pubkey::default();
+
+    emit!(events::OwnershipTransferAccepted {
+        old_owner,
+        new_owner,
     });
 
     Ok(())
@@ -147,16 +222,24 @@ pub fn handle_set_fee(ctx: Context<SetFee>, _market_id: [u8; 32], fee: u64) -> R
     Ok(())
 }
 
-// ─── Static Oracle (localnet/devnet testing) ─────────────────────────────────
+// ─── Static Oracle (interim until PriceCache lands) ───────────────────────────
 
-/// Create a StaticOracle PDA for a given feed_id.
-/// Anyone can create an oracle — used for localnet testing and devnet demos.
-/// On mainnet, use Pyth PriceUpdateV2 accounts instead.
+/// Create a StaticOracle PDA. Owner-gated to prevent the permissionless-oracle
+/// critical (attacker becomes price admin). Will be replaced by the crank-
+/// attested PriceCache oracle in a follow-up commit; kept here to preserve
+/// test coverage during the migration.
 #[derive(Accounts)]
 #[instruction(feed_id: [u8; 32])]
 pub struct CreateStaticOracle<'info> {
     #[account(mut)]
     pub payer: Signer<'info>,
+
+    #[account(
+        seeds = [SEED_PREFIX, SEED_PROTOCOL],
+        bump = protocol_state.bump,
+        constraint = protocol_state.owner == payer.key() @ ParalendError::Unauthorized,
+    )]
+    pub protocol_state: Account<'info, ProtocolState>,
 
     #[account(
         init,

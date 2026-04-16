@@ -101,3 +101,15 @@ pub struct FeesClaimed {
     pub fee_recipient: Pubkey,
     pub shares: u128,
 }
+
+#[event]
+pub struct OwnershipTransferInitiated {
+    pub old_owner: Pubkey,
+    pub pending_owner: Pubkey,
+}
+
+#[event]
+pub struct OwnershipTransferAccepted {
+    pub old_owner: Pubkey,
+    pub new_owner: Pubkey,
+}

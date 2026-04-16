@@ -41,6 +41,17 @@ pub mod paralend {
         instructions::admin::handle_enable_irm(ctx, irm)
     }
 
+    pub fn transfer_ownership(
+        ctx: Context<TransferOwnership>,
+        new_owner: Pubkey,
+    ) -> Result<()> {
+        instructions::admin::handle_transfer_ownership(ctx, new_owner)
+    }
+
+    pub fn accept_ownership(ctx: Context<AcceptOwnership>) -> Result<()> {
+        instructions::admin::handle_accept_ownership(ctx)
+    }
+
     pub fn create_static_oracle(
         ctx: Context<CreateStaticOracle>,
         feed_id: [u8; 32],

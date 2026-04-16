@@ -10,6 +10,7 @@ use crate::state::irm::LinearIrm;
 use crate::state::market::Market;
 use crate::state::oracle::StaticOracle;
 use crate::state::position::Position;
+use crate::state::protocol::ProtocolState;
 
 // ─── Supply Collateral ────────────────────────────────────────────────────────
 
@@ -19,10 +20,20 @@ pub struct SupplyCollateral<'info> {
     #[account(mut)]
     pub depositor: Signer<'info>,
 
-    /// Market account (read-only for pause check; collateral ops work even when paused)
+    /// Protocol state — blocks deposits when globally paused.
+    #[account(
+        seeds = [SEED_PREFIX, SEED_PROTOCOL],
+        bump = protocol_state.bump,
+        constraint = !protocol_state.paused @ ParalendError::ProtocolPaused,
+    )]
+    pub protocol_state: Account<'info, ProtocolState>,
+
+    /// Market account — blocks deposits on paused or resolved markets.
     #[account(
         seeds = [SEED_PREFIX, SEED_MARKET, &market_id],
         bump = market.bump,
+        constraint = !market.paused @ ParalendError::MarketPaused,
+        constraint = market.market_status == 0 @ ParalendError::MarketNotActive,
     )]
     pub market: Account<'info, Market>,
 
@@ -62,6 +73,19 @@ pub fn handle_supply_collateral(
 ) -> Result<()> {
     require!(amount > 0, ParalendError::ZeroAmount);
 
+    // CEI: Effect (state update) BEFORE Interaction (token transfer).
+    // Prior order was inverted; kept safe on classic SPL only because that
+    // token program has no hooks. Ordering like this lets us safely adopt
+    // Token-2022 later without re-opening the reentrancy window.
+    let position = &mut ctx.accounts.position;
+    position.collateral = position
+        .collateral
+        .checked_add(amount as u128)
+        .ok_or_else(|| error!(ParalendError::MathOverflow))?;
+
+    let market_id_copy = position.market_id;
+    let depositor_key = ctx.accounts.depositor.key();
+
     // Transfer collateral from depositor to vault
     token::transfer(
         CpiContext::new(
@@ -75,17 +99,10 @@ pub fn handle_supply_collateral(
         amount,
     )?;
 
-    // Update position
-    let position = &mut ctx.accounts.position;
-    position.collateral = position
-        .collateral
-        .checked_add(amount as u128)
-        .ok_or_else(|| error!(ParalendError::MathOverflow))?;
-
     emit!(events::CollateralSupplied {
-        market_id: position.market_id,
-        depositor: ctx.accounts.depositor.key(),
-        on_behalf_of: ctx.accounts.depositor.key(),
+        market_id: market_id_copy,
+        depositor: depositor_key,
+        on_behalf_of: depositor_key,
         amount: amount as u128,
     });
 

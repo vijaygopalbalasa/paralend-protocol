@@ -8,6 +8,66 @@
   },
   "instructions": [
     {
+      "name": "accept_ownership",
+      "discriminator": [
+        172,
+        23,
+        43,
+        13,
+        238,
+        213,
+        85,
+        150
+      ],
+      "accounts": [
+        {
+          "name": "pending_owner",
+          "signer": true
+        },
+        {
+          "name": "protocol_state",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  97,
+                  114,
+                  97,
+                  108,
+                  101,
+                  110,
+                  100
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  114,
+                  111,
+                  116,
+                  111,
+                  99,
+                  111,
+                  108,
+                  95,
+                  115,
+                  116,
+                  97,
+                  116,
+                  101
+                ]
+              }
+            ]
+          }
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "accrue_interest",
       "discriminator": [
         47,
@@ -994,6 +1054,45 @@
           "signer": true
         },
         {
+          "name": "protocol_state",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  97,
+                  114,
+                  97,
+                  108,
+                  101,
+                  110,
+                  100
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  114,
+                  111,
+                  116,
+                  111,
+                  99,
+                  111,
+                  108,
+                  95,
+                  115,
+                  116,
+                  97,
+                  116,
+                  101
+                ]
+              }
+            ]
+          }
+        },
+        {
           "name": "oracle",
           "writable": true,
           "pda": {
@@ -1202,6 +1301,9 @@
       "accounts": [
         {
           "name": "payer",
+          "docs": [
+            "Payer must match the owner argument (enforced in handler)."
+          ],
           "writable": true,
           "signer": true
         },
@@ -2054,9 +2156,51 @@
           "signer": true
         },
         {
+          "name": "protocol_state",
+          "docs": [
+            "Protocol state — blocks deposits when globally paused."
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  97,
+                  114,
+                  97,
+                  108,
+                  101,
+                  110,
+                  100
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  114,
+                  111,
+                  116,
+                  111,
+                  99,
+                  111,
+                  108,
+                  95,
+                  115,
+                  116,
+                  97,
+                  116,
+                  101
+                ]
+              }
+            ]
+          }
+        },
+        {
           "name": "market",
           "docs": [
-            "Market account (read-only for pause check; collateral ops work even when paused)"
+            "Market account — blocks deposits on paused or resolved markets."
           ],
           "pda": {
             "seeds": [
@@ -2210,6 +2354,71 @@
         {
           "name": "amount",
           "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "transfer_ownership",
+      "discriminator": [
+        65,
+        177,
+        215,
+        73,
+        53,
+        45,
+        99,
+        47
+      ],
+      "accounts": [
+        {
+          "name": "owner",
+          "signer": true
+        },
+        {
+          "name": "protocol_state",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  97,
+                  114,
+                  97,
+                  108,
+                  101,
+                  110,
+                  100
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  114,
+                  111,
+                  116,
+                  111,
+                  99,
+                  111,
+                  108,
+                  95,
+                  115,
+                  116,
+                  97,
+                  116,
+                  101
+                ]
+              }
+            ]
+          }
+        }
+      ],
+      "args": [
+        {
+          "name": "new_owner",
+          "type": "pubkey"
         }
       ]
     },
@@ -2777,6 +2986,32 @@
         84,
         6,
         58
+      ]
+    },
+    {
+      "name": "OwnershipTransferAccepted",
+      "discriminator": [
+        170,
+        218,
+        124,
+        19,
+        70,
+        121,
+        99,
+        8
+      ]
+    },
+    {
+      "name": "OwnershipTransferInitiated",
+      "discriminator": [
+        181,
+        32,
+        40,
+        60,
+        60,
+        64,
+        235,
+        29
       ]
     },
     {
@@ -3510,6 +3745,38 @@
           {
             "name": "lltv",
             "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "OwnershipTransferAccepted",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "old_owner",
+            "type": "pubkey"
+          },
+          {
+            "name": "new_owner",
+            "type": "pubkey"
+          }
+        ]
+      }
+    },
+    {
+      "name": "OwnershipTransferInitiated",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "old_owner",
+            "type": "pubkey"
+          },
+          {
+            "name": "pending_owner",
+            "type": "pubkey"
           }
         ]
       }

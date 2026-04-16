@@ -14,6 +14,66 @@ export type Paralend = {
   },
   "instructions": [
     {
+      "name": "acceptOwnership",
+      "discriminator": [
+        172,
+        23,
+        43,
+        13,
+        238,
+        213,
+        85,
+        150
+      ],
+      "accounts": [
+        {
+          "name": "pendingOwner",
+          "signer": true
+        },
+        {
+          "name": "protocolState",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  97,
+                  114,
+                  97,
+                  108,
+                  101,
+                  110,
+                  100
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  114,
+                  111,
+                  116,
+                  111,
+                  99,
+                  111,
+                  108,
+                  95,
+                  115,
+                  116,
+                  97,
+                  116,
+                  101
+                ]
+              }
+            ]
+          }
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "accrueInterest",
       "discriminator": [
         47,
@@ -1000,6 +1060,45 @@ export type Paralend = {
           "signer": true
         },
         {
+          "name": "protocolState",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  97,
+                  114,
+                  97,
+                  108,
+                  101,
+                  110,
+                  100
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  114,
+                  111,
+                  116,
+                  111,
+                  99,
+                  111,
+                  108,
+                  95,
+                  115,
+                  116,
+                  97,
+                  116,
+                  101
+                ]
+              }
+            ]
+          }
+        },
+        {
           "name": "oracle",
           "writable": true,
           "pda": {
@@ -1208,6 +1307,9 @@ export type Paralend = {
       "accounts": [
         {
           "name": "payer",
+          "docs": [
+            "Payer must match the owner argument (enforced in handler)."
+          ],
           "writable": true,
           "signer": true
         },
@@ -2060,9 +2162,51 @@ export type Paralend = {
           "signer": true
         },
         {
+          "name": "protocolState",
+          "docs": [
+            "Protocol state — blocks deposits when globally paused."
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  97,
+                  114,
+                  97,
+                  108,
+                  101,
+                  110,
+                  100
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  114,
+                  111,
+                  116,
+                  111,
+                  99,
+                  111,
+                  108,
+                  95,
+                  115,
+                  116,
+                  97,
+                  116,
+                  101
+                ]
+              }
+            ]
+          }
+        },
+        {
           "name": "market",
           "docs": [
-            "Market account (read-only for pause check; collateral ops work even when paused)"
+            "Market account — blocks deposits on paused or resolved markets."
           ],
           "pda": {
             "seeds": [
@@ -2216,6 +2360,71 @@ export type Paralend = {
         {
           "name": "amount",
           "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "transferOwnership",
+      "discriminator": [
+        65,
+        177,
+        215,
+        73,
+        53,
+        45,
+        99,
+        47
+      ],
+      "accounts": [
+        {
+          "name": "owner",
+          "signer": true
+        },
+        {
+          "name": "protocolState",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  97,
+                  114,
+                  97,
+                  108,
+                  101,
+                  110,
+                  100
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  114,
+                  111,
+                  116,
+                  111,
+                  99,
+                  111,
+                  108,
+                  95,
+                  115,
+                  116,
+                  97,
+                  116,
+                  101
+                ]
+              }
+            ]
+          }
+        }
+      ],
+      "args": [
+        {
+          "name": "newOwner",
+          "type": "pubkey"
         }
       ]
     },
@@ -2783,6 +2992,32 @@ export type Paralend = {
         84,
         6,
         58
+      ]
+    },
+    {
+      "name": "ownershipTransferAccepted",
+      "discriminator": [
+        170,
+        218,
+        124,
+        19,
+        70,
+        121,
+        99,
+        8
+      ]
+    },
+    {
+      "name": "ownershipTransferInitiated",
+      "discriminator": [
+        181,
+        32,
+        40,
+        60,
+        60,
+        64,
+        235,
+        29
       ]
     },
     {
@@ -3516,6 +3751,38 @@ export type Paralend = {
           {
             "name": "lltv",
             "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ownershipTransferAccepted",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "oldOwner",
+            "type": "pubkey"
+          },
+          {
+            "name": "newOwner",
+            "type": "pubkey"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ownershipTransferInitiated",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "oldOwner",
+            "type": "pubkey"
+          },
+          {
+            "name": "pendingOwner",
+            "type": "pubkey"
           }
         ]
       }
