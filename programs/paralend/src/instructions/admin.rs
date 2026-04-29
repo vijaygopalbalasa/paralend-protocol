@@ -37,11 +37,7 @@ pub fn handle_initialize_protocol(
 ) -> Result<()> {
     // Defensive: account constraint already enforces this, but the handler
     // asserts invariant so any constraint change can't silently break it.
-    require_keys_eq!(
-        ctx.accounts.payer.key(),
-        owner,
-        ParalendError::Unauthorized
-    );
+    require_keys_eq!(ctx.accounts.payer.key(), owner, ParalendError::Unauthorized);
 
     let state = &mut ctx.accounts.protocol_state;
     state.bump = ctx.bumps.protocol_state;
@@ -82,10 +78,7 @@ pub struct TransferOwnership<'info> {
     pub protocol_state: Account<'info, ProtocolState>,
 }
 
-pub fn handle_transfer_ownership(
-    ctx: Context<TransferOwnership>,
-    new_owner: Pubkey,
-) -> Result<()> {
+pub fn handle_transfer_ownership(ctx: Context<TransferOwnership>, new_owner: Pubkey) -> Result<()> {
     let state = &mut ctx.accounts.protocol_state;
     state.pending_owner = new_owner;
 
@@ -269,10 +262,7 @@ pub fn handle_register_price_cache(
     attester: Pubkey,
     initial_price_wad: u128,
 ) -> Result<()> {
-    require!(
-        initial_price_wad > 0,
-        ParalendError::OraclePriceNonPositive
-    );
+    require!(initial_price_wad > 0, ParalendError::OraclePriceNonPositive);
     require!(
         attester != Pubkey::default(),
         ParalendError::AttesterNotAuthorized
@@ -329,6 +319,12 @@ pub struct AttestPrice<'info> {
     pub attester: Signer<'info>,
 
     #[account(
+        seeds = [SEED_PREFIX, SEED_MARKET, &market_id],
+        bump = market.bump,
+    )]
+    pub market: Account<'info, Market>,
+
+    #[account(
         mut,
         seeds = [SEED_PREFIX, SEED_PRICE_CACHE, &market_id],
         bump = price_cache.bump,
@@ -339,16 +335,38 @@ pub struct AttestPrice<'info> {
 
 pub fn handle_attest_price(
     ctx: Context<AttestPrice>,
-    _market_id: [u8; 32],
+    market_id: [u8; 32],
     new_spot_wad: u128,
 ) -> Result<()> {
-    require!(
-        new_spot_wad > 0,
-        ParalendError::OraclePriceNonPositive
-    );
+    require!(new_spot_wad > 0, ParalendError::OraclePriceNonPositive);
 
+    let market = &ctx.accounts.market;
     let cache = &mut ctx.accounts.price_cache;
     let clock = Clock::get()?;
+
+    require!(
+        cache.market_id == market_id,
+        ParalendError::OracleFeedMismatch
+    );
+    require!(
+        cache.feed_id == market.collateral_oracle_feed_id,
+        ParalendError::OracleFeedMismatch
+    );
+
+    // Binary YES/NO collateral is bounded at $1 per whole token. Enforcing
+    // this at every attestation prevents a compromised attester from slowly
+    // walking the EMA above the maximum redeemable value while staying inside
+    // the per-tick deviation band.
+    let decimals_factor = 10u128
+        .checked_pow(market.collateral_decimals as u32)
+        .ok_or_else(|| error!(ParalendError::MathOverflow))?;
+    let max_binary_price_per_base_unit = WAD
+        .checked_div(decimals_factor)
+        .ok_or_else(|| error!(ParalendError::DivisionByZero))?;
+    require!(
+        new_spot_wad <= max_binary_price_per_base_unit,
+        ParalendError::PriceDeviationExceeded
+    );
 
     // Deviation check bound against BOTH `last_spot_wad` AND `ema_price_wad`.
     // Prior code only checked vs last_spot, which let a malicious attester
@@ -408,11 +426,11 @@ pub fn handle_attest_price(
     Ok(())
 }
 
-/// Permissionless crank to bump `last_update_ts` without changing the price.
-/// Useful when the attester is briefly offline and a consumer would otherwise
-/// hit the staleness guard. Records current slot but does NOT update the
-/// EMA (no new price info). Rejects if last attested price is > 2×MAX age
-/// (forces a real attestation rather than zombie-keeping-alive).
+/// Permissionless no-op crank for indexers.
+///
+/// This deliberately does NOT refresh `last_update_ts`. Oracle freshness must
+/// come from a real attester signature via `attest_price`; otherwise anyone
+/// could keep a stale EMA alive forever by repeatedly poking the cache.
 #[derive(Accounts)]
 #[instruction(market_id: [u8; 32])]
 pub struct PokePrice<'info> {
@@ -424,28 +442,17 @@ pub struct PokePrice<'info> {
     pub price_cache: Account<'info, PriceCache>,
 }
 
-pub fn handle_poke_price(
-    ctx: Context<PokePrice>,
-    _market_id: [u8; 32],
-) -> Result<()> {
+pub fn handle_poke_price(ctx: Context<PokePrice>, _market_id: [u8; 32]) -> Result<()> {
     let cache = &mut ctx.accounts.price_cache;
     let clock = Clock::get()?;
 
-    // Only honour pokes if the last attest was within 2× the staleness
-    // threshold — otherwise we'd mask a dead oracle.
     let since_attest = clock.unix_timestamp.saturating_sub(cache.last_update_ts);
     require!(
         since_attest >= 0 && (since_attest as u64) <= MAX_ORACLE_AGE * 2,
         ParalendError::OraclePriceStale
     );
 
-    // Advance BOTH stamps. Earlier version only bumped the slot, which
-    // meant `read_price_cache` (which keys staleness off
-    // `last_update_ts`) still treated the cache as stale and the poke
-    // achieved nothing. Poke now buys one MAX_ORACLE_AGE window of life
-    // without changing the EMA — enough for a brief attester outage.
     cache.last_update_slot = clock.slot;
-    cache.last_update_ts = clock.unix_timestamp;
     emit!(events::PriceCachePoked {
         market_id: cache.market_id,
         slot: clock.slot,

@@ -3,7 +3,13 @@
 import { cn } from "@/lib/utils";
 import { ButtonHTMLAttributes, forwardRef } from "react";
 
-export type ButtonVariant = "primary" | "secondary" | "danger" | "ghost";
+export type ButtonVariant =
+  | "primary"
+  | "secondary"
+  | "signal"
+  | "alarm"
+  | "ghost"
+  | "danger";
 export type ButtonSize = "sm" | "md" | "lg";
 
 interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
@@ -15,19 +21,23 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 
 const variantClasses: Record<ButtonVariant, string> = {
   primary:
-    "bg-paralend-primary hover:bg-paralend-primary-hover text-white shadow-lg shadow-black/5",
+    "bg-ink text-white border-transparent hover:bg-ink2",
   secondary:
-    "bg-white hover:bg-gray-50 text-paralend-text-primary border border-paralend-border shadow-sm",
-  danger:
-    "bg-red-50 hover:bg-red-100 text-red-600 border border-red-200",
+    "bg-white text-ink border-border hover:border-ink",
+  signal:
+    "bg-ink text-white border-transparent hover:bg-ink2",
+  alarm:
+    "bg-crimson text-white border-transparent hover:bg-crimson-deep",
   ghost:
-    "bg-transparent hover:bg-gray-100 text-paralend-text-secondary hover:text-paralend-text-primary border border-transparent",
+    "bg-transparent text-ink2 border-transparent hover:text-coral hover:bg-coral-soft",
+  danger:
+    "bg-white text-crimson border-crimson hover:bg-crimson hover:text-white",
 };
 
 const sizeClasses: Record<ButtonSize, string> = {
-  sm: "h-8 px-3 text-xs font-medium rounded-md",
-  md: "h-9 px-4 text-sm font-semibold rounded-lg",
-  lg: "h-11 px-6 text-base font-semibold rounded-lg",
+  sm: "h-9 rounded-md px-4 text-[13px] font-bold",
+  md: "h-11 rounded-md px-5 text-[14px] font-bold",
+  lg: "h-12 rounded-md px-6 text-[15px] font-bold",
 };
 
 export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
@@ -49,9 +59,10 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
         ref={ref}
         disabled={disabled || loading}
         className={cn(
-          "inline-flex items-center justify-center gap-2 transition-all duration-150",
-          "focus:outline-none focus:ring-2 focus:ring-paralend-primary/20 focus:ring-offset-2 focus:ring-offset-white",
-          "disabled:opacity-50 disabled:cursor-not-allowed",
+          "inline-flex items-center justify-center gap-2 border transition-colors duration-150 ease-out",
+          "active:scale-[0.99]",
+          "disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:translate-y-0 disabled:active:scale-100",
+          "focus-visible:ring-2 focus-visible:ring-coral focus-visible:ring-offset-2 focus-visible:ring-offset-bg",
           variantClasses[variant],
           sizeClasses[size],
           fullWidth && "w-full",
@@ -60,7 +71,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
         {...props}
       >
         {loading && (
-          <span className="inline-block h-3.5 w-3.5 animate-spin rounded-full border-2 border-current border-t-transparent" />
+          <span className="inline-block h-3.5 w-3.5 animate-spin rounded-full border-[1.5px] border-current border-t-transparent" />
         )}
         {children}
       </button>

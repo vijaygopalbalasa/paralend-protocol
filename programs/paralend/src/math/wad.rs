@@ -9,7 +9,9 @@ pub fn mul_div_down(a: u128, b: u128, c: u128) -> Result<u128> {
     // Use u128 directly — max product is u64::MAX * u64::MAX which fits in u128
     // For larger values, we need to be careful about overflow
     // Split into high/low multiplication if needed
-    let product = a.checked_mul(b).ok_or_else(|| error!(ParalendError::MathOverflow))?;
+    let product = a
+        .checked_mul(b)
+        .ok_or_else(|| error!(ParalendError::MathOverflow))?;
     Ok(product / c)
 }
 
@@ -17,7 +19,9 @@ pub fn mul_div_down(a: u128, b: u128, c: u128) -> Result<u128> {
 /// result = ceil(a * b / c)
 pub fn mul_div_up(a: u128, b: u128, c: u128) -> Result<u128> {
     require!(c > 0, ParalendError::DivisionByZero);
-    let product = a.checked_mul(b).ok_or_else(|| error!(ParalendError::MathOverflow))?;
+    let product = a
+        .checked_mul(b)
+        .ok_or_else(|| error!(ParalendError::MathOverflow))?;
     // (product + c - 1) / c = ceil(product / c)
     let result = product
         .checked_add(c - 1)
@@ -128,6 +132,11 @@ mod tests {
         // so actual error is <0.01%
         let lower = five_pct_wad * 97 / 100;
         let upper = five_pct_wad * 103 / 100;
-        assert!(factor >= lower && factor <= upper, "factor={} expected ~{}", factor, five_pct_wad);
+        assert!(
+            factor >= lower && factor <= upper,
+            "factor={} expected ~{}",
+            factor,
+            five_pct_wad
+        );
     }
 }

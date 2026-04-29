@@ -1,16 +1,16 @@
-// scripts/fund-demo.ts — Paralend demo liquidity seeder.
+// scripts/fund-devnet.ts — Paralend devnet liquidity seeder.
 //
-// Assumptions: `setup-demo-markets.ts` has already run, so
-// demo-deployment.json, demo-mints.json, and demo-attester.json exist.
+// Assumptions: `setup-devnet-markets.ts` has already run, so
+// devnet-deployment.json, devnet-mints.json, and devnet-attester.json exist.
 //
 // What it does:
-//   1. Funds the primary wallet with USDC (for demo supply)
+//   1. Funds the primary wallet with USDC (for devnet supply)
 //   2. Mints each market's YES-token supply to a per-market borrower wallet
 //   3. Creates positions for primary (supplier) and borrower (collateral+borrow)
 //   4. On every market: supplies 25k USDC and has the borrower deposit
 //      YES tokens then draw a USDC loan
-//   5. Persists borrower wallets under scripts/demo-wallets.json so reruns
-//      reuse the same pubkeys (demo continuity)
+//   5. Persists borrower wallets under scripts/devnet-wallets.json so reruns
+//      reuse the same pubkeys (devnet continuity)
 
 import { BN } from "@coral-xyz/anchor";
 import {
@@ -18,21 +18,27 @@ import {
   mintTo,
   TOKEN_PROGRAM_ID,
 } from "@solana/spl-token";
-import { Keypair, PublicKey, SystemProgram, Transaction } from "@solana/web3.js";
+import {
+  Keypair,
+  PublicKey,
+  SystemProgram,
+  Transaction,
+} from "@solana/web3.js";
 
 import {
-  APP_DEMO_CONFIG_PATH,
-  DEMO_ATTESTER_PATH,
-  DEMO_DEPLOYMENT_PATH,
-  DEMO_MARKETS,
-  DEMO_MINTS_PATH,
-  DEMO_WALLETS_PATH,
-  DemoAttesterFile,
-  DemoDeploymentEntry,
-  DemoDeploymentFile,
-  DemoMintsFile,
-  DemoWalletsFile,
+  APP_MARKET_REGISTRY_PATH,
+  DEVNET_ATTESTER_PATH,
+  DEVNET_DEPLOYMENT_PATH,
+  DEVNET_MINTS_PATH,
+  DEVNET_WALLETS_PATH,
+  DevnetAttesterFile,
+  DevnetDeploymentEntry,
+  DevnetDeploymentFile,
+  DevnetMintsFile,
+  DevnetWalletsFile,
+  boundedOraclePrice,
   deriveCollateralVault,
+  deriveMarket,
   deriveLoanVault,
   derivePosition,
   derivePriceCache,
@@ -42,7 +48,8 @@ import {
   parseClusterArg,
   readJsonFile,
   writeJsonFile,
-} from "./demo-common";
+} from "./devnet-common";
+import { fetchDflowSpot } from "./dflow";
 
 function toBaseUnits(amount: number, decimals: number): bigint {
   return BigInt(Math.round(amount * 10 ** decimals));
@@ -66,7 +73,10 @@ async function ensureLamports(
 
   const shortfall = minimumLamports - current;
   if (cluster === "localnet") {
-    const signature = await provider.connection.requestAirdrop(recipient, shortfall);
+    const signature = await provider.connection.requestAirdrop(
+      recipient,
+      shortfall
+    );
     await provider.connection.confirmTransaction(signature, "confirmed");
     return;
   }
@@ -88,7 +98,6 @@ async function ensurePosition(
   marketId: Buffer,
   owner: PublicKey
 ) {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const methods = program.methods as any;
   const position = derivePosition(marketId, owner);
   const existing = await program.provider.connection.getAccountInfo(position);
@@ -115,7 +124,12 @@ async function ensureBalanceAtLeast(params: {
   minimumAmount: bigint;
 }) {
   const { connection, mint, minimumAmount, owner, payer } = params;
-  const ata = await getOrCreateAssociatedTokenAccount(connection, payer, mint, owner);
+  const ata = await getOrCreateAssociatedTokenAccount(
+    connection,
+    payer,
+    mint,
+    owner
+  );
   const currentAmount = BigInt(ata.amount.toString());
   if (currentAmount < minimumAmount) {
     await mintTo(
@@ -134,12 +148,11 @@ async function seedSupply(params: {
   program: ReturnType<typeof makeProgram>;
   payer: Keypair;
   actor: Keypair;
-  market: DemoDeploymentEntry;
+  market: DevnetDeploymentEntry;
   amount: bigint;
   protocolState: PublicKey;
 }) {
   const { actor, amount, market, payer, program, protocolState } = params;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const methods = program.methods as any;
   const marketId = Buffer.from(market.marketId, "hex");
   const position = await ensurePosition(
@@ -149,7 +162,6 @@ async function seedSupply(params: {
     marketId,
     actor.publicKey
   );
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const positionData = await (program.account as any).position.fetch(position);
   if (BigInt(positionData.supplyShares.toString()) > 0n) return;
 
@@ -179,24 +191,32 @@ async function seedSupply(params: {
 
 /**
  * Fresh attestation right before a borrow — devnet confirmations can take
- * longer than the 30 s MAX_ORACLE_AGE, so we re-push the last spot from
- * the cache to reset the staleness timer.
+ * longer than the 30 s MAX_ORACLE_AGE, so fetch a live DFlow bid and push it
+ * immediately before the borrow.
  */
 async function refreshAttestation(
   program: ReturnType<typeof makeProgram>,
   attester: Keypair,
-  market: DemoDeploymentEntry
+  market: DevnetDeploymentEntry
 ): Promise<void> {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const methods = program.methods as any;
   const marketId = Buffer.from(market.marketId, "hex");
+  const marketPda = deriveMarket(marketId);
   const priceCache = derivePriceCache(marketId);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const spot = await fetchDflowSpot(market);
   const cache = await (program.account as any).priceCache.fetch(priceCache);
-  const lastSpot = BigInt(cache.lastSpotWad.toString());
+  const submittedPriceWad = boundedOraclePrice({
+    livePriceWad: spot.priceWad,
+    lastSpotWad: BigInt(cache.lastSpotWad.toString()),
+    emaPriceWad: BigInt(cache.emaPriceWad.toString()),
+  });
   await methods
-    .attestPrice(Array.from(marketId), new BN(lastSpot.toString()))
-    .accountsPartial({ attester: attester.publicKey, priceCache })
+    .attestPrice(Array.from(marketId), new BN(submittedPriceWad.toString()))
+    .accountsPartial({
+      attester: attester.publicKey,
+      market: marketPda,
+      priceCache,
+    })
     .signers([attester])
     .rpc();
 }
@@ -206,7 +226,7 @@ async function seedCollateralAndBorrow(params: {
   payer: Keypair;
   actor: Keypair;
   attester: Keypair;
-  market: DemoDeploymentEntry;
+  market: DevnetDeploymentEntry;
   collateralAmount: bigint;
   borrowAmount: bigint;
   protocolState: PublicKey;
@@ -221,7 +241,6 @@ async function seedCollateralAndBorrow(params: {
     program,
     protocolState,
   } = params;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const methods = program.methods as any;
   const marketId = Buffer.from(market.marketId, "hex");
   const marketPk = new PublicKey(market.market);
@@ -233,7 +252,6 @@ async function seedCollateralAndBorrow(params: {
     marketId,
     actor.publicKey
   );
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const positionData = await (program.account as any).position.fetch(position);
 
   const collateralAta = await ensureBalanceAtLeast({
@@ -254,7 +272,10 @@ async function seedCollateralAndBorrow(params: {
 
   if (BigInt(positionData.collateral.toString()) === 0n) {
     await methods
-      .supplyCollateral(Array.from(marketId), new BN(collateralAmount.toString()))
+      .supplyCollateral(
+        Array.from(marketId),
+        new BN(collateralAmount.toString())
+      )
       .accountsPartial({
         depositor: actor.publicKey,
         protocolState,
@@ -267,8 +288,6 @@ async function seedCollateralAndBorrow(params: {
       .signers(actor.publicKey.equals(payer.publicKey) ? [] : [actor])
       .rpc();
   }
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const refreshedPosition = await (program.account as any).position.fetch(
     position
   );
@@ -301,17 +320,19 @@ async function main() {
   const program = makeProgram(provider);
   const protocolState = deriveProtocolState();
 
-  const deployment = readJsonFile<DemoDeploymentFile>(DEMO_DEPLOYMENT_PATH);
-  const mints = readJsonFile<DemoMintsFile>(DEMO_MINTS_PATH);
-  const attesterFile = readJsonFile<DemoAttesterFile>(DEMO_ATTESTER_PATH);
+  const deployment = readJsonFile<DevnetDeploymentFile>(DEVNET_DEPLOYMENT_PATH);
+  const mints = readJsonFile<DevnetMintsFile>(DEVNET_MINTS_PATH);
+  const attesterFile = readJsonFile<DevnetAttesterFile>(DEVNET_ATTESTER_PATH);
   if (!deployment || !mints || !attesterFile) {
-    throw new Error("Run setup-demo-markets.ts before fund-demo.ts.");
+    throw new Error("Run setup-devnet-markets.ts before fund-devnet.ts.");
   }
   const attester = Keypair.fromSecretKey(
     Uint8Array.from(attesterFile.secretKey)
   );
 
-  const existingWallets = readJsonFile<DemoWalletsFile>(DEMO_WALLETS_PATH) ?? {
+  const existingWallets = readJsonFile<DevnetWalletsFile>(
+    DEVNET_WALLETS_PATH
+  ) ?? {
     primaryWallet: payer.publicKey.toBase58(),
     supportingWallets: {},
   };
@@ -321,19 +342,12 @@ async function main() {
   existingWallets.primaryWallet = primaryWallet.publicKey.toBase58();
   existingWallets.supportingWallets ??= {};
 
-  console.log(`\n💰 Seeding Paralend demo liquidity`);
+  console.log(`\n💰 Seeding Paralend devnet liquidity`);
   console.log(`   Cluster:        ${cluster}`);
   console.log(`   Primary wallet: ${primaryWallet.publicKey.toBase58()}`);
 
-  for (const definition of DEMO_MARKETS) {
-    const market = Object.values(deployment.markets).find(
-      (entry) => entry.key === definition.key
-    );
-    if (!market) {
-      throw new Error(`Missing deployment entry for ${definition.key}`);
-    }
-
-    const supportingWalletKey = `borrower:${definition.key}`;
+  for (const market of Object.values(deployment.markets)) {
+    const supportingWalletKey = `borrower:${market.key}`;
     const borrower = loadOrCreateWallet(
       existingWallets.supportingWallets[supportingWalletKey]
     );
@@ -355,27 +369,26 @@ async function main() {
       amount: supplyAmount,
       protocolState,
     });
-    console.log(
-      `     Primary wallet supplied 25,000 ${market.loanSymbol}`
-    );
+    console.log(`     Primary wallet supplied 25,000 ${market.loanSymbol}`);
 
     // Give the borrower some YES tokens and have them borrow against the
     // position. Borrow is sized at ~50 % of the CURRENT effective LLTV
-    // (not the raw base LLTV) so near-resolution markets like NFL-FINAL
-    // don't immediately fail health checks under the decayed cap.
+    // (not the raw base LLTV) so near-resolution markets don't immediately
+    // fail health checks under the decayed cap.
     const collateralTokens = 500; // 500 YES tokens
-    const expectedCollateralValue =
-      collateralTokens * market.initialPriceUsd; // USD
+    const liveSpot = await fetchDflowSpot(market);
+    const expectedCollateralValue = collateralTokens * liveSpot.priceUsd; // USD
 
     const DECAY_START_SECONDS = 7 * 24 * 3600;
-    const remaining = market.resolutionTimestamp - Math.floor(Date.now() / 1000);
+    const remaining =
+      market.resolutionTimestamp - Math.floor(Date.now() / 1000);
     const baseLltvFraction = market.lltv / 100;
     const effectiveLltvFraction =
       remaining >= DECAY_START_SECONDS
         ? baseLltvFraction
         : remaining <= 0
-          ? 0
-          : baseLltvFraction * (remaining / DECAY_START_SECONDS);
+        ? 0
+        : baseLltvFraction * (remaining / DECAY_START_SECONDS);
     const targetLtv = effectiveLltvFraction * 0.5; // 50 % of effective
     const borrowUsd = Math.max(
       1,
@@ -400,7 +413,7 @@ async function main() {
     );
   }
 
-  // Leave extra USDC in the primary wallet for interactive demo usage.
+  // Leave extra USDC in the primary wallet for interactive devnet usage.
   await ensureBalanceAtLeast({
     connection,
     payer,
@@ -409,16 +422,17 @@ async function main() {
     minimumAmount: toBaseUnits(100_000, 6),
   });
 
-  writeJsonFile(DEMO_WALLETS_PATH, existingWallets);
+  writeJsonFile(DEVNET_WALLETS_PATH, existingWallets);
 
-  const appConfig = readJsonFile<Record<string, unknown>>(APP_DEMO_CONFIG_PATH) ?? {};
-  writeJsonFile(APP_DEMO_CONFIG_PATH, {
+  const appConfig =
+    readJsonFile<Record<string, unknown>>(APP_MARKET_REGISTRY_PATH) ?? {};
+  writeJsonFile(APP_MARKET_REGISTRY_PATH, {
     ...appConfig,
     primaryWallet: primaryWallet.publicKey.toBase58(),
   });
 
-  console.log(`\n✅ Demo funding complete`);
-  console.log(`   Wallets: ${DEMO_WALLETS_PATH}`);
+  console.log(`\n✅ Devnet funding complete`);
+  console.log(`   Wallets: ${DEVNET_WALLETS_PATH}`);
   console.log(
     "\nNext: run `npx ts-node --project tsconfig.json scripts/attester.ts` to start the price attester daemon."
   );

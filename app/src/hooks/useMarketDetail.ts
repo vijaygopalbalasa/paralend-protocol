@@ -5,7 +5,12 @@ import { Buffer } from "buffer";
 import { PublicKey } from "@solana/web3.js";
 import { useConnection, useWallet } from "@solana/wallet-adapter-react";
 
-import { resolveTokenIcon, resolveTokenSymbol } from "@/lib/demo-config";
+import {
+  getRegistryMarket,
+  resolveTokenIcon,
+  resolveTokenSymbol,
+} from "@/lib/market-registry";
+import { computeEffectiveLltvBps } from "@/lib/decay";
 import {
   annualizedPercent,
   bnToBigInt,
@@ -25,6 +30,7 @@ import { BPS, WAD } from "@/lib/constants";
 
 export interface MarketDetail {
   publicKey: string;
+  name: string;
   marketId: Buffer;
   marketIdHex: string;
   collateralMint: PublicKey;
@@ -104,9 +110,9 @@ export function useMarketDetail(
     setLoading(true);
     try {
       const marketKey = new PublicKey(marketAddress);
+      const marketMeta = getRegistryMarket(marketAddress);
       const program = makeReadonlyProgram(connection, getProgramId());
       const account = await program.account.market.fetch(marketKey);
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const irm = await (program.account as any).linearIrm.fetch(account.irm);
       const marketId = computeMarketIdFromAccount(account);
       const marketIdHex = marketId.toString("hex");
@@ -128,6 +134,11 @@ export function useMarketDetail(
       const totalSupplyShares = bnToBigInt(account.totalSupplyShares);
       const totalBorrowAssets = bnToBigInt(account.totalBorrowAssets);
       const totalBorrowShares = bnToBigInt(account.totalBorrowShares);
+      const effectiveLltvBps = computeEffectiveLltvBps(
+        Number(account.baseLltv ?? account.lltv),
+        Number(account.resolutionTimestamp ?? 0),
+        Math.floor(Date.now() / 1000)
+      );
       const utilization = calculateUtilization(totalBorrowAssets, totalSupplyAssets);
       const borrowRate = irmBorrowRatePerSecond(
         utilization,
@@ -149,7 +160,6 @@ export function useMarketDetail(
       const priceCachePda = derivePriceCachePDA(marketId);
       let collateralPriceWad = 0n;
       try {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const cacheAccount = await (program.account as any).priceCache.fetch(
           priceCachePda
         );
@@ -207,7 +217,7 @@ export function useMarketDetail(
               borrowShares,
               totalBorrowAssets,
               totalBorrowShares,
-              lltv: bnToBigInt(account.lltv),
+              lltv: BigInt(effectiveLltvBps),
               collateralPriceWad,
               loanPriceWad,
             }),
@@ -224,8 +234,17 @@ export function useMarketDetail(
         };
       }
 
+      const kalshiTicker = (() => {
+        const buf = Buffer.from(account.kalshiTicker as number[]);
+        const idx = buf.indexOf(0);
+        return buf.slice(0, idx === -1 ? buf.length : idx).toString("utf-8");
+      })();
+
       setMarket({
         publicKey: marketAddress,
+        name:
+          marketMeta?.name ??
+          (kalshiTicker || `${collateralSymbol} / ${loanSymbol}`),
         marketId,
         marketIdHex,
         collateralMint,
@@ -241,16 +260,12 @@ export function useMarketDetail(
         loanIcon,
         collateralDecimals,
         loanDecimals,
-        lltv: Number(account.lltv) / 100,
+        lltv: effectiveLltvBps / 100,
         baseLltvBps: Number(account.baseLltv),
         feeBps: Number(account.fee),
         paused: account.paused,
-        oracleLabel: "PriceCache (EMA, attester-cranked)",
-        kalshiTicker: (() => {
-          const buf = Buffer.from(account.kalshiTicker as number[]);
-          const idx = buf.indexOf(0);
-          return buf.slice(0, idx === -1 ? buf.length : idx).toString("utf-8");
-        })(),
+        oracleLabel: marketMeta?.oracle ?? "DFlow live bid (attested EMA)",
+        kalshiTicker,
         resolutionTimestamp: Number(account.resolutionTimestamp),
         marketStatus: Number(account.marketStatus),
         outcomeBit: Number(account.outcomeBit),

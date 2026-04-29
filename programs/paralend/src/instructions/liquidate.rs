@@ -67,6 +67,7 @@ pub struct Liquidate<'info> {
         mut,
         seeds = [SEED_PREFIX, SEED_POSITION, &market_id, borrower.key().as_ref()],
         bump = borrower_position.bump,
+        constraint = borrower_position.owner == borrower.key() @ ParalendError::Unauthorized,
         constraint = borrower_position.market_id == market_id @ ParalendError::Unauthorized,
     )]
     pub borrower_position: Box<Account<'info, Position>>,
@@ -80,37 +81,41 @@ pub struct Liquidate<'info> {
         token::mint = market.loan_mint,
         token::authority = liquidator,
     )]
-    pub liquidator_loan_ata: Account<'info, TokenAccount>,
+    pub liquidator_loan_ata: Box<Account<'info, TokenAccount>>,
 
     /// Destination (debt repayment): market's loan vault
     #[account(
         mut,
         seeds = [SEED_PREFIX, SEED_LOAN_VAULT, &market_id],
         bump = market.loan_vault_bump,
+        token::mint = market.loan_mint,
+        token::authority = market,
     )]
-    pub loan_vault: Account<'info, TokenAccount>,
+    pub loan_vault: Box<Account<'info, TokenAccount>>,
 
     /// Source (collateral seizure): market's collateral vault
     #[account(
         mut,
         seeds = [SEED_PREFIX, SEED_COLLATERAL_VAULT, &market_id],
         bump = market.collateral_vault_bump,
+        token::mint = market.collateral_mint,
+        token::authority = market,
     )]
-    pub collateral_vault: Account<'info, TokenAccount>,
+    pub collateral_vault: Box<Account<'info, TokenAccount>>,
 
     /// Destination (collateral seizure): liquidator's collateral token account
     #[account(
         mut,
         token::mint = market.collateral_mint,
     )]
-    pub liquidator_collateral_ata: Account<'info, TokenAccount>,
+    pub liquidator_collateral_ata: Box<Account<'info, TokenAccount>>,
 
     /// Collateral PriceCache (EMA of attested Kalshi/DFlow prices).
     #[account(
         seeds = [SEED_PREFIX, SEED_PRICE_CACHE, &market_id],
         bump = price_cache.bump,
     )]
-    pub price_cache: Account<'info, PriceCache>,
+    pub price_cache: Box<Account<'info, PriceCache>>,
 
     pub token_program: Program<'info, Token>,
 }
@@ -170,11 +175,7 @@ pub fn handle_liquidate(
     let bps = BPS as u128;
 
     // cursor_factor = LIF_CURSOR * (BPS - lltv) / BPS
-    let cursor_factor = mul_div_down(
-        LIF_CURSOR as u128,
-        bps.saturating_sub(lltv),
-        bps,
-    )?;
+    let cursor_factor = mul_div_down(LIF_CURSOR as u128, bps.saturating_sub(lltv), bps)?;
 
     // denominator = BPS - cursor_factor (must be > 0 for valid lltv < BPS)
     let denom = bps
@@ -207,6 +208,7 @@ pub fn handle_liquidate(
     // Cap repaid_shares at what the position actually owes
     let position = &ctx.accounts.borrower_position;
     let repaid_shares = repaid_shares.min(position.borrow_shares);
+    require!(repaid_shares > 0, ParalendError::ZeroAmount);
 
     // Recompute repaid_assets from capped shares (round UP — liquidator pays more if rounded)
     let repaid_assets = to_assets_up(
@@ -214,6 +216,7 @@ pub fn handle_liquidate(
         market.total_borrow_assets,
         market.total_borrow_shares,
     )?;
+    require!(repaid_assets > 0, ParalendError::ZeroAmount);
 
     // ── Update market state ───────────────────────────────────────────────────
 
@@ -259,15 +262,9 @@ pub fn handle_liquidate(
 
         let market = &mut ctx.accounts.market;
         // Subtract from supply so remaining lenders absorb the loss
-        market.total_supply_assets = market
-            .total_supply_assets
-            .saturating_sub(bad_debt_assets);
-        market.total_borrow_assets = market
-            .total_borrow_assets
-            .saturating_sub(bad_debt_assets);
-        market.total_borrow_shares = market
-            .total_borrow_shares
-            .saturating_sub(bad_debt_shares);
+        market.total_supply_assets = market.total_supply_assets.saturating_sub(bad_debt_assets);
+        market.total_borrow_assets = market.total_borrow_assets.saturating_sub(bad_debt_assets);
+        market.total_borrow_shares = market.total_borrow_shares.saturating_sub(bad_debt_shares);
 
         let position = &mut ctx.accounts.borrower_position;
         position.borrow_shares = 0;

@@ -110,7 +110,8 @@ mod tests {
         let deposit = 5000_u128;
 
         let shares = to_shares_down(deposit, total_assets, total_shares).unwrap();
-        let withdrawn = to_assets_down(shares, total_assets + deposit, total_shares + shares).unwrap();
+        let withdrawn =
+            to_assets_down(shares, total_assets + deposit, total_shares + shares).unwrap();
 
         // Should get back deposit amount minus at most 1 (rounding)
         assert!(withdrawn >= deposit - 1 && withdrawn <= deposit);

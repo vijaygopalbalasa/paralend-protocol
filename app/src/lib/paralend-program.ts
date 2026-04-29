@@ -87,7 +87,6 @@ export function makeAnchorProvider(
         Promise.all(txs.map((tx) => wallet.signTransaction(tx)))),
   };
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return new AnchorProvider(connection, providerWallet as any, {
     commitment: "confirmed",
   });
@@ -113,7 +112,6 @@ export function makeProgram(
   programId: PublicKey = getProgramId()
 ): Program<Paralend> {
   const provider = makeAnchorProvider(connection, wallet ?? makeReadonlyWallet());
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return new Program<Paralend>(withProgramAddress(programId) as any, provider);
 }
 

@@ -109,7 +109,8 @@ impl Market {
 
     /// Check if the market has available liquidity for borrowing/withdrawal
     pub fn available_liquidity(&self) -> u128 {
-        self.total_supply_assets.saturating_sub(self.total_borrow_assets)
+        self.total_supply_assets
+            .saturating_sub(self.total_borrow_assets)
     }
 }
 

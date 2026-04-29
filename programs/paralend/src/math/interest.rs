@@ -1,6 +1,6 @@
-use crate::constants::{BPS, MAX_INTEREST_ACCRUAL_SECONDS, WAD};
 #[cfg(test)]
 use crate::constants::SECONDS_PER_YEAR;
+use crate::constants::{BPS, MAX_INTEREST_ACCRUAL_SECONDS, WAD};
 use crate::errors::ParalendError;
 use crate::math::shares::to_shares_down;
 use crate::math::wad::{mul_div_down, w_taylor_compounded, wad_mul_down};
@@ -98,7 +98,10 @@ pub fn accrue_interest_on_market(
             // After adding interest but before adding fee shares
             fee_shares = to_shares_down(
                 fee_amount,
-                market.total_supply_assets.checked_sub(fee_amount).unwrap_or(market.total_supply_assets),
+                market
+                    .total_supply_assets
+                    .checked_sub(fee_amount)
+                    .unwrap_or(market.total_supply_assets),
                 market.total_supply_shares,
             )?;
 
@@ -146,7 +149,7 @@ mod tests {
             base_rate: 0,
             slope1: WAD * 5 / 100 / SECONDS_PER_YEAR, // 5% APY slope below kink, per second
             slope2: WAD * 230 / 100 / SECONDS_PER_YEAR, // 230% slope above kink, per second
-            kink: WAD * 80 / 100, // 80% utilization
+            kink: WAD * 80 / 100,                     // 80% utilization
             admin: Pubkey::default(),
         }
     }
@@ -215,7 +218,13 @@ mod tests {
         // Per hour: ~2.5% / 8760 ≈ 0.000285%
         // Interest on 500_000 ≈ 1.4
         assert!(result.interest > 0, "interest should be positive");
-        assert!(market.total_borrow_assets > 500_000, "borrow should increase");
-        assert!(market.total_supply_assets > 1_000_000, "supply should increase by same amount");
+        assert!(
+            market.total_borrow_assets > 500_000,
+            "borrow should increase"
+        );
+        assert!(
+            market.total_supply_assets > 1_000_000,
+            "supply should increase by same amount"
+        );
     }
 }

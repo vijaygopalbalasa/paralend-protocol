@@ -1,41 +1,36 @@
 # Testing Paralend on devnet
 
-End-to-end walk-through for putting yourself in a Kalshi trader's shoes and
-actually doing a supply → deposit → borrow → repay on the live devnet
-deployment.
+End-to-end walk-through for exercising the live devnet deployment with
+DFlow/Kalshi market metadata and attested live bid prices.
 
 **Program**: `2kZNrHd7QkUemYCLFw5dYGQWeKieAUNb5C1FvTjTYiC8`
-**RPC**: `https://api.devnet.solana.com`
-**Live markets**: 3 (BTC-150K-JUN2026, SOL-300-DEC2026, NFL-FINAL-24H)
+**RPC**: `https://api.devnet.solana.com` or a Helius devnet URL
+**Live markets**: the current entries in `app/src/lib/market-registry.json`
 
 ---
 
-## Prerequisites (5 min)
+## Prerequisites
 
-1. **Install [Phantom wallet](https://phantom.app/)** (browser extension or mobile).
-2. **Switch Phantom to Devnet**: settings ⚙️ → Developer Settings → Testnet Mode → enable → select **Devnet**.
-3. **Top up your Phantom with devnet SOL** for gas:
+1. Install Phantom and switch it to **Devnet**.
+2. Fund your wallet with devnet SOL:
    ```bash
    solana airdrop 1 <YOUR_PHANTOM_ADDRESS> --url devnet
-   # or use https://faucet.solana.com if rate-limited
    ```
-4. **Make sure the repo builds locally**:
+3. Build the project:
    ```bash
-   cd /Users/vijaygopalb/colosseum-frontier
-   anchor build                # program + IDL
-   cd app && npm install       # frontend deps (first run only)
-   cd ..
+   anchor build
+   npx tsc --noEmit --project tsconfig.json
+   cd app && npm install && npm run build
    ```
 
 ---
 
-## Step 1 — Mint test tokens to your Phantom wallet (one-time, ~30 sec)
+## 1 · Mint devnet assets to your wallet
 
-The demo markets use synthetic USDC + YES mints created during setup.
-You need to mint some to your wallet before you can supply or borrow.
+The devnet deployment mirrors real DFlow/Kalshi market identity and live
+prices, but uses devnet SPL mints so Phantom can transact on devnet.
 
 ```bash
-# copy your address from Phantom → paste into --to=
 env ANCHOR_WALLET="$HOME/.config/solana/honorary-position-devnet.json" \
   npx ts-node --project tsconfig.json \
   scripts/mint-to-wallet.ts \
@@ -43,25 +38,13 @@ env ANCHOR_WALLET="$HOME/.config/solana/honorary-position-devnet.json" \
   --to=<YOUR_PHANTOM_ADDRESS>
 ```
 
-Expected output:
-```
-💸 Minting test tokens → <YOUR_PHANTOM_ADDRESS>
-   ✓ Minted 10,000 USDC → ...
-   ✓ Minted 2,000 btc-150k-jun2026 YES → ...
-   ✓ Minted 2,000 sol-300-dec2026 YES → ...
-   ✓ Minted 2,000 nfl-final-24h YES → ...
-```
-
-Open Phantom → refresh → you should see 10,000 USDC + 2,000 of each YES
-token in your token list.
+You should receive devnet USDC plus the current registry outcome tokens.
 
 ---
 
-## Step 2 — Start the attester daemon (keep running)
+## 2 · Keep the attester running
 
-Without fresh attestations, the oracle staleness guard (30 s) will reject
-`borrow` / `withdraw_collateral` / `liquidate` calls. Start the attester
-in a dedicated terminal and leave it running:
+Borrow, withdraw-under-debt, and liquidate require a fresh PriceCache update.
 
 ```bash
 env ANCHOR_WALLET="$HOME/.config/solana/honorary-position-devnet.json" \
@@ -69,168 +52,92 @@ env ANCHOR_WALLET="$HOME/.config/solana/honorary-position-devnet.json" \
   scripts/attester.ts --cluster=devnet --interval=20
 ```
 
-You'll see output every ~20 s:
-```
-[attester] BTC-150K-JUN2026: spot 0.3812 → 0.3805 (tx 4CaPs3…)
-[attester] SOL-300-DEC2026: spot 0.5254 → 0.5261 (tx 21kkbj…)
-[attester] NFL-FINAL-24H:    spot 0.6110 → 0.6098 (tx 2XdoDq…)
+Expected output:
+
+```text
+[attester] KXALIENS-27 YES: bid $0.2050, ask $0.2060, cache 0.2050 -> $0.2050 (tx ...)
 ```
 
-Leave this terminal open for the rest of the session.
+Leave this process open during testing.
 
 ---
 
-## Step 3 — Start the frontend (keep running)
-
-In a second terminal:
+## 3 · Start the frontend
 
 ```bash
-cd /Users/vijaygopalb/colosseum-frontier/app
-npm run dev
+cd app
+npm run build
+npm run start
 ```
 
-The Next.js dev server starts at `http://localhost:3000`. Open it in a
-browser where Phantom is installed (same browser profile).
+Open `http://localhost:3000` in the browser profile where Phantom is installed.
 
 ---
 
-## Step 4 — Connect wallet + browse markets
+## 4 · Verify markets
 
-1. Click **Select Wallet** (top right) → pick Phantom → approve.
-2. Navigate to `/markets`. You should see 3 rows:
-   - **BTC-150K-JUN2026** with "~45d to resolution"
-   - **SOL-300-DEC2026** with "~8d to resolution"
-   - **NFL-FINAL-24H** with "force-close" or "cutoff" badge (it's close to resolution)
-3. Each row shows live countdown + LLTV + Supply APY + Borrow APY.
-
-**What to verify**: the countdown ticks in real time and the Kalshi ticker
-displays correctly. If you see "Non-resolving" badges everywhere, the
-attester isn't running — go back to Step 2.
+1. Connect Phantom.
+2. Open `/markets`.
+3. Confirm the page shows exactly the current registry markets, pool size,
+   borrowed amount, utilization, APY, and time-decayed borrow power.
+4. Open a market detail page and confirm the action tabs render:
+   **Borrow**, **Earn**, and **Collateral**.
 
 ---
 
-## Step 5 — Supply USDC (lender flow)
+## 5 · Supply, borrow, repay, withdraw
 
-1. Click any market → you're on `/markets/[id]`.
-2. See the **LLTV decay curve** (SVG, above the stat cards). The green
-   dot is "now" with the current effective LLTV.
-3. Click the **Supply** tab.
-4. Enter **100** (USDC). Click **Supply USDC**.
-5. Phantom pops up → Approve.
+1. On a market detail page, open **Earn** and supply a small USDC amount.
+2. Open **Collateral** and deposit outcome tokens.
+3. Open **Borrow** and borrow well below the displayed capacity.
+4. Repay the debt.
+5. Withdraw collateral and supplied USDC.
 
-**What to verify**:
-- Tx confirms within a few seconds.
-- The **TVL** stat updates.
-- Your USDC balance (in Phantom) dropped by 100.
-- In `useMarketDetail` polling, the **position card** shows your new
-  supply shares.
+Expected behavior:
 
-Try a **Withdraw** too (same tab, bottom half) — withdraw 25 USDC to
-verify the reverse works.
+- Transactions confirm on devnet.
+- Health factor updates after borrow/repay.
+- The borrow button disables when the preview would violate current LLTV.
+- If the attester is stopped for more than `MAX_ORACLE_AGE`, borrow paths
+  revert with `OraclePriceStale`.
 
 ---
 
-## Step 6 — Borrow against YES tokens (borrower flow) — the main demo
+## 6 · Force-close and resolution paths
 
-Pick the **SOL-300-DEC2026** market (it's ~8 days out, so you'll see
-time-decay on the chart but the LLTV is still high enough to borrow).
+For markets inside the final two-hour window:
 
-1. Click the **Collateral** tab.
-2. Deposit **500 YES** tokens. Phantom → Approve.
-3. Position card now shows 500 collateral.
-4. Click the **Borrow** tab.
-5. The UI calculates effective LLTV + your max borrow using the exact
-   same math as on-chain. Enter an amount well under the limit,
-   e.g. **50** USDC.
-6. Click **Borrow USDC**. Phantom → Approve.
+```bash
+npx ts-node --project tsconfig.json scripts/force-close-bot.ts --cluster=devnet --interval=30
+```
 
-**What to verify**:
-- No orange blocker banner appears (meaning: not in the post-borrow
-  cutoff, oracle is fresh, borrow is healthy).
-- Tx confirms.
-- Position **Outstanding debt** updates to 50.
-- **Health factor** shows as a green / orange / red pill.
-- Your USDC balance in Phantom went up by 50.
+For resolved markets:
 
----
+```bash
+npx ts-node --project tsconfig.json scripts/resolve-market.ts --cluster=devnet
+```
 
-## Step 7 — Edge cases worth poking
-
-### Try to borrow more than effective LLTV allows
-Enter e.g. **500** USDC in the borrow field. The client-side health
-preview should immediately show:
-> Position would be unhealthy after borrow at the current effective LLTV
-> (XX.X %). Reduce the amount or add more collateral.
-
-The button disables. This is the "don't burn gas" guard.
-
-### Watch the decay curve move
-Stay on the market detail page. The green "now" dot crawls left-to-right
-every few seconds. For NFL-FINAL-24H (~17 h to resolution), you can see
-the effective LLTV actively decaying — this is the hero visual of the
-demo.
-
-### Hit the POST_BORROW_CUTOFF
-If you pick NFL-FINAL-24H and wait long enough (or if it's already
-< 30 min to resolution), the borrow tab shows:
-> Borrow is paused inside the final 30 minutes before resolution.
-
-The button disables. The force-close bot (if running) can then seize
-any remaining under-water position for a bounty.
-
-### Kill the attester, try to borrow
-In the attester terminal, hit `Ctrl-C`. Wait 30 seconds. Try to borrow
-again in the UI. The Phantom popup will approve but the program will
-revert with **OraclePriceStale**. This is the documented failure mode —
-the fix is to restart the attester.
-
----
-
-## Step 8 — Repay + withdraw collateral
-
-1. On the **Borrow** tab (bottom half), enter your debt amount → **Repay**.
-2. Switch to **Collateral** tab → withdraw all YES back.
-3. Position goes to zero.
+Both instructions are still guarded by the program: attempts outside the
+valid timing/health conditions revert.
 
 ---
 
 ## Common issues
 
-| Symptom | Fix |
-|---|---|
-| "Insufficient funds" on borrow | Your Phantom doesn't have enough SOL for tx fees. `solana airdrop 1 <addr> --url devnet`. |
-| "OraclePriceStale" | Attester isn't running. Restart `scripts/attester.ts`. |
-| "MarketPaused" | You're hitting NFL-FINAL-24H after its resolution — pick a different market. |
-| Decay chart doesn't render | The market has no resolution_timestamp (classical lending). Our 3 demo markets all do — if none render a chart, check the `useMarketDetail` hook for fetch errors in browser devtools. |
-| "InsufficientLiquidity" on borrow | Someone already borrowed the pool. Supply more USDC first. |
-| Phantom shows "wrong network" | Phantom is on mainnet — switch to Devnet in Settings → Developer. |
+| Symptom               | Fix                                                                                            |
+| --------------------- | ---------------------------------------------------------------------------------------------- |
+| `OraclePriceStale`    | Restart `scripts/attester.ts` and wait for a fresh tx.                                         |
+| `Insufficient funds`  | Airdrop devnet SOL and confirm token balances.                                                 |
+| Empty markets page    | Check `NEXT_PUBLIC_RPC_URL`, `NEXT_PUBLIC_PROGRAM_ID`, and `app/src/lib/market-registry.json`. |
+| Phantom wrong network | Switch Phantom to Devnet.                                                                      |
+| Borrow disabled       | The previewed amount violates current effective LLTV or the market is near resolution.         |
 
 ---
 
-## What to watch / record for the demo video
+## Submission recording checklist
 
-- The **decay curve** as the hero shot (2–3 s static render)
-- A live **borrow** tx with the Phantom popup → confirmation
-- The **countdown** on each market row ticking in real time
-- The **post-borrow-cutoff** banner (shows a market gracefully rejecting)
-- A **health factor** turning red as you increase borrow amount
-- The attester terminal posting prices (proof it's live data, not canned)
-
----
-
-## Want to start fresh?
-
-If you want to wipe state and re-seed 3 new markets with fresh
-resolution timestamps (useful if your NFL market has already expired):
-
-```bash
-# Close the program + recover rent (DESTRUCTIVE, only if you're OK losing
-# the live state and redeploying)
-solana program close 2kZNrHd7QkUemYCLFw5dYGQWeKieAUNb5C1FvTjTYiC8 --url devnet
-
-# Then redeploy + re-seed per DEPLOYMENT.md.
-```
-
-Usually NOT needed — just `setup-demo-markets.ts` is idempotent and will
-reuse existing markets. If a market resolved, pick a different one; the
-other two (BTC, SOL) run for 45 + 8 days.
+- `/markets` with the three live registry markets.
+- The detail-page decay chart and current borrow power.
+- One confirmed USDC supply transaction.
+- One confirmed collateral deposit and borrow transaction.
+- Attester terminal showing live DFlow bid/ask attestations.

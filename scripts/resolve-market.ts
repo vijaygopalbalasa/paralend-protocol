@@ -5,9 +5,9 @@
 // 2 = NO won). Until this runs the market stays in Active status and
 // no downstream settlement can happen.
 //
-// In production this would be an automation watching the Kalshi REST
-// resolve endpoint; for the devnet demo it's a manual CLI invocation so
-// operators can deliberately resolve markets during the recorded video.
+// On mainnet this would be an automation watching the live resolution
+// endpoint; for devnet it is a manual CLI invocation so operators can
+// deliberately resolve markets during a recorded walkthrough.
 //
 // Usage:
 //   npx ts-node --project tsconfig.json scripts/resolve-market.ts \
@@ -17,10 +17,10 @@ import { BN } from "@coral-xyz/anchor";
 import { Keypair, PublicKey } from "@solana/web3.js";
 
 import {
-  DEMO_ATTESTER_PATH,
-  DEMO_DEPLOYMENT_PATH,
-  DemoAttesterFile,
-  DemoDeploymentFile,
+  DEVNET_ATTESTER_PATH,
+  DEVNET_DEPLOYMENT_PATH,
+  DevnetAttesterFile,
+  DevnetDeploymentFile,
   deriveMarket,
   derivePriceCache,
   makeProgram,
@@ -28,7 +28,7 @@ import {
   parseClusterArg,
   PROGRAM_ID,
   readJsonFile,
-} from "./demo-common";
+} from "./devnet-common";
 
 function parseArg(name: string): string | null {
   const raw = process.argv
@@ -38,9 +38,9 @@ function parseArg(name: string): string | null {
 }
 
 function resolveMarket(
-  deployment: DemoDeploymentFile,
+  deployment: DevnetDeploymentFile,
   selector: string
-): { market: DemoDeploymentFile["markets"][string]; pubkey: PublicKey } {
+): { market: DevnetDeploymentFile["markets"][string]; pubkey: PublicKey } {
   // Try pubkey first (exact match against map keys)
   if (deployment.markets[selector]) {
     return {
@@ -69,7 +69,7 @@ async function main(): Promise<void> {
     throw new Error(
       "Pass --market=<pubkey|key|ticker>. Options:\n" +
         Object.values(
-          readJsonFile<DemoDeploymentFile>(DEMO_DEPLOYMENT_PATH)?.markets ?? {}
+          readJsonFile<DevnetDeploymentFile>(DEVNET_DEPLOYMENT_PATH)?.markets ?? {}
         )
           .map((m) => `    ${m.key} (${m.kalshiTicker}) → ${m.market}`)
           .join("\n")
@@ -80,11 +80,11 @@ async function main(): Promise<void> {
   }
   const outcomeBit = outcomeArg === "YES" ? 1 : 2;
 
-  const deployment = readJsonFile<DemoDeploymentFile>(DEMO_DEPLOYMENT_PATH);
-  const attesterFile = readJsonFile<DemoAttesterFile>(DEMO_ATTESTER_PATH);
+  const deployment = readJsonFile<DevnetDeploymentFile>(DEVNET_DEPLOYMENT_PATH);
+  const attesterFile = readJsonFile<DevnetAttesterFile>(DEVNET_ATTESTER_PATH);
   if (!deployment || !attesterFile) {
     throw new Error(
-      "Missing demo-deployment.json or demo-attester.json — run scripts/setup-demo-markets.ts first."
+      "Missing devnet-deployment.json or devnet-attester.json — run scripts/setup-devnet-markets.ts first."
     );
   }
 
@@ -102,7 +102,6 @@ async function main(): Promise<void> {
   );
   const { provider } = makeProvider(cluster);
   const program = makeProgram(provider);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const methods = program.methods as any;
 
   const marketIdBuf = Buffer.from(market.marketId, "hex");
@@ -110,7 +109,6 @@ async function main(): Promise<void> {
   const priceCachePda = derivePriceCache(marketIdBuf);
 
   // Sanity check — ensure the caller holds the right attester key.
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const cache = await (program.account as any).priceCache.fetch(priceCachePda);
   if (cache.attester.toBase58() !== attester.publicKey.toBase58()) {
     throw new Error(
@@ -143,7 +141,7 @@ async function main(): Promise<void> {
 
   console.log(`\n✅ Resolution finalised — tx ${sig}`);
   console.log(
-    "   Market is now paused. Winning positions can redeem via DFlow;"
+    "   Market is now paused. Mainnet redemption belongs to the source venue;"
   );
   console.log(
     "   losing-side positions can still be force-closed through the bot."

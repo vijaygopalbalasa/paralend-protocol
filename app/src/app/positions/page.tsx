@@ -1,278 +1,425 @@
 "use client";
 
 import Link from "next/link";
-import { useWallet } from "@solana/wallet-adapter-react";
+import { useMemo, useState } from "react";
+import { Transaction } from "@solana/web3.js";
+import { TOKEN_PROGRAM_ID } from "@solana/spl-token";
+import { useConnection, useWallet } from "@solana/wallet-adapter-react";
+
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
-import { formatUSD, formatHealthFactor, healthFactorBg } from "@/lib/utils";
-import { usePositions } from "@/hooks/usePositions";
-import { formatTokenAmount } from "@/lib/paralend-program";
+import { Badge } from "@/components/ui/badge";
+import { Meter } from "@/components/ui/meter";
+import { NumberTicker } from "@/components/ui/number-ticker";
+import { formatUSD, cn } from "@/lib/utils";
+import { usePositions, type PositionRow } from "@/hooks/usePositions";
+import {
+  deriveCollateralVaultPDA,
+  deriveLoanVaultPDA,
+  deriveMarketPDA,
+  derivePositionPDA,
+  derivePriceCachePDA,
+  ensureAtaIx,
+  formatTokenAmount,
+  makeAnchorProvider,
+  makeProgram,
+  toAnchorWallet,
+} from "@/lib/paralend-program";
+import { useMarkets, type MarketRow } from "@/hooks/useMarkets";
+import {
+  COPY,
+  formatDuration,
+  marketPhase,
+  safetyLabel,
+  safetyScore,
+  safetyTone,
+} from "@/lib/copy";
+
+type Notice =
+  | { type: "success"; message: string }
+  | { type: "error"; message: string }
+  | null;
+
+function errorMessage(err: unknown): string {
+  return err instanceof Error ? err.message : String(err);
+}
 
 export default function PositionsPage() {
-  const { publicKey, connected } = useWallet();
-  const { positions, loading } = usePositions(15_000);
+  const { connection } = useConnection();
+  const wallet = useWallet();
+  const { connected } = wallet;
+  const { positions, loading, reload } = usePositions(15_000);
+  const { markets } = useMarkets(30_000);
+  const [notice, setNotice] = useState<Notice>(null);
+  const [pendingAction, setPendingAction] = useState<string | null>(null);
 
-  const totalSupplied = positions.reduce((s, p) => s + p.supplyAssetsUsd, 0);
-  const totalBorrowed = positions.reduce((s, p) => s + p.borrowAssetsUsd, 0);
-  const totalCollateral = positions.reduce((s, p) => s + p.collateralValueUsd, 0);
+  const marketsByKey = useMemo(() => {
+    const m = new Map<string, MarketRow>();
+    for (const mk of markets) m.set(mk.publicKey, mk);
+    return m;
+  }, [markets]);
+
+  const aggregate = useMemo(() => {
+    const totalLent = positions.reduce((s, p) => s + p.supplyAssetsUsd, 0);
+    const totalBorrowed = positions.reduce((s, p) => s + p.borrowAssetsUsd, 0);
+    const totalCollateral = positions.reduce(
+      (s, p) => s + p.collateralValueUsd,
+      0
+    );
+    const netEquity = totalLent + totalCollateral - totalBorrowed;
+    return { totalLent, totalBorrowed, totalCollateral, netEquity };
+  }, [positions]);
+
+  const lastCallPositions = useMemo(() => {
+    return positions.filter((p) => {
+      const m = marketsByKey.get(p.marketPubkey);
+      if (!m) return false;
+      return marketPhase(m.resolutionTimestamp, m.marketStatus) === "last-call";
+    });
+  }, [positions, marketsByKey]);
+
+  const handleForceClose = async (row: PositionRow) => {
+    const anchorWallet = toAnchorWallet(wallet);
+    if (!anchorWallet) {
+      setNotice({ type: "error", message: "Connect a wallet first." });
+      return;
+    }
+    const market = marketsByKey.get(row.marketPubkey);
+    if (!market) {
+      setNotice({ type: "error", message: "Market data not loaded yet." });
+      return;
+    }
+    setPendingAction(`fc:${row.publicKey}`);
+    setNotice(null);
+    try {
+      const program = makeProgram(connection, anchorWallet);
+      const marketAccount = await program.account.market.fetch(row.marketPubkey);
+      const methods = program.methods as any;
+      const posAccount = await program.account.position.fetch(row.publicKey);
+      const borrower = posAccount.owner;
+      const marketId = Buffer.from(posAccount.marketId as number[]);
+
+      const marketPda = deriveMarketPDA(marketId);
+      const positionPda = derivePositionPDA(marketId, borrower);
+      const loanVault = deriveLoanVaultPDA(marketId);
+      const collateralVault = deriveCollateralVaultPDA(marketId);
+      const priceCache = derivePriceCachePDA(marketId);
+
+      const provider = makeAnchorProvider(connection, anchorWallet);
+      const tx = new Transaction();
+      const { address: liquidatorLoanAta, instruction: loanAtaIx } =
+        ensureAtaIx(marketAccount.loanMint, anchorWallet.publicKey, anchorWallet.publicKey);
+      const { address: liquidatorCollateralAta, instruction: collAtaIx } =
+        ensureAtaIx(marketAccount.collateralMint, anchorWallet.publicKey, anchorWallet.publicKey);
+      tx.add(loanAtaIx);
+      tx.add(collAtaIx);
+      tx.add(
+        await methods
+          .forceClosePosition(Array.from(marketId))
+          .accountsPartial({
+            liquidator: anchorWallet.publicKey,
+            market: marketPda,
+            irm: marketAccount.irm,
+            borrowerPosition: positionPda,
+            borrower,
+            liquidatorLoanAta,
+            loanVault,
+            collateralVault,
+            liquidatorCollateralAta,
+            priceCache,
+            tokenProgram: TOKEN_PROGRAM_ID,
+          })
+          .instruction()
+      );
+      const sig = await provider.sendAndConfirm(tx, []);
+      setNotice({
+        type: "success",
+        message: `Last-call close confirmed · ${sig.slice(0, 10)}…`,
+      });
+      await reload();
+    } catch (err) {
+      setNotice({ type: "error", message: errorMessage(err) });
+    } finally {
+      setPendingAction(null);
+    }
+  };
 
   return (
-    <div className="flex flex-col gap-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+    <div className="mx-auto max-w-[1280px] px-5 py-8 sm:px-8 lg:px-10 md:py-10">
+      <div className="mb-6 flex flex-col gap-4 border-b border-border pb-6 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-paralend-text-primary">My Positions</h1>
-          <p className="text-sm text-paralend-text-secondary mt-1">
-            All your active lending and borrowing positions across every market.
+          <span className="eyebrow-xs mb-2 inline-block">Portfolio</span>
+          <h1 className="text-[30px] font-extrabold leading-tight text-ink md:text-[40px]">
+            Positions
+          </h1>
+          <p className="mt-2 max-w-2xl text-[14px] leading-relaxed text-ink2 md:text-[15px]">
+            Review supplied assets, posted collateral, borrow balances, and
+            account health across all markets.
           </p>
         </div>
         <Link href="/markets">
-          <Button variant="primary" size="sm">
-            + Open Position
+          <Button variant="primary" size="md">
+            Open position
           </Button>
         </Link>
       </div>
 
-      {/* Not connected */}
+      {notice && (
+        <div
+          className={cn(
+            "mb-6 flex items-center justify-between gap-3 rounded-lg px-5 py-4 text-[14px]",
+            notice.type === "success"
+              ? "bg-leaf-soft text-leaf-deep"
+              : "bg-crimson-soft text-crimson-deep"
+          )}
+        >
+          <span className="font-bold">{notice.message}</span>
+          <button
+            onClick={() => setNotice(null)}
+            className="text-[11px] font-bold uppercase tracking-wider hover:text-ink"
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
+
       {!connected && (
-        <div className="flex flex-col items-center justify-center py-24 gap-5 rounded-xl border border-paralend-border border-dashed bg-paralend-card/30">
-          <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-paralend-card border border-paralend-border text-3xl">
-            ◎
-          </div>
-          <div className="text-center">
-            <h3 className="text-base font-semibold text-paralend-text-primary mb-1">
-              Connect your wallet
-            </h3>
-            <p className="text-sm text-paralend-text-secondary max-w-xs">
-              Connect a Solana wallet (Phantom, Solflare, Backpack) to view your positions.
-            </p>
-          </div>
+        <div className="rounded-lg border border-border bg-white p-12 text-center">
+          <h3 className="mb-2 text-2xl font-extrabold text-ink">
+            Connect your wallet
+          </h3>
+          <p className="text-[15px] text-ink2 max-w-md mx-auto leading-relaxed mb-7">
+            {COPY.empty.notConnected}
+          </p>
           <Link href="/markets">
-            <Button variant="primary">Explore Markets</Button>
+            <Button variant="primary">Browse markets</Button>
           </Link>
         </div>
       )}
 
-      {/* Connected, loading */}
-      {connected && loading && positions.length === 0 && (
-        <div className="flex items-center justify-center py-16 text-paralend-text-secondary text-sm animate-pulse">
-          Loading positions from devnet…
-        </div>
-      )}
-
-      {/* Connected, no positions */}
-      {connected && !loading && positions.length === 0 && (
-        <div className="flex flex-col items-center justify-center py-24 gap-5 rounded-xl border border-paralend-border border-dashed bg-paralend-card/30">
-          <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-paralend-card border border-paralend-border text-3xl">
-            ◎
-          </div>
-          <div className="text-center">
-            <h3 className="text-base font-semibold text-paralend-text-primary mb-1">
-              No positions yet
-            </h3>
-            <p className="text-sm text-paralend-text-secondary max-w-xs">
-              Explore markets to start supplying or borrowing.
-            </p>
-          </div>
-          <div className="flex gap-3">
-            <Link href="/markets">
-              <Button variant="primary">Explore Markets</Button>
-            </Link>
-            <Link href="/create">
-              <Button variant="secondary">Create Market</Button>
-            </Link>
-          </div>
-        </div>
-      )}
-
-      {/* Summary cards */}
-      {positions.length > 0 && (
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          {[
-            { label: "Total Supplied", value: formatUSD(totalSupplied) },
-            { label: "Total Borrowed", value: formatUSD(totalBorrowed) },
-            { label: "Total Collateral", value: formatUSD(totalCollateral) },
-            { label: "Positions", value: String(positions.length) },
-          ].map((stat) => (
-            <div
-              key={stat.label}
-              className="rounded-xl border border-paralend-border bg-paralend-card px-4 py-3"
-            >
-              <div className="text-xs text-paralend-text-secondary uppercase tracking-wide mb-1">
-                {stat.label}
+      {connected && (
+        <>
+          <div className="mb-6 grid grid-cols-2 gap-3 md:grid-cols-4">
+            {[
+              { label: "Net value", value: aggregate.netEquity, accent: aggregate.netEquity >= 0 ? undefined : "coral" as const },
+              { label: "Lent", value: aggregate.totalLent, accent: "leaf" as const },
+              { label: "Collateral", value: aggregate.totalCollateral },
+              { label: "Borrowed", value: aggregate.totalBorrowed, accent: "coral" as const },
+            ].map((s) => (
+              <div key={s.label} className="rounded-lg border border-border bg-white p-4">
+                <div className="eyebrow-xs mb-2">{s.label}</div>
+                <div
+                  className={cn(
+                    "numerals text-[24px] font-bold leading-none md:text-[30px]",
+                    s.accent === "coral" && "text-coral",
+                    s.accent === "leaf" && "text-leaf"
+                  )}
+                >
+                  <NumberTicker value={s.value} currency />
+                </div>
               </div>
-              <div className="text-lg font-bold text-paralend-text-primary tabular-nums">
-                {stat.value}
+            ))}
+          </div>
+
+          {lastCallPositions.length > 0 && (
+            <div className="mb-6 rounded-lg border border-crimson/30 bg-crimson-soft p-5 text-crimson-deep">
+              <div className="flex items-start gap-4">
+                <div className="flex-1">
+                  <div className="mb-1 text-[11px] font-bold uppercase tracking-wider">Last call</div>
+                  <h3 className="mb-2 text-[18px] font-extrabold leading-tight">
+                    {lastCallPositions.length} position{lastCallPositions.length > 1 ? "s" : ""} in the final window
+                  </h3>
+                  <p className="text-[14px] leading-relaxed max-w-2xl opacity-90">
+                    These markets settle in under 2 hours. Borrow power is
+                    tightening. Anyone can close unsafe positions for a bounty.
+                  </p>
+                </div>
               </div>
             </div>
-          ))}
-        </div>
-      )}
+          )}
 
-      {/* Positions table — desktop */}
-      {positions.length > 0 && (
-        <>
-          <div className="hidden md:block rounded-xl border border-paralend-border overflow-hidden">
-            <table className="w-full text-sm">
-              <thead className="bg-paralend-card border-b border-paralend-border">
-                <tr>
-                  <th className="text-left py-3 px-5 text-xs font-semibold text-paralend-text-secondary uppercase tracking-wide">
-                    Market
-                  </th>
-                  <th className="text-right py-3 px-4 text-xs font-semibold text-paralend-text-secondary uppercase tracking-wide">
-                    Supplied
-                  </th>
-                  <th className="text-right py-3 px-4 text-xs font-semibold text-paralend-text-secondary uppercase tracking-wide">
-                    Borrowed
-                  </th>
-                  <th className="text-right py-3 px-4 text-xs font-semibold text-paralend-text-secondary uppercase tracking-wide">
-                    Collateral
-                  </th>
-                  <th className="text-right py-3 px-4 text-xs font-semibold text-paralend-text-secondary uppercase tracking-wide">
-                    Health Factor
-                  </th>
-                  <th className="text-right py-3 px-5 text-xs font-semibold text-paralend-text-secondary uppercase tracking-wide">
-                    Actions
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="bg-paralend-bg divide-y divide-paralend-border/50">
-                {positions.map((pos) => (
-                  <tr key={pos.id} className="hover:bg-white/[0.02] transition-colors">
-                    <td className="py-4 px-5">
-                      <div className="flex items-center gap-3">
-                        <div className="flex -space-x-1">
-                          <span className="flex h-8 w-8 items-center justify-center rounded-full bg-paralend-card border border-paralend-border text-sm font-bold text-paralend-text-secondary">
-                            {pos.collateralSymbol.slice(0, 2)}
-                          </span>
-                          <span className="flex h-8 w-8 items-center justify-center rounded-full bg-paralend-card border border-paralend-border text-sm">
-                            $
-                          </span>
-                        </div>
-                        <span className="font-semibold text-paralend-text-primary">
-                          {pos.collateralSymbol} / {pos.loanSymbol}
-                        </span>
-                      </div>
-                    </td>
+          {loading && positions.length === 0 && (
+            <div className="py-16 text-center">
+              <span className="text-ink3">Loading your positions...</span>
+            </div>
+          )}
 
-                    <td className="py-4 px-4 text-right">
-                      <div className="text-paralend-green font-semibold">
-                        {pos.supplyAssetsUsd > 0 ? formatUSD(pos.supplyAssetsUsd) : "—"}
-                      </div>
-                    </td>
+          {!loading && positions.length === 0 && (
+            <div className="rounded-lg border border-border bg-white p-12 text-center">
+              <h3 className="mb-2 text-2xl font-extrabold text-ink">
+                No positions yet
+              </h3>
+              <p className="text-[15px] text-ink2 max-w-md mx-auto mb-7">
+                {COPY.empty.noPositions} Start by posting collateral or lending into a pool.
+              </p>
+              <Link href="/markets">
+                <Button variant="primary">Browse markets</Button>
+              </Link>
+            </div>
+          )}
 
-                    <td className="py-4 px-4 text-right">
-                      <div className={pos.borrowAssetsUsd > 0 ? "text-paralend-orange font-semibold" : "text-paralend-text-secondary"}>
-                        {pos.borrowAssetsUsd > 0 ? formatUSD(pos.borrowAssetsUsd) : "—"}
-                      </div>
-                    </td>
-
-                    <td className="py-4 px-4 text-right">
-                      <div className="font-semibold text-paralend-text-primary">
-                        {Number(pos.collateralAmount) > 0
-                          ? `${formatTokenAmount(pos.collateralAmount, pos.collateralDecimals, 4)} ${pos.collateralSymbol}`
-                          : "—"}
-                      </div>
-                      {pos.collateralValueUsd > 0 && (
-                        <div className="text-xs text-paralend-text-secondary">
-                          ≈ {formatUSD(pos.collateralValueUsd)}
-                        </div>
-                      )}
-                    </td>
-
-                    <td className="py-4 px-4 text-right">
-                      {pos.borrowAssetsUsd > 0 ? (
-                        <span
-                          className={`inline-flex items-center rounded-md border px-2.5 py-1 text-sm font-bold ${healthFactorBg(pos.healthFactor)}`}
-                        >
-                          {formatHealthFactor(pos.healthFactor)}
-                        </span>
-                      ) : (
-                        <span className="text-paralend-text-secondary text-sm">—</span>
-                      )}
-                    </td>
-
-                    <td className="py-4 px-5 text-right">
-                      <Link href={`/markets/${pos.marketPubkey}`}>
-                        <Button variant="secondary" size="sm">
-                          Manage
-                        </Button>
-                      </Link>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-
-          {/* Mobile cards */}
-          <div className="flex flex-col gap-3 md:hidden">
-            {positions.map((pos) => (
-              <div
-                key={pos.id}
-                className="rounded-xl border border-paralend-border bg-paralend-card p-4"
-              >
-                <div className="flex items-center justify-between mb-4">
-                  <span className="font-semibold text-paralend-text-primary text-sm">
-                    {pos.collateralSymbol} / {pos.loanSymbol}
-                  </span>
-                  {pos.borrowAssetsUsd > 0 && (
-                    <span
-                      className={`inline-flex items-center rounded-md border px-2 py-0.5 text-xs font-bold ${healthFactorBg(pos.healthFactor)}`}
-                    >
-                      HF: {formatHealthFactor(pos.healthFactor)}
-                    </span>
-                  )}
-                </div>
-                <div className="grid grid-cols-2 gap-3 text-sm mb-4">
-                  <div>
-                    <div className="text-xs text-paralend-text-secondary mb-0.5">Supplied</div>
-                    <div className="font-semibold text-paralend-green">
-                      {pos.supplyAssetsUsd > 0 ? formatUSD(pos.supplyAssetsUsd) : "—"}
-                    </div>
-                  </div>
-                  <div>
-                    <div className="text-xs text-paralend-text-secondary mb-0.5">Borrowed</div>
-                    <div className={`font-semibold ${pos.borrowAssetsUsd > 0 ? "text-paralend-orange" : "text-paralend-text-secondary"}`}>
-                      {pos.borrowAssetsUsd > 0 ? formatUSD(pos.borrowAssetsUsd) : "—"}
-                    </div>
-                  </div>
-                </div>
-                <Link href={`/markets/${pos.marketPubkey}`}>
-                  <Button variant="secondary" size="sm" fullWidth>
-                    Manage Position
-                  </Button>
-                </Link>
-              </div>
-            ))}
-          </div>
+          {positions.length > 0 && (
+            <div className="flex flex-col gap-4">
+              {positions.map((position) => {
+                const market = marketsByKey.get(position.marketPubkey);
+                return (
+                  <PositionCard
+                    key={position.publicKey}
+                    position={position}
+                    market={market}
+                    isPending={pendingAction === `fc:${position.publicKey}`}
+                    onForceClose={() => handleForceClose(position)}
+                  />
+                );
+              })}
+            </div>
+          )}
         </>
       )}
+    </div>
+  );
+}
 
-      {/* Health Factor legend */}
-      {positions.length > 0 && (
-        <Card>
-          <div className="flex flex-wrap gap-4 text-xs text-paralend-text-secondary">
-            <span className="font-semibold text-paralend-text-primary text-sm">
-              Health Factor guide:
-            </span>
-            {[
-              { label: "> 1.5 — Safe", hf: 2 },
-              { label: "1.1–1.5 — Caution", hf: 1.3 },
-              { label: "< 1.1 — Liquidatable", hf: 0.9 },
-            ].map(({ label, hf }) => (
-              <span key={label} className="inline-flex items-center gap-1.5">
-                <span
-                  className={`inline-block px-2 py-0.5 rounded border font-bold ${healthFactorBg(hf)}`}
-                >
-                  {formatHealthFactor(hf)}
-                </span>
-                {label.split(" — ")[1]}
-              </span>
-            ))}
-          </div>
-        </Card>
+function PositionCard({
+  position,
+  market,
+  isPending,
+  onForceClose,
+}: {
+  position: PositionRow;
+  market: MarketRow | undefined;
+  isPending: boolean;
+  onForceClose: () => void;
+}) {
+  const phase = market
+    ? marketPhase(market.resolutionTimestamp, market.marketStatus)
+    : "open";
+  const isLastCall = phase === "last-call";
+  const isSettled = phase === "settled";
+
+  const safetyPct = safetyScore(position.healthFactor);
+  const tone = safetyTone(position.healthFactor);
+  const meterTone: "leaf" | "crimson" | "amber" =
+    tone === "mint" ? "leaf" : tone === "alarm" ? "crimson" : "amber";
+  const hasDebt = position.borrowShares > 0n;
+  const canForceClose = isLastCall && hasDebt && position.healthFactor < 1.0;
+  return (
+    <div
+      className={cn(
+        "overflow-hidden rounded-lg border bg-white transition-colors",
+        isLastCall ? "border-crimson/40" : "border-border",
+        isSettled && "opacity-80"
       )}
+    >
+      <div className="p-5 md:p-6">
+        <div className="flex flex-col lg:flex-row lg:items-start gap-5 lg:gap-8">
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 mb-3 flex-wrap">
+              <Badge variant={isLastCall ? "crimson" : "outline"}>
+                {market?.collateralSymbol ?? position.collateralSymbol}
+              </Badge>
+              {market && (
+                <Badge variant={
+                  phase === "last-call" ? "crimson"
+                  : phase === "narrowing" ? "amber"
+                  : phase === "settled" ? "outline"
+                  : "leaf"
+                }>
+                  {phase === "last-call" ? "Last call"
+                    : phase === "settled" ? "Settled"
+                    : phase === "narrowing" ? "Narrowing"
+                    : "Open"}
+                </Badge>
+              )}
+              {market && market.resolutionTimestamp > 0 && !isSettled && (
+                <span className="text-[11px] font-bold text-ink3 uppercase tracking-wider numerals">
+                  {formatDuration(market.resolutionTimestamp - Math.floor(Date.now() / 1000))}
+                </span>
+              )}
+            </div>
+            <Link
+              href={`/markets/${position.marketPubkey}`}
+              className="block line-clamp-2 text-[20px] font-extrabold leading-tight text-ink transition-colors hover:text-coral md:text-[24px]"
+            >
+              {market?.name ?? `${position.collateralSymbol} / ${position.loanSymbol}`}
+            </Link>
+          </div>
+
+          <div className="grid grid-cols-3 gap-5 lg:gap-7 text-[13px]">
+            <Col label="Collateral" value={position.collateralAmount > 0n ? formatTokenAmount(position.collateralAmount, position.collateralDecimals, 3) : "—"} sub={position.collateralValueUsd > 0 ? formatUSD(position.collateralValueUsd) : undefined} />
+            <Col label="Lent" value={position.supplyAssetsUsd > 0 ? formatUSD(position.supplyAssetsUsd) : "—"} accent="leaf" />
+            <Col label="Borrowed" value={position.borrowAssetsUsd > 0 ? formatUSD(position.borrowAssetsUsd) : "—"} accent="coral" />
+          </div>
+
+          {hasDebt ? (
+            <div className="w-full lg:w-56">
+              <div className="flex items-baseline justify-between mb-2">
+                <span className="eyebrow-xs">Safety</span>
+                <span className={cn(
+                  "text-[11px] font-bold uppercase tracking-wider",
+                  tone === "mint" && "text-leaf",
+                  tone === "signal" && "text-amber-deep",
+                  tone === "alarm" && "text-crimson"
+                )}>
+                  {safetyLabel(position.healthFactor)}
+                </span>
+              </div>
+              <Meter value={safetyPct} tone={meterTone} />
+            </div>
+          ) : (
+            <div className="w-full lg:w-56 text-right">
+              <div className="eyebrow-xs">Safety</div>
+              <div className="mt-1 text-[13px] text-ink3">No debt</div>
+            </div>
+          )}
+        </div>
+
+        {canForceClose && (
+          <div className="mt-5 pt-5 border-t border-crimson/30 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <p className="text-[13px] text-crimson font-bold">
+              Unsafe during last call. Force-close is available.
+            </p>
+            <Button variant="alarm" size="md" loading={isPending} onClick={onForceClose}>
+              Force close
+            </Button>
+          </div>
+        )}
+
+        {!canForceClose && isLastCall && hasDebt && (
+          <div className="mt-5 pt-5 border-t border-border flex items-center justify-between gap-3">
+            <p className="text-[13px] text-ink2 font-medium">
+              Safe during last call.
+            </p>
+            <Link href={`/markets/${position.marketPubkey}?tab=borrow`}>
+              <Button variant="secondary" size="sm">Repay</Button>
+            </Link>
+          </div>
+        )}
+
+        {!isLastCall && (
+          <div className="mt-5 pt-5 border-t border-border flex items-center justify-end gap-2 flex-wrap">
+            <Link href={`/markets/${position.marketPubkey}?tab=borrow`}>
+              <Button variant="ghost" size="sm">Borrow more</Button>
+            </Link>
+            <Link href={`/markets/${position.marketPubkey}?tab=borrow`}>
+              <Button variant="secondary" size="sm">Repay</Button>
+            </Link>
+            <Link href={`/markets/${position.marketPubkey}?tab=collateral`}>
+              <Button variant="primary" size="sm">Manage collateral</Button>
+            </Link>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function Col({ label, value, sub, accent }: { label: string; value: string; sub?: string; accent?: "leaf" | "coral" }) {
+  const c = accent === "leaf" ? "text-leaf" : accent === "coral" ? "text-coral" : "text-ink";
+  return (
+    <div>
+      <div className="eyebrow-xs mb-1">{label}</div>
+      <div className={cn("numerals text-[16px] font-extrabold", c)}>{value}</div>
+      {sub && <div className="text-[11px] text-ink3 mt-0.5 numerals font-bold">{sub}</div>}
     </div>
   );
 }

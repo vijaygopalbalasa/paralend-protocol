@@ -4,9 +4,7 @@ use anchor_spl::token::{self, Token, TokenAccount, Transfer};
 use crate::constants::*;
 use crate::errors::ParalendError;
 use crate::events;
-use crate::interfaces::oracle::{
-    get_loan_price, is_position_healthy, read_price_cache_stale_ok,
-};
+use crate::interfaces::oracle::{get_loan_price, is_position_healthy, read_price_cache_stale_ok};
 use crate::math::interest::accrue_interest_on_market;
 use crate::math::safe_math::safe_u128_to_u64;
 use crate::math::shares::{to_assets_up, to_shares_down};
@@ -58,6 +56,7 @@ pub struct ForceClosePosition<'info> {
         mut,
         seeds = [SEED_PREFIX, SEED_POSITION, &market_id, borrower.key().as_ref()],
         bump = borrower_position.bump,
+        constraint = borrower_position.owner == borrower.key() @ ParalendError::Unauthorized,
         constraint = borrower_position.market_id == market_id @ ParalendError::Unauthorized,
     )]
     pub borrower_position: Box<Account<'info, Position>>,
@@ -78,6 +77,8 @@ pub struct ForceClosePosition<'info> {
         mut,
         seeds = [SEED_PREFIX, SEED_LOAN_VAULT, &market_id],
         bump = market.loan_vault_bump,
+        token::mint = market.loan_mint,
+        token::authority = market,
     )]
     pub loan_vault: Box<Account<'info, TokenAccount>>,
 
@@ -86,6 +87,8 @@ pub struct ForceClosePosition<'info> {
         mut,
         seeds = [SEED_PREFIX, SEED_COLLATERAL_VAULT, &market_id],
         bump = market.collateral_vault_bump,
+        token::mint = market.collateral_mint,
+        token::authority = market,
     )]
     pub collateral_vault: Box<Account<'info, TokenAccount>>,
 
@@ -114,10 +117,7 @@ pub fn handle_force_close_position(
     let now = clock.unix_timestamp;
 
     let market_resolution_ts = ctx.accounts.market.resolution_timestamp;
-    require!(
-        market_resolution_ts > 0,
-        ParalendError::MarketNotActive
-    );
+    require!(market_resolution_ts > 0, ParalendError::MarketNotActive);
 
     // Window = [T_resolution - FORCE_CLOSE_WINDOW, T_resolution).
     // Before T_resolution - FORCE_CLOSE_WINDOW the regular `liquidate` path
@@ -130,11 +130,7 @@ pub fn handle_force_close_position(
     require!(now < market_resolution_ts, ParalendError::MarketResolved);
 
     // Accrue interest so debt computations reflect the present moment.
-    accrue_interest_on_market(
-        &mut ctx.accounts.market,
-        &ctx.accounts.irm,
-        now,
-    )?;
+    accrue_interest_on_market(&mut ctx.accounts.market, &ctx.accounts.irm, now)?;
 
     // Health check under the time-decayed LLTV. Tolerate a stale oracle
     // here — see `read_price_cache_stale_ok` for the chicken-and-egg
@@ -166,8 +162,7 @@ pub fn handle_force_close_position(
     let elapsed = now.saturating_sub(window_open);
     let span = LIQUIDATOR_BOUNTY_MAX_BPS.saturating_sub(LIQUIDATOR_BOUNTY_MIN_BPS);
     let bounty_bps = LIQUIDATOR_BOUNTY_MIN_BPS.saturating_add(
-        (span as i64).saturating_mul(elapsed).unsigned_abs()
-            / (FORCE_CLOSE_WINDOW_SECONDS as u64),
+        (span as i64).saturating_mul(elapsed).unsigned_abs() / (FORCE_CLOSE_WINDOW_SECONDS as u64),
     );
 
     // collateral_value_in_loan = seized_collateral * collateral_price / loan_price
@@ -190,11 +185,13 @@ pub fn handle_force_close_position(
         market_ro.total_borrow_shares,
     )?;
     let repaid_shares = repaid_shares_naive.min(position.borrow_shares);
+    require!(repaid_shares > 0, ParalendError::ZeroAmount);
     let repaid_assets = to_assets_up(
         repaid_shares,
         market_ro.total_borrow_assets,
         market_ro.total_borrow_shares,
     )?;
+    require!(repaid_assets > 0, ParalendError::ZeroAmount);
 
     // ── Apply state updates ──────────────────────────────────────────────────
     let market = &mut ctx.accounts.market;
@@ -226,15 +223,9 @@ pub fn handle_force_close_position(
         )?;
 
         let market = &mut ctx.accounts.market;
-        market.total_supply_assets = market
-            .total_supply_assets
-            .saturating_sub(bad_debt_assets);
-        market.total_borrow_assets = market
-            .total_borrow_assets
-            .saturating_sub(bad_debt_assets);
-        market.total_borrow_shares = market
-            .total_borrow_shares
-            .saturating_sub(bad_debt_shares);
+        market.total_supply_assets = market.total_supply_assets.saturating_sub(bad_debt_assets);
+        market.total_borrow_assets = market.total_borrow_assets.saturating_sub(bad_debt_assets);
+        market.total_borrow_shares = market.total_borrow_shares.saturating_sub(bad_debt_shares);
 
         let position = &mut ctx.accounts.borrower_position;
         position.borrow_shares = 0;

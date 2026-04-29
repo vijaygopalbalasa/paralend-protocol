@@ -10,58 +10,82 @@ import {
 import { FORCE_CLOSE_WINDOW_SECONDS } from "@/lib/constants";
 
 export interface DecayCurveChartProps {
-  /** base LLTV in BPS (e.g. 6000 for 60 %). */
   baseLltvBps: number;
-  /** Unix seconds; 0 = classical lending (render nothing). */
   resolutionTimestamp: number;
   marketStatus: number;
   width?: number;
   height?: number;
+  thumbnail?: boolean;
 }
 
 /**
- * Pure-SVG renderer for the time-decay LLTV curve. No Recharts dep — keeps
- * the bundle small and the render deterministic for screenshots in the
- * submission demo. X-axis spans [now, resolution]; Y-axis spans [0, 100%].
- * Red zone = force-close window. Grey dashed line = 7-day decay onset.
+ * Soft consumer chart — coral fill that turns crimson in last call.
+ * Smooth curve, no hatching, no glow, no neon.
  */
 export function DecayCurveChart({
   baseLltvBps,
   resolutionTimestamp,
   marketStatus,
-  width = 560,
-  height = 220,
+  width = 720,
+  height = 240,
+  thumbnail = false,
 }: DecayCurveChartProps) {
-  const [now, setNow] = useState(() => Math.floor(Date.now() / 1000));
+  const [now, setNow] = useState<number | null>(null);
 
   useEffect(() => {
+    setNow(Math.floor(Date.now() / 1000));
     const id = setInterval(() => setNow(Math.floor(Date.now() / 1000)), 5_000);
     return () => clearInterval(id);
   }, []);
+
+  const nowForChart = now ?? 0;
 
   const samples = useMemo(
     () =>
       decayCurveSamples({
         baseLltvBps,
         resolutionTimestampSec: resolutionTimestamp,
-        nowSec: now,
+        nowSec: nowForChart,
         samples: 72,
       }),
-    [baseLltvBps, resolutionTimestamp, now]
+    [baseLltvBps, resolutionTimestamp, nowForChart]
   );
 
-  if (resolutionTimestamp === 0 || samples.length === 0) {
+  if (now === null) {
     return (
-      <div className="rounded-xl border border-paralend-border border-dashed bg-paralend-card p-6 text-center">
-        <p className="text-sm font-medium text-paralend-text-secondary">
-          No scheduled resolution — this market behaves as a classical
-          lending market (no time-decay).
-        </p>
+      <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-full" preserveAspectRatio="none">
+        <line
+          x1="0"
+          x2={width}
+          y1={height / 2}
+          y2={height / 2}
+          stroke="#7A766E"
+          strokeOpacity={0.22}
+          strokeWidth={thumbnail ? 2 : 1.5}
+          strokeDasharray="6 6"
+        />
+      </svg>
+    );
+  }
+
+  if (resolutionTimestamp === 0 || samples.length === 0) {
+    if (thumbnail) {
+      return (
+        <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-full" preserveAspectRatio="none">
+          <line x1="0" x2={width} y1={height / 2} y2={height / 2} stroke="#7A766E" strokeOpacity={0.4} strokeWidth={2} strokeDasharray="6 6" />
+        </svg>
+      );
+    }
+    return (
+      <div className="rounded-lg border border-dashed border-border bg-muted/40 p-8 text-center">
+        <p className="text-sm text-ink3">This market never expires — borrow power stays flat.</p>
       </div>
     );
   }
 
-  const pad = { top: 18, right: 20, bottom: 36, left: 42 };
+  const pad = thumbnail
+    ? { top: 4, right: 4, bottom: 4, left: 4 }
+    : { top: 24, right: 24, bottom: 38, left: 48 };
   const plotW = width - pad.left - pad.right;
   const plotH = height - pad.top - pad.bottom;
 
@@ -74,157 +98,117 @@ export function DecayCurveChart({
     pad.top + plotH - (Math.min(100, pct) / 100) * plotH;
 
   const linePath = samples
-    .map(({ t, lltvPct }, i) => `${i === 0 ? "M" : "L"}${xFor(t)},${yFor(lltvPct)}`)
+    .map(({ t, lltvPct }, i) => `${i === 0 ? "M" : "L"}${xFor(t).toFixed(2)},${yFor(lltvPct).toFixed(2)}`)
     .join(" ");
 
   const areaPath =
     linePath +
-    ` L${xFor(tMax)},${pad.top + plotH}` +
-    ` L${xFor(tMin)},${pad.top + plotH} Z`;
+    ` L${xFor(tMax).toFixed(2)},${(pad.top + plotH).toFixed(2)}` +
+    ` L${xFor(tMin).toFixed(2)},${(pad.top + plotH).toFixed(2)} Z`;
 
-  // Decay-onset marker: the point where effective LLTV first drops below base,
-  // i.e. remaining = DECAY_START_SECONDS.
   const decayOnsetT = tMax - DECAY_START_SECONDS;
   const decayOnsetVisible = decayOnsetT >= tMin && decayOnsetT <= tMax;
 
-  // Force-close zone: [tMax - FORCE_CLOSE_WINDOW, tMax]
   const fcStart = Math.max(tMin, tMax - FORCE_CLOSE_WINDOW_SECONDS);
   const fcX = xFor(fcStart);
   const fcW = xFor(tMax) - fcX;
 
   const phase = resolutionPhase(resolutionTimestamp, marketStatus, now);
+  const isLastCall = phase === "cutoff" || phase === "force-close-window";
+
+  const stroke = isLastCall ? "#E53056" : "#FF5436";
+  const fill = isLastCall ? "#E53056" : "#FF5436";
+  const fillOpacity = isLastCall ? 0.16 : 0.14;
+
+  if (thumbnail) {
+    const gradId = `g-${Math.abs(resolutionTimestamp)}-thumb`;
+    return (
+      <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-full" preserveAspectRatio="none">
+        <defs>
+          <linearGradient id={gradId} x1="0" x2="0" y1="0" y2="1">
+            <stop offset="0%" stopColor={fill} stopOpacity={fillOpacity * 1.4} />
+            <stop offset="100%" stopColor={fill} stopOpacity="0" />
+          </linearGradient>
+        </defs>
+        <path d={areaPath} fill={`url(#${gradId})`} />
+        <path
+          d={linePath}
+          stroke={stroke}
+          strokeWidth={2}
+          fill="none"
+          strokeLinejoin="round"
+          strokeLinecap="round"
+        />
+      </svg>
+    );
+  }
 
   const yGrid = [0, 25, 50, 75, 100];
+  const gradId = `g-${Math.abs(resolutionTimestamp)}-full`;
 
   return (
-    <div className="rounded-xl border border-paralend-border bg-white p-4 shadow-sm">
-      <div className="mb-2 flex items-center justify-between">
-        <h3 className="text-sm font-black uppercase tracking-wider text-paralend-text-secondary">
-          Effective LLTV until resolution
-        </h3>
-        <span className="text-xs font-bold text-paralend-text-secondary tabular-nums">
-          base {(baseLltvBps / 100).toFixed(1)}%
-        </span>
-      </div>
+    <div className="relative">
+      <svg role="img" aria-label="Borrow power vs time" viewBox={`0 0 ${width} ${height}`} className="w-full h-auto">
+        <defs>
+          <linearGradient id={gradId} x1="0" x2="0" y1="0" y2="1">
+            <stop offset="0%" stopColor={fill} stopOpacity={fillOpacity * 1.6} />
+            <stop offset="100%" stopColor={fill} stopOpacity="0" />
+          </linearGradient>
+        </defs>
 
-      <svg
-        role="img"
-        aria-label="Time-decay LLTV curve"
-        viewBox={`0 0 ${width} ${height}`}
-        className="w-full h-auto"
-      >
-        {/* Y grid */}
         {yGrid.map((g) => (
           <g key={g}>
-            <line
-              x1={pad.left}
-              x2={pad.left + plotW}
-              y1={yFor(g)}
-              y2={yFor(g)}
-              stroke="#E5E5E5"
-              strokeDasharray="3 3"
-            />
-            <text
-              x={pad.left - 6}
-              y={yFor(g) + 3}
-              fontSize={10}
-              textAnchor="end"
-              fill="#888"
-            >
-              {g}%
+            <line x1={pad.left} x2={pad.left + plotW} y1={yFor(g)} y2={yFor(g)} stroke="#0F0E0D" strokeOpacity={0.06} />
+            <text x={pad.left - 10} y={yFor(g) + 4} fontSize={10} textAnchor="end" fill="#7A766E" fontFamily="'JetBrains Mono', monospace" style={{ letterSpacing: "0.04em" }}>
+              {g}
             </text>
           </g>
         ))}
 
-        {/* Force-close zone */}
         {fcW > 0 && (
-          <rect
-            x={fcX}
-            y={pad.top}
-            width={fcW}
-            height={plotH}
-            fill="#F59E0B"
-            fillOpacity={0.08}
-          />
+          <>
+            <rect x={fcX} y={pad.top} width={fcW} height={plotH} fill="#E53056" fillOpacity={0.06} rx={6} />
+            <text x={fcX + fcW / 2} y={pad.top + 14} fontSize={9} fill="#E53056" textAnchor="middle" fontWeight={700} fontFamily="'Manrope', sans-serif" style={{ letterSpacing: "0.12em", textTransform: "uppercase" }}>
+              Last call
+            </text>
+          </>
         )}
 
-        {/* Area under curve */}
-        <path d={areaPath} fill="#111111" fillOpacity={0.05} />
-
-        {/* Curve line */}
+        <path d={areaPath} fill={`url(#${gradId})`} />
         <path
           d={linePath}
-          stroke="#111111"
+          stroke={stroke}
           strokeWidth={2.5}
           fill="none"
           strokeLinejoin="round"
           strokeLinecap="round"
         />
 
-        {/* Decay onset marker (dashed vertical) */}
         {decayOnsetVisible && (
           <g>
-            <line
-              x1={xFor(decayOnsetT)}
-              x2={xFor(decayOnsetT)}
-              y1={pad.top}
-              y2={pad.top + plotH}
-              stroke="#888"
-              strokeDasharray="4 3"
-            />
-            <text
-              x={xFor(decayOnsetT) + 4}
-              y={pad.top + 10}
-              fontSize={10}
-              fill="#888"
-            >
-              T-7d · decay begins
+            <line x1={xFor(decayOnsetT)} x2={xFor(decayOnsetT)} y1={pad.top} y2={pad.top + plotH} stroke="#0F0E0D" strokeOpacity={0.18} strokeDasharray="3 4" />
+            <text x={xFor(decayOnsetT) + 6} y={pad.top + 14} fontSize={9} fill="#7A766E" fontFamily="'Manrope', sans-serif" fontWeight={600} style={{ letterSpacing: "0.1em", textTransform: "uppercase" }}>
+              7d
             </text>
           </g>
         )}
 
-        {/* Now marker (green dot) */}
-        <circle cx={xFor(tMin)} cy={yFor(samples[0].lltvPct)} r={4} fill="#16A34A" />
-        <text
-          x={xFor(tMin) + 6}
-          y={yFor(samples[0].lltvPct) - 6}
-          fontSize={10}
-          fill="#16A34A"
-          fontWeight={700}
-        >
-          now · {samples[0].lltvPct.toFixed(1)}%
+        {/* NOW marker */}
+        <circle cx={xFor(tMin)} cy={yFor(samples[0].lltvPct)} r={6} fill={stroke} />
+        <circle cx={xFor(tMin)} cy={yFor(samples[0].lltvPct)} r={3} fill="white" />
+        <text x={xFor(tMin) + 12} y={yFor(samples[0].lltvPct) - 8} fontSize={10} fill={stroke} fontWeight={700} fontFamily="'Manrope', sans-serif" style={{ letterSpacing: "0.06em" }}>
+          NOW · {samples[0].lltvPct.toFixed(0)}%
         </text>
 
-        {/* Resolution marker */}
-        <line
-          x1={xFor(tMax)}
-          x2={xFor(tMax)}
-          y1={pad.top}
-          y2={pad.top + plotH}
-          stroke="#EF4444"
-          strokeWidth={1.5}
-        />
+        <line x1={xFor(tMax)} x2={xFor(tMax)} y1={pad.top} y2={pad.top + plotH} stroke="#0F0E0D" strokeOpacity={0.4} strokeWidth={1} />
 
-        {/* X-axis labels */}
-        <text x={pad.left} y={height - 12} fontSize={10} fill="#888">
-          {samples[0].label}
+        <text x={pad.left} y={height - 14} fontSize={10} fill="#7A766E" fontFamily="'Manrope', sans-serif" fontWeight={600} style={{ letterSpacing: "0.1em", textTransform: "uppercase" }}>
+          Now
         </text>
-        <text
-          x={pad.left + plotW}
-          y={height - 12}
-          fontSize={10}
-          fill="#888"
-          textAnchor="end"
-        >
-          resolution
+        <text x={pad.left + plotW} y={height - 14} fontSize={10} fill="#7A766E" textAnchor="end" fontFamily="'Manrope', sans-serif" fontWeight={600} style={{ letterSpacing: "0.1em", textTransform: "uppercase" }}>
+          Settles
         </text>
       </svg>
-
-      <p className="mt-2 text-[11px] font-medium text-paralend-text-secondary">
-        Effective LLTV ramps down over the final 7 days before resolution.
-        The shaded strip marks the {Math.floor(FORCE_CLOSE_WINDOW_SECONDS / 3600)}-hour
-        force-close window (currently <strong>{phase}</strong>).
-      </p>
     </div>
   );
 }

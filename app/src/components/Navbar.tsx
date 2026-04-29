@@ -5,36 +5,30 @@ import { usePathname } from "next/navigation";
 import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
 import { cn } from "@/lib/utils";
 
-// `Create Market` is not a public nav action — markets are registered
-// by the protocol admin via the setup script, not the browser. The
-// /create page still exists for admin use but is intentionally unlinked.
 const NAV_LINKS = [
   { href: "/markets", label: "Markets" },
-  { href: "/positions", label: "My Positions" },
+  { href: "/positions", label: "Portfolio" },
 ];
 
 export function Navbar() {
   const pathname = usePathname();
 
   return (
-    <nav className="sticky top-0 z-50 border-b border-paralend-border bg-paralend-bg/80 backdrop-blur-xl">
-      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-        <div className="flex h-14 items-center justify-between gap-4">
-          {/* Logo */}
-          <Link
-            href="/"
-            className="flex items-center gap-2 shrink-0 group"
-          >
-            <span className="text-lg font-black tracking-tight text-paralend-primary group-hover:text-gray-600 transition-colors">
+    <nav className="sticky top-0 z-50 bg-bg/85 backdrop-blur-xl border-b border-border">
+      <div className="mx-auto max-w-[1280px] px-5 sm:px-8 lg:px-10">
+        <div className="flex h-16 items-center justify-between gap-4">
+          <Link href="/" className="flex items-center gap-2.5 group">
+            <div className="relative flex h-8 w-8 items-center justify-center rounded-md bg-ink">
+              <span className="font-display text-[16px] font-extrabold text-white leading-none">
+                P
+              </span>
+            </div>
+            <span className="font-display text-[20px] font-extrabold text-ink">
               Paralend
-            </span>
-            <span className="hidden sm:inline-block text-[10px] font-bold uppercase tracking-widest text-paralend-text-secondary border border-paralend-border rounded px-1.5 py-0.5">
-              devnet
             </span>
           </Link>
 
-          {/* Nav links */}
-          <div className="hidden md:flex items-center gap-1">
+          <div className="hidden items-center gap-1 rounded-lg border border-border bg-white p-1 md:flex">
             {NAV_LINKS.map((link) => {
               const active =
                 pathname === link.href ||
@@ -44,10 +38,10 @@ export function Navbar() {
                   key={link.href}
                   href={link.href}
                   className={cn(
-                    "px-3 py-1.5 rounded-md text-sm font-semibold transition-colors",
+                    "rounded-md px-4 py-1.5 text-[13px] font-bold transition-colors",
                     active
-                      ? "bg-paralend-primary text-white"
-                      : "text-paralend-text-secondary hover:text-paralend-primary hover:bg-gray-100"
+                      ? "bg-ink text-white"
+                      : "text-ink2 hover:text-ink hover:bg-muted"
                   )}
                 >
                   {link.label}
@@ -56,14 +50,12 @@ export function Navbar() {
             })}
           </div>
 
-          {/* Wallet button */}
-          <div className="shrink-0">
+          <div className="flex items-center gap-3 shrink-0">
             <WalletMultiButton />
           </div>
         </div>
 
-        {/* Mobile nav */}
-        <div className="flex md:hidden gap-1 pb-2 overflow-x-auto no-scrollbar">
+        <div className="flex md:hidden gap-1 pb-3 overflow-x-auto no-scrollbar">
           {NAV_LINKS.map((link) => {
             const active =
               pathname === link.href ||
@@ -73,10 +65,8 @@ export function Navbar() {
                 key={link.href}
                 href={link.href}
                 className={cn(
-                  "shrink-0 px-3 py-1.5 rounded-md text-sm font-semibold transition-colors",
-                  active
-                    ? "bg-paralend-primary text-white"
-                    : "text-paralend-text-secondary hover:text-paralend-primary hover:bg-gray-100"
+                  "shrink-0 rounded-md px-3.5 py-1.5 text-[12px] font-bold transition-colors",
+                  active ? "bg-ink text-white" : "text-ink2 hover:bg-muted"
                 )}
               >
                 {link.label}

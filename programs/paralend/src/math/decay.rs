@@ -81,40 +81,28 @@ mod tests {
     fn far_from_resolution_no_decay() {
         let now = 1_000_000;
         let resolution = now + 14 * 24 * 3600; // 14 days away
-        assert_eq!(
-            compute_effective_lltv(6000, resolution, now).unwrap(),
-            6000
-        );
+        assert_eq!(compute_effective_lltv(6000, resolution, now).unwrap(), 6000);
     }
 
     #[test]
     fn at_decay_window_boundary_equals_base() {
         let now = 1_000_000;
         let resolution = now + DECAY_START_SECONDS; // exactly 7 days
-        assert_eq!(
-            compute_effective_lltv(6000, resolution, now).unwrap(),
-            6000
-        );
+        assert_eq!(compute_effective_lltv(6000, resolution, now).unwrap(), 6000);
     }
 
     #[test]
     fn midpoint_of_decay_is_half_base() {
         let now = 1_000_000;
         let resolution = now + DECAY_START_SECONDS / 2;
-        assert_eq!(
-            compute_effective_lltv(6000, resolution, now).unwrap(),
-            3000
-        );
+        assert_eq!(compute_effective_lltv(6000, resolution, now).unwrap(), 3000);
     }
 
     #[test]
     fn quarter_remaining_is_quarter_base() {
         let now = 1_000_000;
         let resolution = now + DECAY_START_SECONDS / 4;
-        assert_eq!(
-            compute_effective_lltv(6000, resolution, now).unwrap(),
-            1500
-        );
+        assert_eq!(compute_effective_lltv(6000, resolution, now).unwrap(), 1500);
     }
 
     #[test]
@@ -126,10 +114,7 @@ mod tests {
     #[test]
     fn past_resolution_is_zero() {
         let now = 1_000_000;
-        assert_eq!(
-            compute_effective_lltv(6000, now - 3600, now).unwrap(),
-            0
-        );
+        assert_eq!(compute_effective_lltv(6000, now - 3600, now).unwrap(), 0);
     }
 
     #[test]

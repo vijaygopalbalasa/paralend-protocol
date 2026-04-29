@@ -6,8 +6,9 @@
 //   - register_price_cache + attest_price (deviation band) + poke_price
 //   - supply / supply_collateral / borrow / repay
 //   - Pre-resolution borrow cutoff (POST_BORROW_CUTOFF_SECONDS)
+//   - force_close_position in the final 2-hour window
 //
-// Additional coverage (liquidate, force_close_position, handle_resolution)
+// Additional coverage (liquidate, handle_resolution)
 // is planned behind a test-only feature flag that lets `create_market`
 // accept past timestamps for deterministic time-warp scenarios. See the
 // "Open items" section in DEPLOYMENT.md.
@@ -58,14 +59,22 @@ function deriveLoanVault(marketId: Buffer, programId: PublicKey) {
   return derive([SEED_PREFIX, SEED_LOAN_VAULT, marketId], programId);
 }
 
-function derivePosition(marketId: Buffer, owner: PublicKey, programId: PublicKey) {
+function derivePosition(
+  marketId: Buffer,
+  owner: PublicKey,
+  programId: PublicKey
+) {
   return derive(
     [SEED_PREFIX, SEED_POSITION, marketId, owner.toBuffer()],
     programId
   );
 }
 
-function deriveLinearIrm(admin: PublicKey, nonce: bigint, programId: PublicKey) {
+function deriveLinearIrm(
+  admin: PublicKey,
+  nonce: bigint,
+  programId: PublicKey
+) {
   const nonceBuf = Buffer.alloc(8);
   nonceBuf.writeBigUInt64LE(nonce);
   return derive(
@@ -140,7 +149,7 @@ describe("Paralend", () => {
   // price_wad = 0.42 * 1e18 / 1e6 = 420_000_000_000
   const PRICE_WAD_INITIAL = 420_000_000_000n;
 
-  // Fake feed_id the attester drives
+  // Local feed_id the attester drives
   const COLLATERAL_FEED_ID = Buffer.alloc(32);
   COLLATERAL_FEED_ID.write("KALSHI-YES-TEST-001", "utf-8");
   const LOAN_FEED_ID = Buffer.alloc(32); // all zeros = USDC stablecoin path
@@ -185,7 +194,11 @@ describe("Paralend", () => {
 
     let s = await program.account.protocolState.fetch(protocolState);
     assert.equal(s.pendingOwner.toBase58(), newOwner.publicKey.toBase58());
-    assert.equal(s.owner.toBase58(), payer.publicKey.toBase58(), "owner unchanged");
+    assert.equal(
+      s.owner.toBase58(),
+      payer.publicKey.toBase58(),
+      "owner unchanged"
+    );
 
     // Proposed owner accepts
     await program.methods
@@ -285,7 +298,7 @@ describe("Paralend", () => {
     // decay test (Day 8) will exercise the near-resolution tightening.
     const resolutionTs = Math.floor(Date.now() / 1000) + 14 * 24 * 3600;
     const ticker = Buffer.alloc(48);
-    ticker.write("BTC-150K-JUN2026-TEST", "utf-8");
+    ticker.write("KXTEST-YES-001", "utf-8");
 
     await program.methods
       .createMarket(
@@ -360,7 +373,11 @@ describe("Paralend", () => {
         new BN(newSpot.toString())
       )
       // @ts-ignore
-      .accountsPartial({ attester: attester.publicKey, priceCache })
+      .accountsPartial({
+        attester: attester.publicKey,
+        market: marketPda,
+        priceCache,
+      })
       .signers([attester])
       .rpc();
 
@@ -385,7 +402,11 @@ describe("Paralend", () => {
           new BN(PRICE_WAD_INITIAL.toString())
         )
         // @ts-ignore
-        .accountsPartial({ attester: outsider.publicKey, priceCache })
+        .accountsPartial({
+          attester: outsider.publicKey,
+          market: marketPda,
+          priceCache,
+        })
         .signers([outsider])
         .rpc();
     } catch (e: any) {
@@ -401,9 +422,8 @@ describe("Paralend", () => {
 
   it("attest_price rejects spot outside deviation band", async () => {
     // Current last_spot ≈ 103% of initial (from earlier test). Attempt +10% jump.
-    const prev = (
-      await program.account.priceCache.fetch(priceCache)
-    ).lastSpotWad;
+    const prev = (await program.account.priceCache.fetch(priceCache))
+      .lastSpotWad;
     const out_of_band = (BigInt(prev.toString()) * 110n) / 100n;
 
     let threw = false;
@@ -414,13 +434,107 @@ describe("Paralend", () => {
           new BN(out_of_band.toString())
         )
         // @ts-ignore
-        .accountsPartial({ attester: attester.publicKey, priceCache })
+        .accountsPartial({
+          attester: attester.publicKey,
+          market: marketPda,
+          priceCache,
+        })
         .signers([attester])
         .rpc();
     } catch {
       threw = true;
     }
     assert.isTrue(threw, "out-of-band attest should revert");
+  });
+
+  it("attest_price rejects binary collateral prices above $1", async () => {
+    const highFeedId = Buffer.alloc(32);
+    highFeedId.write("KXTEST-HIGH-PRICE", "utf-8");
+    const highMarketId = computeMarketId({
+      collateralMint,
+      loanMint,
+      collateralFeedId: highFeedId,
+      loanFeedId: LOAN_FEED_ID,
+      irm: irmPda,
+      lltv: LLTV,
+    });
+    const [highMarketPda] = deriveMarketPda(highMarketId, program.programId);
+    const [highCollateralVault] = deriveCollateralVault(
+      highMarketId,
+      program.programId
+    );
+    const [highLoanVault] = deriveLoanVault(highMarketId, program.programId);
+    const [highPriceCache] = derivePriceCache(highMarketId, program.programId);
+    const resolutionTs = Math.floor(Date.now() / 1000) + 14 * 24 * 3600;
+    const ticker = Buffer.alloc(48);
+    ticker.write("KXTEST-HIGH-PRICE", "utf-8");
+
+    await program.methods
+      .createMarket(
+        Array.from(highMarketId) as unknown as number[] & { length: 32 },
+        Array.from(highFeedId) as unknown as number[] & { length: 32 },
+        Array.from(LOAN_FEED_ID) as unknown as number[] & { length: 32 },
+        irmPda,
+        new BN(LLTV.toString()),
+        new BN(FEE_BPS.toString()),
+        new BN(resolutionTs),
+        Array.from(ticker) as unknown as number[] & { length: 48 }
+      )
+      // @ts-ignore
+      .accountsPartial({
+        payer: payer.publicKey,
+        protocolState,
+        collateralMint,
+        loanMint,
+        irmAccount: irmPda,
+        market: highMarketPda,
+        collateralVault: highCollateralVault,
+        loanVault: highLoanVault,
+        tokenProgram: TOKEN_PROGRAM_ID,
+        systemProgram: SystemProgram.programId,
+      })
+      .rpc();
+
+    const nearCapPrice =
+      (WAD * 98n) / 100n / 10n ** BigInt(COLLATERAL_DECIMALS);
+    await program.methods
+      .registerPriceCache(
+        Array.from(highMarketId) as unknown as number[] & { length: 32 },
+        attester.publicKey,
+        new BN(nearCapPrice.toString())
+      )
+      // @ts-ignore
+      .accountsPartial({
+        payer: payer.publicKey,
+        protocolState,
+        market: highMarketPda,
+        priceCache: highPriceCache,
+        systemProgram: SystemProgram.programId,
+      })
+      .rpc();
+
+    const aboveCapPrice =
+      (WAD * 101n) / 100n / 10n ** BigInt(COLLATERAL_DECIMALS);
+    let threw = false;
+    try {
+      await program.methods
+        .attestPrice(
+          Array.from(highMarketId) as unknown as number[] & { length: 32 },
+          new BN(aboveCapPrice.toString())
+        )
+        // @ts-ignore
+        .accountsPartial({
+          attester: attester.publicKey,
+          market: highMarketPda,
+          priceCache: highPriceCache,
+        })
+        .signers([attester])
+        .rpc();
+    } catch {
+      threw = true;
+    }
+
+    assert.isTrue(threw, "above-$1 binary outcome price should revert");
   });
 
   it("poke_price updates slot stamp without changing EMA", async () => {
@@ -441,7 +555,12 @@ describe("Paralend", () => {
     assert.isTrue(
       BigInt(after.lastUpdateSlot.toString()) >=
         BigInt(before.lastUpdateSlot.toString()),
-      "poke refreshes slot stamp"
+      "poke updates slot stamp"
+    );
+    assert.equal(
+      after.lastUpdateTs.toString(),
+      before.lastUpdateTs.toString(),
+      "poke must not refresh oracle freshness"
     );
   });
 
@@ -474,7 +593,9 @@ describe("Paralend", () => {
       program.programId
     );
     await program.methods
-      .createPosition(Array.from(marketId) as unknown as number[] & { length: 32 })
+      .createPosition(
+        Array.from(marketId) as unknown as number[] & { length: 32 }
+      )
       // @ts-ignore
       .accountsPartial({
         payer: payer.publicKey,
@@ -527,9 +648,15 @@ describe("Paralend", () => {
       borrower.publicKey
     );
 
-    [positionPda] = derivePosition(marketId, borrower.publicKey, program.programId);
+    [positionPda] = derivePosition(
+      marketId,
+      borrower.publicKey,
+      program.programId
+    );
     await program.methods
-      .createPosition(Array.from(marketId) as unknown as number[] & { length: 32 })
+      .createPosition(
+        Array.from(marketId) as unknown as number[] & { length: 32 }
+      )
       // @ts-ignore
       .accountsPartial({
         payer: borrower.publicKey,
@@ -587,5 +714,246 @@ describe("Paralend", () => {
       BigInt(pos.borrowShares.toString()) > 0n,
       "borrow_shares recorded"
     );
+  });
+
+  it("force-closes an unhealthy near-resolution position", async () => {
+    const nearFeedId = Buffer.alloc(32);
+    nearFeedId.write("KALSHI-FORCE-CLOSE-TEST", "utf-8");
+    const nearMarketId = computeMarketId({
+      collateralMint,
+      loanMint,
+      collateralFeedId: nearFeedId,
+      loanFeedId: LOAN_FEED_ID,
+      irm: irmPda,
+      lltv: LLTV,
+    });
+    const [nearMarketPda] = deriveMarketPda(nearMarketId, program.programId);
+    const [nearCollateralVault] = deriveCollateralVault(
+      nearMarketId,
+      program.programId
+    );
+    const [nearLoanVault] = deriveLoanVault(nearMarketId, program.programId);
+    const [nearPriceCache] = derivePriceCache(nearMarketId, program.programId);
+    const ticker = Buffer.alloc(48);
+    ticker.write("FORCE-CLOSE-TEST", "utf-8");
+
+    // Create just outside the force-close window, then wait a few seconds so
+    // the test enters [T-2h, T) without needing validator clock warping.
+    const nearResolutionTs = Math.floor(Date.now() / 1000) + 7_205;
+    await program.methods
+      .createMarket(
+        Array.from(nearMarketId) as unknown as number[] & { length: 32 },
+        Array.from(nearFeedId) as unknown as number[] & { length: 32 },
+        Array.from(LOAN_FEED_ID) as unknown as number[] & { length: 32 },
+        irmPda,
+        new BN(LLTV.toString()),
+        new BN(FEE_BPS.toString()),
+        new BN(nearResolutionTs),
+        Array.from(ticker) as unknown as number[] & { length: 48 }
+      )
+      // @ts-ignore
+      .accountsPartial({
+        payer: payer.publicKey,
+        protocolState,
+        collateralMint,
+        loanMint,
+        irmAccount: irmPda,
+        market: nearMarketPda,
+        collateralVault: nearCollateralVault,
+        loanVault: nearLoanVault,
+        tokenProgram: TOKEN_PROGRAM_ID,
+        systemProgram: SystemProgram.programId,
+      })
+      .rpc();
+
+    await program.methods
+      .registerPriceCache(
+        Array.from(nearMarketId) as unknown as number[] & { length: 32 },
+        attester.publicKey,
+        new BN(PRICE_WAD_INITIAL.toString())
+      )
+      // @ts-ignore
+      .accountsPartial({
+        payer: payer.publicKey,
+        protocolState,
+        market: nearMarketPda,
+        priceCache: nearPriceCache,
+        systemProgram: SystemProgram.programId,
+      })
+      .rpc();
+
+    const [nearSupplierPosition] = derivePosition(
+      nearMarketId,
+      payer.publicKey,
+      program.programId
+    );
+    await program.methods
+      .createPosition(
+        Array.from(nearMarketId) as unknown as number[] & { length: 32 }
+      )
+      // @ts-ignore
+      .accountsPartial({
+        payer: payer.publicKey,
+        owner: payer.publicKey,
+        market: nearMarketPda,
+        position: nearSupplierPosition,
+        systemProgram: SystemProgram.programId,
+      })
+      .rpc();
+
+    await program.methods
+      .supply(
+        Array.from(nearMarketId) as unknown as number[] & { length: 32 },
+        new BN(300_000_000), // 300 USDC
+        new BN(0)
+      )
+      // @ts-ignore
+      .accountsPartial({
+        supplier: payer.publicKey,
+        protocolState,
+        market: nearMarketPda,
+        irm: irmPda,
+        position: nearSupplierPosition,
+        supplierLoanAta,
+        loanVault: nearLoanVault,
+        tokenProgram: TOKEN_PROGRAM_ID,
+      })
+      .rpc();
+
+    const nearBorrower = Keypair.generate();
+    await connection.confirmTransaction(
+      await connection.requestAirdrop(nearBorrower.publicKey, 2e9)
+    );
+
+    const nearBorrowerCollateralAta = await createAccount(
+      connection,
+      payer,
+      collateralMint,
+      nearBorrower.publicKey
+    );
+    await mintTo(
+      connection,
+      payer,
+      collateralMint,
+      nearBorrowerCollateralAta,
+      payer.publicKey,
+      50_000_000_000 // 50,000 YES tokens (6 decimals)
+    );
+    const nearBorrowerLoanAta = await createAccount(
+      connection,
+      payer,
+      loanMint,
+      nearBorrower.publicKey
+    );
+    const nearLiquidatorCollateralAta = await createAccount(
+      connection,
+      payer,
+      collateralMint,
+      payer.publicKey
+    );
+
+    const [nearBorrowerPosition] = derivePosition(
+      nearMarketId,
+      nearBorrower.publicKey,
+      program.programId
+    );
+    await program.methods
+      .createPosition(
+        Array.from(nearMarketId) as unknown as number[] & { length: 32 }
+      )
+      // @ts-ignore
+      .accountsPartial({
+        payer: nearBorrower.publicKey,
+        owner: nearBorrower.publicKey,
+        market: nearMarketPda,
+        position: nearBorrowerPosition,
+        systemProgram: SystemProgram.programId,
+      })
+      .signers([nearBorrower])
+      .rpc();
+
+    await program.methods
+      .supplyCollateral(
+        Array.from(nearMarketId) as unknown as number[] & { length: 32 },
+        new BN(50_000_000_000)
+      )
+      // @ts-ignore
+      .accountsPartial({
+        depositor: nearBorrower.publicKey,
+        protocolState,
+        market: nearMarketPda,
+        position: nearBorrowerPosition,
+        depositorCollateralAta: nearBorrowerCollateralAta,
+        collateralVault: nearCollateralVault,
+        tokenProgram: TOKEN_PROGRAM_ID,
+      })
+      .signers([nearBorrower])
+      .rpc();
+
+    await program.methods
+      .borrow(
+        Array.from(nearMarketId) as unknown as number[] & { length: 32 },
+        new BN(149_000_000), // 149 USDC, just inside the decayed limit
+        new BN(0)
+      )
+      // @ts-ignore
+      .accountsPartial({
+        borrower: nearBorrower.publicKey,
+        protocolState,
+        market: nearMarketPda,
+        irm: irmPda,
+        position: nearBorrowerPosition,
+        loanVault: nearLoanVault,
+        receiverLoanAta: nearBorrowerLoanAta,
+        priceCache: nearPriceCache,
+        tokenProgram: TOKEN_PROGRAM_ID,
+      })
+      .signers([nearBorrower])
+      .rpc();
+
+    // One 5% lower spot only moves the EMA by 0.5%, enough to make this
+    // deliberately tight position unhealthy while staying inside the band.
+    const lowerSpot = (PRICE_WAD_INITIAL * 95n) / 100n;
+    await program.methods
+      .attestPrice(
+        Array.from(nearMarketId) as unknown as number[] & { length: 32 },
+        new BN(lowerSpot.toString())
+      )
+      // @ts-ignore
+      .accountsPartial({
+        attester: attester.publicKey,
+        market: nearMarketPda,
+        priceCache: nearPriceCache,
+      })
+      .signers([attester])
+      .rpc();
+
+    await new Promise((resolve) => setTimeout(resolve, 6_000));
+
+    await program.methods
+      .forceClosePosition(
+        Array.from(nearMarketId) as unknown as number[] & { length: 32 }
+      )
+      // @ts-ignore
+      .accountsPartial({
+        liquidator: payer.publicKey,
+        market: nearMarketPda,
+        irm: irmPda,
+        borrowerPosition: nearBorrowerPosition,
+        borrower: nearBorrower.publicKey,
+        liquidatorLoanAta: supplierLoanAta,
+        loanVault: nearLoanVault,
+        collateralVault: nearCollateralVault,
+        liquidatorCollateralAta: nearLiquidatorCollateralAta,
+        priceCache: nearPriceCache,
+        tokenProgram: TOKEN_PROGRAM_ID,
+      })
+      .rpc();
+
+    const closedPosition = await program.account.position.fetch(
+      nearBorrowerPosition
+    );
+    assert.equal(closedPosition.collateral.toString(), "0");
+    assert.equal(closedPosition.borrowShares.toString(), "0");
   });
 });

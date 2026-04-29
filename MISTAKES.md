@@ -13,6 +13,7 @@ This document tracks mistakes made during development to avoid repeating them.
 **Root cause:** Made changes to program without simultaneously updating all consumers (tests, SDK).
 
 **Prevention:**
+
 1. When adding required accounts to instructions, grep for ALL usages across tests and SDK
 2. Run `anchor test` immediately after any instruction signature change
 3. Use a checklist: Program → IDL → Tests → SDK → Frontend
@@ -22,6 +23,7 @@ This document tracks mistakes made during development to avoid repeating them.
 ### Mistake 2: Shallow test coverage
 
 **What happened:** Tests only cover happy path. No tests for:
+
 - Error conditions (unauthorized access, invalid inputs)
 - Edge cases (zero amounts, max values, overflow protection)
 - Security features (pause enforcement, staleness checks)
@@ -30,6 +32,7 @@ This document tracks mistakes made during development to avoid repeating them.
 **Root cause:** Tests written to "make it pass" rather than to verify correctness.
 
 **Prevention:**
+
 1. For every instruction, write: 1 happy path + N negative tests
 2. Test error codes explicitly (expect specific ParalendError)
 3. Test boundary conditions (0, 1, MAX_VALUE)
@@ -44,6 +47,7 @@ This document tracks mistakes made during development to avoid repeating them.
 **Root cause:** Manual file copying, no automated sync.
 
 **Prevention:**
+
 1. After `anchor build`, always run: `cp target/idl/paralend.json app/src/lib/paralend-idl.json`
 2. After `anchor build`, always run: `cp target/types/paralend.ts app/src/lib/paralend-idl-types.ts`
 3. Add a script: `scripts/sync-idl.sh`
@@ -57,6 +61,7 @@ This document tracks mistakes made during development to avoid repeating them.
 **Root cause:** Rushing to deploy instead of thorough local testing.
 
 **Prevention:**
+
 1. ALL tests must pass before deployment
 2. Run `anchor test` at least twice (catches race conditions)
 3. Review all TODO/FIXME comments before deploy
@@ -71,6 +76,7 @@ This document tracks mistakes made during development to avoid repeating them.
 **Root cause:** Overconfidence, trying to move fast.
 
 **Prevention:**
+
 1. **RULE: Read before write.** Always read the full context of any file being modified.
 2. Search for usages of any function/struct being changed
 3. Check for related tests that might need updates
@@ -84,6 +90,7 @@ This document tracks mistakes made during development to avoid repeating them.
 **Root cause:** Copy-pasted old test code without updating for new instruction signature.
 
 **Prevention:**
+
 1. Prefer `.accounts()` for tests (auto-resolves missing PDAs)
 2. If using `.accountsStrict()`, verify against current IDL
 3. After changing instruction accounts, search for all `accountsStrict` usages
@@ -97,6 +104,7 @@ This document tracks mistakes made during development to avoid repeating them.
 **Root cause:** No formal "deferred features" documentation.
 
 **Prevention:**
+
 1. Update CLAUDE.md with "Known Limitations" section
 2. Add TODO comments in relevant code
 3. Create GitHub issues for deferred features
@@ -110,7 +118,7 @@ This document tracks mistakes made during development to avoid repeating them.
 - [ ] IDL synced to frontend
 - [ ] All TODO/FIXME reviewed
 - [ ] CLAUDE.md up to date
-- [ ] No hardcoded devnet values that should be mainnet
+- [ ] No static devnet values that should come from deployment config
 - [ ] Program ID matches across all files
 - [ ] Wallet has sufficient SOL for deployment + buffer
 

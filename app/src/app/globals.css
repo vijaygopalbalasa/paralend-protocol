@@ -1,104 +1,191 @@
+@import url("https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&display=swap");
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 :root {
-  --bg: #FAFAFA;
-  --card: #FFFFFF;
-  --border: #E5E7EB;
-  --text-primary: #030712;
-  --text-secondary: #4B5563;
-  --primary: #000000;
-  --primary-hover: #333333;
-  --green: #10B981;
-  --yellow: #F59E0B;
-  --red: #EF4444;
-  --orange: #F97316;
+  --bg: #F8F4EC;
+  --surface: #FFFFFF;
+  --muted: #F0EBDF;
+  --border: #E2DCCC;
+  --ink: #0F0E0D;
+  --ink2: #3F3D38;
+  --ink3: #7A766E;
+  --ink4: #B0AC9F;
+  --coral: #FF5436;
+  --coral-hover: #E64022;
+  --coral-soft: #FFE6DF;
+  --leaf: #0FAF7B;
+  --crimson: #E53056;
+  --amber: #F2A800;
 }
 
-* {
-  box-sizing: border-box;
+* { box-sizing: border-box; }
+
+html {
+  background-color: var(--bg);
+  scroll-behavior: smooth;
 }
 
-html,
 body {
   background-color: var(--bg);
-  color: var(--text-primary);
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen,
-    Ubuntu, Cantarell, "Fira Sans", "Droid Sans", "Helvetica Neue", sans-serif;
+  color: var(--ink);
+  font-family: "Manrope", -apple-system, BlinkMacSystemFont, sans-serif;
+  font-feature-settings: "ss01", "ss02", "cv01", "tnum";
+  font-weight: 500;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  letter-spacing: 0;
+  overflow-x: hidden;
 }
 
-/* Wallet adapter button override */
-.wallet-adapter-button {
-  background-color: var(--primary) !important;
-  color: white !important;
-  font-family: inherit !important;
-  font-size: 0.875rem !important;
-  font-weight: 600 !important;
-  border-radius: 0.5rem !important;
-  height: 2.25rem !important;
-  padding: 0 1rem !important;
-  transition: all 0.15s ease !important;
-  border: 1px solid var(--primary) !important;
+::selection { background-color: var(--coral); color: white; }
+
+/* ============================================================
+   TYPOGRAPHY
+   ============================================================ */
+
+.numerals {
+  font-family: "JetBrains Mono", ui-monospace, Menlo, monospace;
+  font-feature-settings: "tnum", "ss01", "zero";
+  font-weight: 500;
+  letter-spacing: 0;
 }
 
-.wallet-adapter-button:hover:not([disabled]) {
-  background-color: var(--card) !important;
-  color: var(--primary) !important;
+.eyebrow {
+  font-family: "Manrope", sans-serif;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0;
+  text-transform: uppercase;
+  color: var(--ink3);
 }
 
-.wallet-adapter-button-trigger {
-  background-color: var(--primary) !important;
-}
+.eyebrow-xs { @apply eyebrow; font-size: 0.625rem; }
 
-.wallet-adapter-modal-wrapper {
-  background-color: var(--card) !important;
-  border: 1px solid var(--border) !important;
-  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04) !important;
-}
+.italic-display { font-family: "Manrope", sans-serif; font-style: normal; font-weight: 700; }
 
-.wallet-adapter-modal-title {
-  color: var(--text-primary) !important;
-}
+.text-balance { text-wrap: balance; }
+.text-pretty { text-wrap: pretty; }
 
-.wallet-adapter-modal-list li {
-  background-color: transparent !important;
-}
+/* Compatibility shims for older util classes */
+.italic-serif { font-family: "Manrope", sans-serif; font-style: normal; font-weight: 700; }
+.font-display { font-family: "Manrope", sans-serif; font-weight: 800; letter-spacing: 0; }
+.font-display-narrow { font-family: "Manrope", sans-serif; font-weight: 800; letter-spacing: 0; }
+.font-mono { font-family: "JetBrains Mono", monospace; }
+.small-caps { @apply eyebrow; }
+.small-caps-tight { @apply eyebrow; font-size: 0.625rem; }
+.dropcap::first-letter { font-family: inherit; font-size: 1em; float: none; padding: 0; color: inherit; }
+.rule, .rule-thin, .rule-single, .rule-dotted, .rule-double, .rule-masthead { display: none; }
+.column-rule, .column-rule-dark { border-left: 0; padding-left: 0; }
+.dateline-bar { border: 0; }
+.pull-quote { font-style: italic; font-size: 1.5rem; padding-left: 0; border-left: 0; }
+.rosette { display: inline-flex; align-items: center; gap: 0.4rem; padding: 0.25rem 0.5rem; border-radius: 6px; background: var(--coral-soft); color: var(--coral-deep, var(--coral-hover)); font-size: 0.6875rem; font-weight: 700; letter-spacing: 0; text-transform: uppercase; border: 0; }
+.rosette.masthead { background: rgba(229, 48, 86, 0.10); color: var(--crimson); }
+.rosette.gold { background: rgba(242, 168, 0, 0.14); color: var(--amber); }
+.rosette.forest { background: rgba(15, 175, 123, 0.12); color: var(--leaf); }
 
-.wallet-adapter-modal-list-more {
-  color: var(--text-secondary) !important;
+/* Live indicator — small filled dot */
+.live-mark {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  background-color: var(--coral);
+  border-radius: 999px;
+  flex-shrink: 0;
+  position: relative;
 }
-
-/* Custom scrollbar */
-::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
-}
-::-webkit-scrollbar-track {
-  background: var(--bg);
-}
-::-webkit-scrollbar-thumb {
-  background: #D1D5DB;
-  border-radius: 3px;
-}
-::-webkit-scrollbar-thumb:hover {
-  background: #9CA3AF;
-}
-
-/* Stat card gradient borders */
-.gradient-border {
-  background: linear-gradient(var(--card), var(--card)) padding-box,
-    linear-gradient(135deg, var(--border), #D1D5DB) border-box;
-  border: 1px solid transparent;
-}
-
-/* Utility */
-.no-scrollbar::-webkit-scrollbar {
+.live-mark::after {
   display: none;
 }
-.no-scrollbar {
-  -ms-overflow-style: none;
-  scrollbar-width: none;
+.live-mark.forest, .live-mark.win, .live-mark.mint { background-color: var(--leaf); }
+.live-mark.forest::after, .live-mark.win::after, .live-mark.mint::after { background-color: var(--leaf); }
+.live-mark.gold, .live-mark.warn, .live-mark.signal { background-color: var(--amber); }
+.live-mark.gold::after, .live-mark.warn::after, .live-mark.signal::after { background-color: var(--amber); }
+.live-mark.muted { background-color: var(--ink3); }
+.live-mark.muted::after { display: none; }
+.live-mark.lose, .live-mark.alarm, .live-mark.hot { background-color: var(--crimson); }
+.live-mark.lose::after, .live-mark.alarm::after, .live-mark.hot::after { background-color: var(--crimson); }
+
+.live-dot { display: inline-block; width: 8px; height: 8px; background-color: var(--coral); border-radius: 999px; flex-shrink: 0; position: relative; }
+.live-dot::after { display: none; }
+.live-dot.hot, .live-dot.alarm, .live-dot.lose { background-color: var(--crimson); }
+.live-dot.hot::after, .live-dot.alarm::after, .live-dot.lose::after { background-color: var(--crimson); }
+.live-dot.signal, .live-dot.gold, .live-dot.warn { background-color: var(--amber); }
+.live-dot.signal::after, .live-dot.gold::after, .live-dot.warn::after { background-color: var(--amber); }
+.live-dot.mint, .live-dot.win, .live-dot.forest { background-color: var(--leaf); }
+.live-dot.mint::after, .live-dot.win::after, .live-dot.forest::after { background-color: var(--leaf); }
+.live-dot.muted { background-color: var(--ink3); }
+.live-dot.muted::after { display: none; }
+
+/* Old marquee — kept off */
+.marquee-track { animation: none; }
+
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: var(--bg); }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 5px; }
+::-webkit-scrollbar-thumb:hover { background: var(--ink4); }
+
+/* ==== Wallet adapter ==== */
+.wallet-adapter-button {
+  background-color: var(--ink) !important;
+  color: white !important;
+  font-family: "Manrope", sans-serif !important;
+  font-size: 0.875rem !important;
+  font-weight: 700 !important;
+  letter-spacing: 0 !important;
+  border-radius: 6px !important;
+  height: 2.5rem !important;
+  padding: 0 1.25rem !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  transition: all 160ms cubic-bezier(0.22, 1, 0.36, 1) !important;
+  text-transform: none !important;
 }
+.wallet-adapter-button:hover:not([disabled]) {
+  background-color: var(--coral) !important;
+  color: white !important;
+  transform: none;
+}
+.wallet-adapter-button-trigger { background-color: var(--ink) !important; }
+
+.wallet-adapter-modal-wrapper {
+  background-color: var(--surface) !important;
+  border-radius: 8px !important;
+  box-shadow: none !important;
+  border: 1px solid var(--border) !important;
+}
+.wallet-adapter-modal-title {
+  color: var(--ink) !important;
+  font-family: "Manrope", sans-serif !important;
+  font-weight: 800 !important;
+  letter-spacing: 0 !important;
+}
+.wallet-adapter-modal-list li {
+  background-color: var(--muted) !important;
+  border: 1px solid var(--border) !important;
+  border-radius: 8px !important;
+  margin-bottom: 8px !important;
+  color: var(--ink) !important;
+  transition: all 140ms ease !important;
+}
+.wallet-adapter-modal-list li:hover {
+  background-color: var(--coral-soft) !important;
+  color: var(--coral-hover) !important;
+}
+.wallet-adapter-modal-list-more { color: var(--ink3) !important; }
+
+*:focus { outline: none; }
+*:focus-visible {
+  outline: 2px solid var(--coral);
+  outline-offset: 2px;
+  border-radius: 8px;
+}
+
+.section-dark { background-color: var(--ink); color: white; }
+.section-dark::before { display: none; }
+body::before { display: none; }

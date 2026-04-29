@@ -85,9 +85,7 @@ function decodeMarket(raw: IdlAccounts<Paralend>["market"]): MarketState {
 /**
  * Convert an Anchor-decoded Position account to our SDK PositionState.
  */
-function decodePosition(
-  raw: IdlAccounts<Paralend>["position"]
-): PositionState {
+function decodePosition(raw: IdlAccounts<Paralend>["position"]): PositionState {
   return {
     bump: raw.bump,
     marketId: Array.from(raw.marketId),
@@ -111,7 +109,6 @@ export class ParalendClient {
       ...(IDL as Record<string, unknown>),
       address: programId.toBase58(),
     };
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     this.program = new Program<Paralend>(idl as any, provider);
   }
 
@@ -378,6 +375,7 @@ export class ParalendClient {
   }): Promise<TransactionInstruction> {
     const { marketId, assets, supplier, minShares = 0n } = params;
     const [marketPda] = deriveMarketPDA(marketId);
+    const [protocolState] = deriveProtocolStatePDA(this.program.programId);
     const [positionPda] = derivePositionPDA(marketId, supplier);
     const [loanVaultPda] = deriveLoanVaultPDA(marketId);
 
@@ -396,6 +394,7 @@ export class ParalendClient {
       )
       .accountsPartial({
         supplier,
+        protocolState,
         market: marketPda,
         irm: market.irm,
         position: positionPda,
@@ -427,7 +426,15 @@ export class ParalendClient {
     maxSharesBurn?: bigint;
     minAssetsOut?: bigint;
   }): Promise<TransactionInstruction> {
-    const { marketId, assets, shares, owner, receiver, maxSharesBurn = 0n, minAssetsOut = 0n } = params;
+    const {
+      marketId,
+      assets,
+      shares,
+      owner,
+      receiver,
+      maxSharesBurn = 0n,
+      minAssetsOut = 0n,
+    } = params;
     const [marketPda] = deriveMarketPDA(marketId);
     const [positionPda] = derivePositionPDA(marketId, owner);
     const [loanVaultPda] = deriveLoanVaultPDA(marketId);
@@ -475,6 +482,7 @@ export class ParalendClient {
   }): Promise<TransactionInstruction> {
     const { marketId, amount, depositor } = params;
     const [marketPda] = deriveMarketPDA(marketId);
+    const [protocolState] = deriveProtocolStatePDA(this.program.programId);
     const [positionPda] = derivePositionPDA(marketId, depositor);
     const [collateralVaultPda] = deriveCollateralVaultPDA(marketId);
 
@@ -491,6 +499,7 @@ export class ParalendClient {
       )
       .accountsPartial({
         depositor,
+        protocolState,
         market: marketPda,
         position: positionPda,
         depositorCollateralAta,
@@ -559,6 +568,7 @@ export class ParalendClient {
   }): Promise<TransactionInstruction> {
     const { marketId, assets, borrower, receiver, maxShares = 0n } = params;
     const [marketPda] = deriveMarketPDA(marketId);
+    const [protocolState] = deriveProtocolStatePDA(this.program.programId);
     const [positionPda] = derivePositionPDA(marketId, borrower);
     const [loanVaultPda] = deriveLoanVaultPDA(marketId);
     const [priceCachePda] = derivePriceCachePDA(marketId);
@@ -577,6 +587,7 @@ export class ParalendClient {
       )
       .accountsPartial({
         borrower,
+        protocolState,
         market: marketPda,
         irm: market.irm,
         position: positionPda,
@@ -783,10 +794,7 @@ export class ParalendClient {
   }): Promise<TransactionInstruction> {
     const { owner, marketId, newAttester } = params;
     const [protocolState] = deriveProtocolStatePDA(this.program.programId);
-    const [priceCache] = derivePriceCachePDA(
-      marketId,
-      this.program.programId
-    );
+    const [priceCache] = derivePriceCachePDA(marketId, this.program.programId);
 
     return this.program.methods
       .rotateAttester(
@@ -887,7 +895,10 @@ export class ParalendClient {
     marketId: Buffer;
     attester: PublicKey;
     initialPriceWad: bigint;
-  }): Promise<{ instruction: TransactionInstruction; priceCachePda: PublicKey }> {
+  }): Promise<{
+    instruction: TransactionInstruction;
+    priceCachePda: PublicKey;
+  }> {
     const { payer, marketId, attester, initialPriceWad } = params;
     const [protocolState] = deriveProtocolStatePDA(this.program.programId);
     const [marketPda] = deriveMarketPDA(marketId, this.program.programId);
@@ -927,6 +938,7 @@ export class ParalendClient {
       marketId,
       this.program.programId
     );
+    const [marketPda] = deriveMarketPDA(marketId, this.program.programId);
 
     return this.program.methods
       .attestPrice(
@@ -935,13 +947,17 @@ export class ParalendClient {
       )
       .accountsPartial({
         attester,
+        market: marketPda,
         priceCache: priceCachePda,
       })
       .instruction();
   }
 
   /**
-   * Build a permissionless `pokePrice` instruction (crank slot stamp only).
+   * Build a permissionless `pokePrice` instruction.
+   *
+   * This only updates the cache slot marker for indexers. It does not refresh
+   * oracle staleness; only `attestPrice` can update `lastUpdateTs`.
    */
   async pokePriceIx(params: {
     marketId: Buffer;
@@ -1130,10 +1146,7 @@ export class ParalendClient {
    * Check whether a Position account exists on-chain.
    * Returns true if it does, false if not (account has no data).
    */
-  async positionExists(
-    marketId: Buffer,
-    owner: PublicKey
-  ): Promise<boolean> {
+  async positionExists(marketId: Buffer, owner: PublicKey): Promise<boolean> {
     const pda = this.derivePositionAddress(marketId, owner);
     const info = await this.provider.connection.getAccountInfo(pda);
     return info !== null && info.data.length > 0;

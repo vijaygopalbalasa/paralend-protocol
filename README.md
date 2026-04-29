@@ -37,15 +37,15 @@ Kamino or Jupiter Lend:
 
 ## Status
 
-| Layer | State |
-|---|---|
-| Anchor program (25 instructions) | Deployed on Solana **devnet** |
-| Rust unit tests | 37 / 37 passing |
-| Integration tests | 9 / 9 passing |
-| TypeScript SDK | 25 methods (1:1 parity with program) |
-| Frontend (Next.js 14) | Landing, markets list, market detail with live decay chart + countdown |
-| Operator scripts | setup · fund · attester · force-close bot · resolve-market · mint-to-wallet |
-| Live seeded markets | 3 (BTC-150K-JUN2026, SOL-300-DEC2026, NFL-FINAL-24H) |
+| Layer                            | State                                                                       |
+| -------------------------------- | --------------------------------------------------------------------------- |
+| Anchor program (25 instructions) | Deployed on Solana **devnet**                                               |
+| Rust unit tests                  | 37 / 37 passing                                                             |
+| Integration tests                | 10 / 10 passing                                                             |
+| TypeScript SDK                   | 25 methods (1:1 parity with program)                                        |
+| Frontend (Next.js 14)            | Landing, markets list, market detail with live decay chart + countdown      |
+| Operator scripts                 | setup · fund · attester · force-close bot · resolve-market · mint-to-wallet |
+| Live seeded markets              | 3 DFlow/Kalshi markets mirrored on devnet                                   |
 
 **Devnet Program ID:** `2kZNrHd7QkUemYCLFw5dYGQWeKieAUNb5C1FvTjTYiC8`
 
@@ -62,8 +62,8 @@ Kamino or Jupiter Lend:
      ├── LinearIrm (kinked-curve interest model)
      └── ProtocolState (singleton — owner, attester, LLTV + IRM allowlist)
 
-  ← CPI redemption via DFlow CLP    ← spot reads via off-chain attester
-    (post-resolution, winners only)   (pulls Kalshi REST, pushes on-chain)
+  ← Source-venue settlement          ← spot reads via off-chain attester
+    (DFlow/Kalshi outcome path)         (devnet mirrors live DFlow/Kalshi spots)
 ```
 
 Source: `programs/paralend/src/`. Full module tree in [DEPLOYMENT.md](./DEPLOYMENT.md).
@@ -74,26 +74,27 @@ Source: `programs/paralend/src/`. Full module tree in [DEPLOYMENT.md](./DEPLOYME
 # Build program + run the full test suite
 anchor build
 cargo test --manifest-path programs/paralend/Cargo.toml --lib   # 37/37
-anchor test                                                      # 9/9
+anchor test                                                      # 10/10
 
 # Ship it to devnet (needs ~5 SOL in the upgrade-authority wallet)
 anchor deploy --provider.cluster devnet
 
-# Seed 3 Kalshi-style markets + attester + liquidity
-npx ts-node --project tsconfig.json scripts/setup-demo-markets.ts --cluster=devnet
-npx ts-node --project tsconfig.json scripts/fund-demo.ts         --cluster=devnet
+# Seed live DFlow markets + attester + liquidity
+npx ts-node --project tsconfig.json scripts/setup-devnet-markets.ts --cluster=devnet
+npx ts-node --project tsconfig.json scripts/fund-devnet.ts         --cluster=devnet
 npx ts-node --project tsconfig.json scripts/attester.ts          --cluster=devnet --interval=20
+npm run check-devnet
 
-# Run the frontend (NEXT_PUBLIC_PROGRAM_ID + NEXT_PUBLIC_RPC_URL already defaulted to devnet)
-cd app && npm install && npm run dev
+# Run the frontend in production mode
+npm run app:build
+npm run app:start
 ```
 
 Full walkthrough: [TESTING.md](./TESTING.md).
 
 ## Building this for Colosseum Frontier 2026
 
-Paralend was built during the Frontier Hackathon window (Apr 6 – May 11,
-2026) after pivoting from a generic isolated-lending clone (Nucleus) on
+Paralend was built during the Frontier Hackathon window (Apr 6 – May 11, 2026) after pivoting from a generic isolated-lending clone (Nucleus) on
 day three once it was clear Kamino + Jupiter Lend had that space
 locked. The pivot recognized three things the market was telling us:
 
@@ -108,4 +109,4 @@ locked. The pivot recognized three things the market was telling us:
 
 ## License
 
-MIT. See `LICENSE` if/when added; PRs welcome post-hackathon.
+MIT. See `LICENSE`.

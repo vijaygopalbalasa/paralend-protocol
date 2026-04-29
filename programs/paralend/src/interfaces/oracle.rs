@@ -54,10 +54,7 @@ fn read_price_cache_inner(
         cache.ema_price_wad > 0,
         ParalendError::OraclePriceNonPositive
     );
-    require!(
-        cache.last_update_ts > 0,
-        ParalendError::OraclePriceStale
-    );
+    require!(cache.last_update_ts > 0, ParalendError::OraclePriceStale);
 
     if !allow_stale {
         let now = Clock::get()?.unix_timestamp;
@@ -91,11 +88,8 @@ pub fn is_position_healthy(
     loan_price_wad: u128,
 ) -> Result<bool> {
     let now = Clock::get()?.unix_timestamp;
-    let effective_lltv = compute_effective_lltv(
-        market.base_lltv,
-        market.resolution_timestamp,
-        now,
-    )?;
+    let effective_lltv =
+        compute_effective_lltv(market.base_lltv, market.resolution_timestamp, now)?;
     is_position_healthy_at_lltv(
         market,
         collateral,

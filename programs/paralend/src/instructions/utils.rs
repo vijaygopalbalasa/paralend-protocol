@@ -34,10 +34,7 @@ pub struct AccrueInterest<'info> {
     pub irm: Box<Account<'info, LinearIrm>>,
 }
 
-pub fn handle_accrue_interest(
-    ctx: Context<AccrueInterest>,
-    market_id: [u8; 32],
-) -> Result<()> {
+pub fn handle_accrue_interest(ctx: Context<AccrueInterest>, market_id: [u8; 32]) -> Result<()> {
     let clock = Clock::get()?;
     let result = accrue_interest_on_market(
         &mut ctx.accounts.market,

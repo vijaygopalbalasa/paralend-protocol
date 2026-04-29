@@ -61,6 +61,8 @@ pub struct SupplyCollateral<'info> {
         mut,
         seeds = [SEED_PREFIX, SEED_COLLATERAL_VAULT, &market_id],
         bump = market.collateral_vault_bump,
+        token::mint = market.collateral_mint,
+        token::authority = market,
     )]
     pub collateral_vault: Box<Account<'info, TokenAccount>>,
 
@@ -146,6 +148,8 @@ pub struct WithdrawCollateral<'info> {
         mut,
         seeds = [SEED_PREFIX, SEED_COLLATERAL_VAULT, &market_id],
         bump = market.collateral_vault_bump,
+        token::mint = market.collateral_mint,
+        token::authority = market,
     )]
     pub collateral_vault: Account<'info, TokenAccount>,
 

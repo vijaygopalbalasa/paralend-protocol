@@ -135,10 +135,7 @@ pub fn handle_create_market(
     // resolution — classical markets (resolution_timestamp == 0) are not
     // affected since they never decay.
     if resolution_timestamp != 0 {
-        require!(
-            lltv <= MAX_BINARY_LLTV_BPS,
-            ParalendError::InvalidLltv
-        );
+        require!(lltv <= MAX_BINARY_LLTV_BPS, ParalendError::InvalidLltv);
     }
 
     // Validate the resolution horizon. Accept 0 (classical lending) or a

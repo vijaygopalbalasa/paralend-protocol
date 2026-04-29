@@ -2,17 +2,14 @@
 
 import { useEffect, useState } from "react";
 
-import { resolutionPhase, humanizeRemaining } from "@/lib/decay";
+import { resolutionPhase } from "@/lib/decay";
+import { formatDuration } from "@/lib/copy";
 import { cn } from "@/lib/utils";
 
 export interface ResolutionCountdownProps {
-  /** Unix seconds. 0 => classical lending market (no resolution). */
   resolutionTimestamp: number;
-  /** 0 Active, 1 PreResolution, 2 Resolved. */
   marketStatus: number;
-  /** 0 unresolved, 1 YES won, 2 NO won. */
   outcomeBit: number;
-  /** Compact mode for market cards; default false. */
   compact?: boolean;
 }
 
@@ -32,63 +29,37 @@ export function ResolutionCountdown({
   const phase = resolutionPhase(resolutionTimestamp, marketStatus, now);
   const remaining = resolutionTimestamp - now;
 
+  const baseCls =
+    "inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-[11px] font-bold uppercase numerals whitespace-nowrap";
+  const compactCls = compact ? "px-2 py-[3px] text-[10px]" : "";
+
   if (phase === "classical") {
-    return (
-      <span
-        className={cn(
-          "inline-flex items-center gap-1.5 rounded-full border border-paralend-border bg-paralend-card px-2.5 py-1 text-xs font-bold text-paralend-text-secondary",
-          compact && "px-2 py-0.5"
-        )}
-      >
-        <span className="h-1.5 w-1.5 rounded-full bg-paralend-text-secondary" />
-        Non-resolving
-      </span>
-    );
+    return <span className={cn(baseCls, compactCls, "bg-muted text-ink3")}>Evergreen</span>;
   }
 
   if (phase === "resolved") {
-    const label = outcomeBit === 1 ? "YES won" : outcomeBit === 2 ? "NO won" : "Resolved";
-    const colour = outcomeBit === 1 ? "bg-paralend-green" : "bg-paralend-orange";
+    const won = outcomeBit === 1;
+    const label = outcomeBit === 1 ? "Yes won" : outcomeBit === 2 ? "No won" : "Settled";
     return (
-      <span
-        className={cn(
-          "inline-flex items-center gap-1.5 rounded-full border border-paralend-border bg-white px-2.5 py-1 text-xs font-black text-paralend-text-primary",
-          compact && "px-2 py-0.5"
-        )}
-      >
-        <span className={cn("h-1.5 w-1.5 rounded-full", colour)} />
+      <span className={cn(baseCls, compactCls, won ? "bg-leaf-soft text-leaf-deep" : "bg-muted text-ink2")}>
         {label}
       </span>
     );
   }
 
-  const base =
-    "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-bold tabular-nums";
-  const compactCls = compact ? "px-2 py-0.5" : "";
   const phaseCls =
     phase === "cutoff"
-      ? "border-paralend-orange/40 bg-paralend-orange/10 text-paralend-orange"
+      ? "bg-amber-soft text-amber-deep"
       : phase === "force-close-window"
-        ? "border-paralend-yellow/50 bg-paralend-yellow/10 text-paralend-text-primary"
-        : "border-paralend-border bg-paralend-card text-paralend-text-primary";
-  const dotCls =
-    phase === "cutoff"
-      ? "bg-paralend-orange animate-pulse"
-      : phase === "force-close-window"
-        ? "bg-paralend-yellow animate-pulse"
-        : "bg-paralend-green";
+      ? "bg-crimson-soft text-crimson-deep"
+      : "bg-leaf-soft text-leaf-deep";
 
   const label =
     phase === "cutoff"
-      ? `${humanizeRemaining(remaining)} · borrow cutoff`
+      ? `${formatDuration(remaining)} · locked`
       : phase === "force-close-window"
-        ? `${humanizeRemaining(remaining)} · force-close`
-        : `${humanizeRemaining(remaining)} to resolution`;
+      ? `${formatDuration(remaining)} · last call`
+      : `${formatDuration(remaining)}`;
 
-  return (
-    <span className={cn(base, compactCls, phaseCls)}>
-      <span className={cn("h-1.5 w-1.5 rounded-full", dotCls)} />
-      {label}
-    </span>
-  );
+  return <span className={cn(baseCls, compactCls, phaseCls)}>{label}</span>;
 }

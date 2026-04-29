@@ -17,12 +17,14 @@ node --version       # 20.x
 ```
 
 If missing:
+
 ```bash
 sh -c "$(curl -sSfL https://release.anza.xyz/stable/install)"   # agave / solana CLI
 cargo install --git https://github.com/coral-xyz/anchor avm --force && avm install 0.31.1 && avm use 0.31.1
 ```
 
 Set the Solana CLI to devnet:
+
 ```bash
 solana config set --url https://api.devnet.solana.com
 solana config set --keypair ~/.config/solana/honorary-position-devnet.json   # or wherever your deploy wallet lives
@@ -67,6 +69,7 @@ anchor deploy --provider.cluster devnet
 ```
 
 Expected output ends with:
+
 ```
 Program Id: 2kZNrHd7QkUemYCLFw5dYGQWeKieAUNb5C1FvTjTYiC8
 Deploy success
@@ -81,40 +84,41 @@ cp target/idl/paralend.json       app/src/lib/paralend-idl.json
 cp target/types/paralend.ts       app/src/lib/paralend-idl-types.ts
 ```
 
-(Done automatically by `scripts/setup-demo-markets.ts` on every run — this
-step is only needed if you deploy without seeding demo markets.)
+(Done automatically by `scripts/setup-devnet-markets.ts` on every run — this
+step is only needed if you deploy without seeding live market mirrors.)
 
 ---
 
-## 6 · Seed demo markets
+## 6 · Seed live devnet markets
 
-Creates the 3 flagship Kalshi-style markets with different resolution
-horizons so the UI shows the whole decay spectrum:
+Loads active DFlow/Kalshi binary markets, mirrors their metadata/prices to
+devnet SPL collateral mints, and registers one PriceCache per market:
 
 ```bash
-npx ts-node --project tsconfig.json scripts/setup-demo-markets.ts --cluster=devnet
+npx ts-node --project tsconfig.json scripts/setup-devnet-markets.ts --cluster=devnet
 ```
 
 Artifacts written:
 
-| File | Purpose |
-|---|---|
-| `scripts/demo-mints.json` | USDC + per-market YES mint addresses |
-| `scripts/demo-deployment.json` | Market + IRM + PriceCache PDAs |
-| `scripts/demo-attester.json` | Attester keypair (**do not commit**) |
-| `app/src/lib/demo-config.json` | Frontend-visible metadata |
+| File                               | Purpose                                  |
+| ---------------------------------- | ---------------------------------------- |
+| `scripts/devnet-mints.json`        | USDC + per-market outcome mint addresses |
+| `scripts/devnet-deployment.json`   | Market + IRM + PriceCache PDAs           |
+| `scripts/devnet-attester.json`     | Attester keypair (**do not commit**)     |
+| `app/src/lib/market-registry.json` | Frontend-visible market registry         |
 
 ---
 
 ## 7 · Seed liquidity + borrowers
 
 Each market gets:
+
 - 25 000 USDC supplied from the deploy wallet (lender role)
 - A generated per-market borrower wallet with 500 YES tokens posted
   and a ~30 % LTV borrow drawn
 
 ```bash
-npx ts-node --project tsconfig.json scripts/fund-demo.ts --cluster=devnet
+npx ts-node --project tsconfig.json scripts/fund-devnet.ts --cluster=devnet
 ```
 
 ---
@@ -126,7 +130,7 @@ program's EMA + ±5 % deviation band guarantees a single misbehaving
 tick can't zero the price.
 
 ```bash
-# One push (useful in CI or for a single demo run):
+# One push (useful in CI or for a single readiness check):
 npx ts-node --project tsconfig.json scripts/attester.ts --cluster=devnet --once
 
 # Continuous (run in tmux / screen / systemd):
@@ -135,7 +139,19 @@ npx ts-node --project tsconfig.json scripts/attester.ts --cluster=devnet --inter
 
 ---
 
-## 9 · Optional: force-close watcher
+## 9 · Readiness check
+
+Run this before recording or submitting. It verifies registry/deployment
+consistency, on-chain market accounts, PriceCache accounts, and oracle
+freshness.
+
+```bash
+npm run check-devnet
+```
+
+---
+
+## 10 · Optional: force-close watcher
 
 Polls every 30 s, auto-fires `force_close_position` on any unhealthy
 position inside the 2-hour pre-resolution window. The program's own
@@ -147,7 +163,7 @@ npx ts-node --project tsconfig.json scripts/force-close-bot.ts --cluster=devnet 
 
 ---
 
-## 10 · Frontend
+## 11 · Frontend
 
 Point the Next.js frontend at the deployed program + devnet RPC:
 
@@ -168,7 +184,7 @@ npm run dev      # local preview on http://localhost:3000
 
 ---
 
-## 11 · End-to-end verification
+## 12 · End-to-end verification
 
 From the app UI, connect a Phantom wallet on devnet:
 
@@ -191,7 +207,7 @@ From the app UI, connect a Phantom wallet on devnet:
 
 ---
 
-## 12 · Cleanup / teardown
+## 13 · Cleanup / teardown
 
 Revoking the deploy is not usually necessary for a hackathon. If you
 ever do:
@@ -201,4 +217,4 @@ solana program close 2kZNrHd7VzE...   # recovers ~4.8 SOL
 ```
 
 ⚠️ That deletes the program. All markets / positions / price caches
-become unusable. Do **not** close while the demo is still running.
+become unusable. Do **not** close while the submission deployment is still running.

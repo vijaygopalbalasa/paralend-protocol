@@ -1,12 +1,16 @@
 {
-  "license": "ISC",
+  "license": "MIT",
   "scripts": {
     "lint:fix": "prettier */*.js \"*/**/*{.js,.ts}\" -w",
     "lint": "prettier */*.js \"*/**/*{.js,.ts}\" --check",
-    "setup-demo": "npx ts-node --project tsconfig.json scripts/setup-demo-markets.ts",
-    "fund-demo": "npx ts-node --project tsconfig.json scripts/fund-demo.ts",
-    "stage-liquidation": "npx ts-node --project tsconfig.json scripts/stage-liquidation.ts",
-    "liquidation-bot": "npx ts-node --project tsconfig.json scripts/liquidation-bot.ts"
+    "setup-devnet": "npx ts-node --project tsconfig.json scripts/setup-devnet-markets.ts",
+    "fund-devnet": "npx ts-node --project tsconfig.json scripts/fund-devnet.ts",
+    "attest-devnet": "npx ts-node --project tsconfig.json scripts/attester.ts",
+    "check-devnet": "npx ts-node --project tsconfig.json scripts/check-devnet-health.ts --cluster=devnet",
+    "force-close": "npx ts-node --project tsconfig.json scripts/force-close-bot.ts",
+    "resolve-market": "npx ts-node --project tsconfig.json scripts/resolve-market.ts",
+    "app:build": "npm --prefix app run build",
+    "app:start": "npm --prefix app run start"
   },
   "dependencies": {
     "@coral-xyz/anchor": "^0.31.1",

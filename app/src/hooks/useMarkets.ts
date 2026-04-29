@@ -4,7 +4,9 @@ import { useEffect, useRef, useState } from "react";
 import { Buffer } from "buffer";
 import { useConnection } from "@solana/wallet-adapter-react";
 
-import { getDemoMarket, resolveTokenSymbol } from "@/lib/demo-config";
+import { getRegistryMarket, resolveTokenSymbol } from "@/lib/market-registry";
+import { computeEffectiveLltvBps } from "@/lib/decay";
+import { marketPhase, marketPhaseRank } from "@/lib/copy";
 import {
   annualizedPercent,
   bnToBigInt,
@@ -42,6 +44,8 @@ export interface MarketRow {
   outcomeBit: number;
   /** Human-readable Kalshi ticker decoded from the on-chain bytes (trimmed). */
   kalshiTicker: string;
+  /** True when this market is in the frontend market registry. */
+  isRegistryMarket: boolean;
 }
 
 let pendingFetch: Promise<MarketRow[]> | null = null;
@@ -52,7 +56,7 @@ async function fetchAllMarkets(
   const program = makeReadonlyProgram(connection);
   const rawMarkets = await program.account.market.all();
 
-  return Promise.all(
+  const rows = await Promise.all(
     rawMarkets.map(async (entry) => {
       const market = entry.account;
       const publicKey = entry.publicKey.toBase58();
@@ -66,7 +70,6 @@ async function fetchAllMarkets(
       let borrowApyPct = 0;
       let supplyApyPct = 0;
       try {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const irm = await (program.account as any).linearIrm.fetch(market.irm);
         const borrowRate = irmBorrowRatePerSecond(
           utilization,
@@ -87,14 +90,19 @@ async function fetchAllMarkets(
       const loanDecimals = market.loanDecimals ?? 6;
       const tvlUsd = Number(totalSupply) / 10 ** loanDecimals;
       const borrowedUsd = Number(totalBorrow) / 10 ** loanDecimals;
+      const effectiveLltvBps = computeEffectiveLltvBps(
+        Number(market.baseLltv ?? market.lltv),
+        Number(market.resolutionTimestamp ?? 0),
+        Math.floor(Date.now() / 1000)
+      );
 
-      const marketMeta = getDemoMarket(publicKey);
+      const marketMeta = getRegistryMarket(publicKey);
       const collateralMint = market.collateralMint.toBase58();
       const loanMint = market.loanMint.toBase58();
       const collateralSymbol =
         marketMeta?.collateralSymbol ?? resolveTokenSymbol(collateralMint);
       const loanSymbol = marketMeta?.loanSymbol ?? resolveTokenSymbol(loanMint);
-      const oracleLabel = marketMeta?.oracle ?? "PriceCache (attester EMA)";
+      const oracleLabel = marketMeta?.oracle ?? "DFlow live bid (attested EMA)";
 
       // Decode the on-chain Kalshi ticker bytes — trim NUL padding.
       const tickerBytes = Buffer.from(market.kalshiTicker as number[]);
@@ -112,7 +120,7 @@ async function fetchAllMarkets(
         marketIdHex,
         collateralMint,
         loanMint,
-        lltv: Number(market.lltv) / 100,
+        lltv: effectiveLltvBps / 100,
         baseLltv: Number(market.baseLltv) / 100,
         utilization: utilizationPct,
         supplyApyPct,
@@ -132,9 +140,19 @@ async function fetchAllMarkets(
         marketStatus: Number(market.marketStatus),
         outcomeBit: Number(market.outcomeBit),
         kalshiTicker,
+        isRegistryMarket: Boolean(marketMeta),
       } satisfies MarketRow;
     })
   );
+
+  const now = Math.floor(Date.now() / 1000);
+  return rows.filter((row) => row.isRegistryMarket).sort((a, b) => {
+    const phaseDelta =
+      marketPhaseRank(marketPhase(a.resolutionTimestamp, a.marketStatus, now)) -
+      marketPhaseRank(marketPhase(b.resolutionTimestamp, b.marketStatus, now));
+    if (phaseDelta !== 0) return phaseDelta;
+    return a.resolutionTimestamp - b.resolutionTimestamp;
+  });
 }
 
 export function useMarkets(pollMs = 30_000) {

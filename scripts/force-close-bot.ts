@@ -13,12 +13,12 @@
 //   npx ts-node --project tsconfig.json scripts/force-close-bot.ts [--cluster=devnet] [--interval=30] [--once]
 
 import { BN } from "@coral-xyz/anchor";
-import { getAssociatedTokenAddressSync } from "@solana/spl-token";
+import { getAssociatedTokenAddressSync, TOKEN_PROGRAM_ID } from "@solana/spl-token";
 import { PublicKey } from "@solana/web3.js";
 
 import {
-  DEMO_DEPLOYMENT_PATH,
-  DemoDeploymentFile,
+  DEVNET_DEPLOYMENT_PATH,
+  DevnetDeploymentFile,
   deriveCollateralVault,
   deriveLoanVault,
   derivePriceCache,
@@ -27,7 +27,7 @@ import {
   parseClusterArg,
   PROGRAM_ID,
   readJsonFile,
-} from "./demo-common";
+} from "./devnet-common";
 
 const args = process.argv.slice(2);
 const intervalArg = args.find((a) => a.startsWith("--interval="));
@@ -41,10 +41,9 @@ const FORCE_CLOSE_WINDOW_SECONDS = 7_200;
 
 async function tick(
   program: ReturnType<typeof makeProgram>,
-  deployment: DemoDeploymentFile,
+  deployment: DevnetDeploymentFile,
   liquidatorPubkey: PublicKey
 ): Promise<void> {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const methods = program.methods as any;
   const now = Math.floor(Date.now() / 1000);
 
@@ -55,8 +54,6 @@ async function tick(
 
     const marketId = Buffer.from(m.marketId, "hex");
     const marketPk = new PublicKey(m.market);
-
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const positions = await (program.account as any).position.all([
       {
         memcmp: {
@@ -95,6 +92,7 @@ async function tick(
               liquidatorPubkey
             ),
             priceCache: derivePriceCache(marketId),
+            tokenProgram: TOKEN_PROGRAM_ID,
           })
           .rpc();
         console.log(
@@ -119,10 +117,10 @@ async function main(): Promise<void> {
   const { provider, payer } = makeProvider(cluster);
   const program = makeProgram(provider);
 
-  const deployment = readJsonFile<DemoDeploymentFile>(DEMO_DEPLOYMENT_PATH);
+  const deployment = readJsonFile<DevnetDeploymentFile>(DEVNET_DEPLOYMENT_PATH);
   if (!deployment) {
     throw new Error(
-      "Missing demo-deployment.json — run scripts/setup-demo-markets.ts first."
+      "Missing devnet-deployment.json — run scripts/setup-devnet-markets.ts first."
     );
   }
 

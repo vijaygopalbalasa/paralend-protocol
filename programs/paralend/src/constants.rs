@@ -17,7 +17,6 @@ pub const SECONDS_PER_YEAR: u128 = 31_536_000;
 /// Maximum interest accrual period (7 days) to prevent overflow in Taylor expansion
 pub const MAX_INTEREST_ACCRUAL_SECONDS: u128 = 604_800;
 
-
 /// Liquidation incentive factor parameters
 /// Maximum LIF: 115% (liquidator gets at most 15% bonus)
 pub const MAX_LIF: u64 = 11_500;

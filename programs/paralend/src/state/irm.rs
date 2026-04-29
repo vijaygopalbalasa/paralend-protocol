@@ -71,7 +71,7 @@ impl LinearIrm {
             .ok_or_else(|| error!(ParalendError::MathOverflow))
     }
 
-    /// Create default IRM parameters for demo markets
+    /// Create default IRM parameters for prediction-market lending pools
     /// 0% base, 5% APY slope1, 230% APY slope2, 80% kink
     pub fn default_params() -> (u128, u128, u128, u128) {
         let base = 0_u128;

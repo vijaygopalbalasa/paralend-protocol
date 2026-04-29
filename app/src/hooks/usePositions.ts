@@ -4,7 +4,8 @@ import { useEffect, useRef, useState } from "react";
 import { Buffer } from "buffer";
 import { useConnection, useWallet } from "@solana/wallet-adapter-react";
 
-import { resolveTokenSymbol } from "@/lib/demo-config";
+import { resolveTokenSymbol } from "@/lib/market-registry";
+import { computeEffectiveLltvBps } from "@/lib/decay";
 import {
   bnToBigInt,
   calculateHealthFactor,
@@ -106,7 +107,6 @@ export function usePositions(pollMs = 15_000) {
           let collateralPriceWad = oracleCache.get(cacheKey);
           if (collateralPriceWad === undefined) {
             try {
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
               const cacheAccount = await (program.account as any).priceCache.fetch(
                 priceCachePda
               );
@@ -127,12 +127,17 @@ export function usePositions(pollMs = 15_000) {
           const collateralValueUsd =
             Number((collateralAmount * collateralPriceWad) / WAD) /
             10 ** collateralDecimals;
+          const effectiveLltvBps = computeEffectiveLltvBps(
+            Number(market.baseLltv ?? market.lltv),
+            Number(market.resolutionTimestamp ?? 0),
+            Math.floor(Date.now() / 1000)
+          );
           const healthFactor = calculateHealthFactor({
             collateral: collateralAmount,
             borrowShares,
             totalBorrowAssets,
             totalBorrowShares,
-            lltv: bnToBigInt(market.lltv),
+            lltv: BigInt(effectiveLltvBps),
             collateralPriceWad,
             loanPriceWad,
           });

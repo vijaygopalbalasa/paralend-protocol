@@ -42,10 +42,7 @@ pub mod paralend {
         instructions::admin::handle_enable_irm(ctx, irm)
     }
 
-    pub fn transfer_ownership(
-        ctx: Context<TransferOwnership>,
-        new_owner: Pubkey,
-    ) -> Result<()> {
+    pub fn transfer_ownership(ctx: Context<TransferOwnership>, new_owner: Pubkey) -> Result<()> {
         instructions::admin::handle_transfer_ownership(ctx, new_owner)
     }
 
@@ -157,15 +154,19 @@ pub mod paralend {
         max_shares_burn: u128,
         min_assets_out: u128,
     ) -> Result<()> {
-        instructions::supply::handle_withdraw(ctx, market_id, assets, shares, max_shares_burn, min_assets_out)
+        instructions::supply::handle_withdraw(
+            ctx,
+            market_id,
+            assets,
+            shares,
+            max_shares_burn,
+            min_assets_out,
+        )
     }
 
     // ─── Accrue Interest (permissionless crank) ──────────────
 
-    pub fn accrue_interest(
-        ctx: Context<AccrueInterest>,
-        market_id: [u8; 32],
-    ) -> Result<()> {
+    pub fn accrue_interest(ctx: Context<AccrueInterest>, market_id: [u8; 32]) -> Result<()> {
         instructions::utils::handle_accrue_interest(ctx, market_id)
     }
 

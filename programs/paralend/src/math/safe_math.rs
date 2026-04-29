@@ -3,23 +3,27 @@ use anchor_lang::prelude::*;
 
 /// Checked addition for u128
 pub fn checked_add(a: u128, b: u128) -> Result<u128> {
-    a.checked_add(b).ok_or_else(|| error!(ParalendError::MathOverflow))
+    a.checked_add(b)
+        .ok_or_else(|| error!(ParalendError::MathOverflow))
 }
 
 /// Checked subtraction for u128
 pub fn checked_sub(a: u128, b: u128) -> Result<u128> {
-    a.checked_sub(b).ok_or_else(|| error!(ParalendError::MathOverflow))
+    a.checked_sub(b)
+        .ok_or_else(|| error!(ParalendError::MathOverflow))
 }
 
 /// Checked multiplication for u128
 pub fn checked_mul(a: u128, b: u128) -> Result<u128> {
-    a.checked_mul(b).ok_or_else(|| error!(ParalendError::MathOverflow))
+    a.checked_mul(b)
+        .ok_or_else(|| error!(ParalendError::MathOverflow))
 }
 
 /// Checked division for u128
 pub fn checked_div(a: u128, b: u128) -> Result<u128> {
     require!(b > 0, ParalendError::DivisionByZero);
-    a.checked_div(b).ok_or_else(|| error!(ParalendError::MathOverflow))
+    a.checked_div(b)
+        .ok_or_else(|| error!(ParalendError::MathOverflow))
 }
 
 /// Safe u128 to u64 conversion
@@ -29,7 +33,11 @@ pub fn safe_u128_to_u64(val: u128) -> Result<u64> {
 
 /// Minimum of two u128 values
 pub fn min_u128(a: u128, b: u128) -> u128 {
-    if a < b { a } else { b }
+    if a < b {
+        a
+    } else {
+        b
+    }
 }
 
 #[cfg(test)]

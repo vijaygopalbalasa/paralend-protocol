@@ -6,11 +6,11 @@
 //     --cluster=devnet --to=<YOUR_PHANTOM_ADDRESS>
 //
 // Mints:
-//   - 10,000 USDC (devnet test mint) → for supplying liquidity
-//   - 2,000 of each YES token (BTC / SOL / NFL markets) → for borrowing
+//   - 10,000 USDC (devnet mint) → for supplying liquidity
+//   - 2,000 of each live DFlow YES outcome token → for borrowing
 //
 // Requires the deploy wallet (the mint authority) — same keypair that ran
-// scripts/setup-demo-markets.ts. That's normally
+// scripts/setup-devnet-markets.ts. That's normally
 // `~/.config/solana/honorary-position-devnet.json` or whatever your
 // `ANCHOR_WALLET` env var points to.
 
@@ -21,12 +21,12 @@ import {
 import { PublicKey } from "@solana/web3.js";
 
 import {
-  DEMO_MINTS_PATH,
-  DemoMintsFile,
+  DEVNET_MINTS_PATH,
+  DevnetMintsFile,
   makeProvider,
   parseClusterArg,
   readJsonFile,
-} from "./demo-common";
+} from "./devnet-common";
 
 function parseArg(name: string): string | null {
   const raw = process.argv
@@ -46,15 +46,15 @@ async function main(): Promise<void> {
   }
   const target = new PublicKey(targetAddr);
 
-  const mints = readJsonFile<DemoMintsFile>(DEMO_MINTS_PATH);
+  const mints = readJsonFile<DevnetMintsFile>(DEVNET_MINTS_PATH);
   if (!mints) {
     throw new Error(
-      "Missing scripts/demo-mints.json — run setup-demo-markets.ts first."
+      "Missing scripts/devnet-mints.json — run setup-devnet-markets.ts first."
     );
   }
 
   const { connection, payer } = makeProvider(cluster);
-  console.log(`\n💸 Minting test tokens → ${target.toBase58()}`);
+  console.log(`\n💸 Minting devnet tokens → ${target.toBase58()}`);
   console.log(`   Cluster:  ${cluster}`);
   console.log(`   Payer:    ${payer.publicKey.toBase58()} (mint authority)`);
 

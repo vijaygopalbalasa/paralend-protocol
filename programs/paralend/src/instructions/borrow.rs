@@ -60,6 +60,8 @@ pub struct Borrow<'info> {
         mut,
         seeds = [SEED_PREFIX, SEED_LOAN_VAULT, &market_id],
         bump = market.loan_vault_bump,
+        token::mint = market.loan_mint,
+        token::authority = market,
     )]
     pub loan_vault: Account<'info, TokenAccount>,
 
@@ -232,6 +234,7 @@ pub struct Repay<'info> {
         mut,
         seeds = [SEED_PREFIX, SEED_POSITION, &market_id, borrower.key().as_ref()],
         bump = position.bump,
+        constraint = position.owner == borrower.key() @ ParalendError::Unauthorized,
         constraint = position.market_id == market_id @ ParalendError::Unauthorized,
     )]
     pub position: Box<Account<'info, Position>>,
@@ -252,6 +255,8 @@ pub struct Repay<'info> {
         mut,
         seeds = [SEED_PREFIX, SEED_LOAN_VAULT, &market_id],
         bump = market.loan_vault_bump,
+        token::mint = market.loan_mint,
+        token::authority = market,
     )]
     pub loan_vault: Account<'info, TokenAccount>,
 
@@ -265,10 +270,7 @@ pub fn handle_repay(
     shares: u128,
 ) -> Result<()> {
     // Exactly one of assets or shares must be non-zero
-    require!(
-        (assets == 0) != (shares == 0),
-        ParalendError::InvalidInput
-    );
+    require!((assets == 0) != (shares == 0), ParalendError::InvalidInput);
 
     // Accrue interest before computing share/asset values
     let clock = Clock::get()?;
@@ -290,6 +292,7 @@ pub fn handle_repay(
             market.total_borrow_assets,
             market.total_borrow_shares,
         )?;
+        require!(shares_cleared > 0, ParalendError::ZeroAmount);
         (assets as u128, shares_cleared)
     } else {
         // User specifies shares to clear → compute assets to pay (round UP: pay more)

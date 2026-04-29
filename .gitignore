@@ -18,7 +18,19 @@ app/.env
 app/.env.local
 app/.env*.local
 
-# Demo keypairs / deployment artifacts (contain private keys)
+# Devnet keypairs / generated deployment artifacts
+scripts/devnet-attester.json
+scripts/devnet-wallets.json
+scripts/devnet-deployment.json
+scripts/devnet-mints.json
+scripts/devnet-peers-*.json
+
+# Local runtime/browser artifacts
+.runtime/
+.playwright-mcp/
+paralend-*.png
+
+# Legacy generated keypairs / deployment artifacts
 scripts/demo-peers-*.json
 scripts/wallet.json
 *.keypair.json

@@ -5,8 +5,8 @@ use crate::constants::*;
 use crate::errors::ParalendError;
 use crate::events;
 use crate::math::interest::accrue_interest_on_market;
-use crate::math::shares::{to_assets_down, to_shares_down, to_shares_up};
 use crate::math::safe_math::safe_u128_to_u64;
+use crate::math::shares::{to_assets_down, to_shares_down, to_shares_up};
 use crate::state::irm::LinearIrm;
 use crate::state::market::Market;
 use crate::state::position::Position;
@@ -62,6 +62,8 @@ pub struct Supply<'info> {
         mut,
         seeds = [SEED_PREFIX, SEED_LOAN_VAULT, &market_id],
         bump = market.loan_vault_bump,
+        token::mint = market.loan_mint,
+        token::authority = market,
     )]
     pub loan_vault: Account<'info, TokenAccount>,
 
@@ -92,6 +94,7 @@ pub fn handle_supply(
         market.total_supply_assets,
         market.total_supply_shares,
     )?;
+    require!(shares > 0, ParalendError::ZeroAmount);
 
     // Slippage protection: ensure user gets at least min_shares
     require!(shares >= min_shares, ParalendError::SlippageExceeded);
@@ -177,6 +180,8 @@ pub struct Withdraw<'info> {
         mut,
         seeds = [SEED_PREFIX, SEED_LOAN_VAULT, &market_id],
         bump = market.loan_vault_bump,
+        token::mint = market.loan_mint,
+        token::authority = market,
     )]
     pub loan_vault: Account<'info, TokenAccount>,
 
@@ -199,10 +204,7 @@ pub fn handle_withdraw(
     min_assets_out: u128,
 ) -> Result<()> {
     // Exactly one of assets or shares must be non-zero
-    require!(
-        (assets == 0) != (shares == 0),
-        ParalendError::InvalidInput
-    );
+    require!((assets == 0) != (shares == 0), ParalendError::InvalidInput);
 
     // Accrue interest before computing share/asset values
     let clock = Clock::get()?;
@@ -238,11 +240,17 @@ pub fn handle_withdraw(
     // Slippage protection (0 = no protection, backwards compatible)
     // When withdrawing by assets: ensure user doesn't burn more shares than expected
     if assets > 0 && max_shares_burn > 0 {
-        require!(final_shares <= max_shares_burn, ParalendError::SlippageExceeded);
+        require!(
+            final_shares <= max_shares_burn,
+            ParalendError::SlippageExceeded
+        );
     }
     // When withdrawing by shares: ensure user gets at least min_assets
     if shares > 0 && min_assets_out > 0 {
-        require!(final_assets >= min_assets_out, ParalendError::SlippageExceeded);
+        require!(
+            final_assets >= min_assets_out,
+            ParalendError::SlippageExceeded
+        );
     }
 
     // Check position has enough shares to burn
