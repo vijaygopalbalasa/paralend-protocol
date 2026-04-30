@@ -1,6 +1,10 @@
 import { Buffer } from "buffer";
 
 import { getRegistryMarket, resolveTokenSymbol } from "./market-registry";
+import {
+  getLiveDflowMarketMeta,
+  liveDflowDisplayName,
+} from "./live-market-meta";
 import { computeEffectiveLltvBps } from "./decay";
 import { marketPhase, marketPhaseRank } from "./copy";
 import {
@@ -46,6 +50,7 @@ export interface MarketView {
   kalshiTicker: string;
   id: string;
   isRegistryMarket: boolean;
+  hasLiveMetadata: boolean;
 }
 
 export interface ProtocolStats {
@@ -104,8 +109,15 @@ export async function getAllMarkets(): Promise<MarketView[]> {
 
         const tickerBytes = Buffer.from(market.kalshiTicker as number[]);
         const idx = tickerBytes.indexOf(0);
-        const trimmed = tickerBytes.slice(0, idx === -1 ? tickerBytes.length : idx);
+        const trimmed = tickerBytes.slice(
+          0,
+          idx === -1 ? tickerBytes.length : idx
+        );
         const kalshiTicker = trimmed.toString("utf-8");
+        const liveMeta = kalshiTicker
+          ? await getLiveDflowMarketMeta(kalshiTicker)
+          : null;
+        const liveName = liveDflowDisplayName(liveMeta, collateralSymbol);
 
         const effectiveLltvBps = computeEffectiveLltvBps(
           Number(market.baseLltv ?? market.lltv),
@@ -125,6 +137,7 @@ export async function getAllMarkets(): Promise<MarketView[]> {
           collateralSymbol,
           loanSymbol,
           name:
+            liveName ??
             marketMeta?.name ??
             (kalshiTicker || `${collateralSymbol} / ${loanSymbol}`),
           oracleLabel: marketMeta?.oracle ?? "DFlow live bid (attested EMA)",
@@ -145,17 +158,24 @@ export async function getAllMarkets(): Promise<MarketView[]> {
           kalshiTicker,
           id: publicKey,
           isRegistryMarket: Boolean(marketMeta),
+          hasLiveMetadata: Boolean(liveMeta),
         } satisfies MarketView;
       })
     );
     const now = Math.floor(Date.now() / 1000);
-    return rows.filter((row) => row.isRegistryMarket).sort((a, b) => {
-      const phaseDelta =
-        marketPhaseRank(marketPhase(a.resolutionTimestamp, a.marketStatus, now)) -
-        marketPhaseRank(marketPhase(b.resolutionTimestamp, b.marketStatus, now));
-      if (phaseDelta !== 0) return phaseDelta;
-      return a.resolutionTimestamp - b.resolutionTimestamp;
-    });
+    return rows
+      .filter((row) => row.hasLiveMetadata || row.isRegistryMarket)
+      .sort((a, b) => {
+        const phaseDelta =
+          marketPhaseRank(
+            marketPhase(a.resolutionTimestamp, a.marketStatus, now)
+          ) -
+          marketPhaseRank(
+            marketPhase(b.resolutionTimestamp, b.marketStatus, now)
+          );
+        if (phaseDelta !== 0) return phaseDelta;
+        return a.resolutionTimestamp - b.resolutionTimestamp;
+      });
   } catch (err) {
     console.error("[paralend-rpc] getAllMarkets failed:", err);
     return [];

@@ -212,6 +212,13 @@ export function loadWalletKeypair(): Keypair {
 
 export function makeProvider(cluster: DevnetCluster) {
   const walletKeypair = loadWalletKeypair();
+  return makeProviderWithKeypair(cluster, walletKeypair);
+}
+
+export function makeProviderWithKeypair(
+  cluster: DevnetCluster,
+  walletKeypair: Keypair
+) {
   const wallet = new anchor.Wallet(walletKeypair);
   const connection = new Connection(getRpcUrl(cluster), "confirmed");
   const provider = new AnchorProvider(connection, wallet, {

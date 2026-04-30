@@ -13,15 +13,17 @@ import { BN } from "@coral-xyz/anchor";
 import { Keypair } from "@solana/web3.js";
 
 import {
+  APP_MARKET_REGISTRY_PATH,
   DEVNET_ATTESTER_PATH,
   DEVNET_DEPLOYMENT_PATH,
   DevnetAttesterFile,
+  DevnetDeploymentEntry,
   DevnetDeploymentFile,
   boundedOraclePrice,
   deriveMarket,
   derivePriceCache,
   makeProgram,
-  makeProvider,
+  makeProviderWithKeypair,
   parseClusterArg,
   PROGRAM_ID,
   readJsonFile,
@@ -35,6 +37,119 @@ const intervalSeconds = Math.max(
   5,
   Number.parseInt(intervalArg?.split("=")[1] ?? "20", 10)
 );
+
+interface RegistryFile {
+  cluster: "devnet" | "localnet";
+  generatedAt: string;
+  programId: string;
+  attester?: string;
+  tokens: Record<string, { name: string; decimals: number }>;
+  markets: Record<
+    string,
+    {
+      name: string;
+      kalshiTicker: string;
+      resolutionTimestamp: number;
+      marketId: string;
+      collateralMint: string;
+      sourceCollateralMint?: string;
+      sourceMarketLedger?: string;
+      sourceSettlementMint?: string;
+      loanMint: string;
+      collateralSymbol: string;
+      loanSymbol: string;
+      collateralName?: string;
+      loanName?: string;
+      lltv: number;
+      feeBps: number;
+      irm: string;
+      priceCache: string;
+      collateralOracleFeedId: string;
+      loanOracleFeedId: string;
+    }
+  >;
+}
+
+function loadAttesterKeypair(): Keypair {
+  const raw = process.env.PARALEND_ATTESTER_SECRET_KEY;
+  if (raw) {
+    const parsed = JSON.parse(raw) as number[];
+    if (!Array.isArray(parsed) || parsed.length !== 64) {
+      throw new Error(
+        "PARALEND_ATTESTER_SECRET_KEY must be a JSON array of 64 bytes."
+      );
+    }
+    return Keypair.fromSecretKey(Uint8Array.from(parsed));
+  }
+
+  const attesterFile = readJsonFile<DevnetAttesterFile>(DEVNET_ATTESTER_PATH);
+  if (!attesterFile) {
+    throw new Error(
+      "Missing attester key. Set PARALEND_ATTESTER_SECRET_KEY or run scripts/setup-devnet-markets.ts."
+    );
+  }
+  return Keypair.fromSecretKey(Uint8Array.from(attesterFile.secretKey));
+}
+
+function deploymentFromRegistry(registry: RegistryFile): DevnetDeploymentFile {
+  const markets: Record<string, DevnetDeploymentEntry> = {};
+  for (const [marketAddress, market] of Object.entries(registry.markets)) {
+    const collateralToken = registry.tokens[market.collateralMint];
+    const loanToken = registry.tokens[market.loanMint];
+    markets[marketAddress] = {
+      key: market.kalshiTicker.toLowerCase(),
+      name: market.name,
+      kalshiTicker: market.kalshiTicker,
+      resolutionTimestamp: market.resolutionTimestamp,
+      market: marketAddress,
+      marketId: market.marketId,
+      collateralMint: market.collateralMint,
+      sourceCollateralMint: market.sourceCollateralMint,
+      sourceMarketLedger: market.sourceMarketLedger,
+      sourceSettlementMint: market.sourceSettlementMint,
+      loanMint: market.loanMint,
+      irm: market.irm,
+      priceCache: market.priceCache,
+      collateralOracleFeedId: market.collateralOracleFeedId,
+      loanOracleFeedId: market.loanOracleFeedId,
+      collateralSymbol: market.collateralSymbol,
+      loanSymbol: market.loanSymbol,
+      collateralName:
+        market.collateralName ??
+        collateralToken?.name ??
+        market.collateralSymbol,
+      loanName: market.loanName ?? loanToken?.name ?? market.loanSymbol,
+      collateralIcon: market.collateralSymbol,
+      loanIcon: market.loanSymbol,
+      collateralDecimals: collateralToken?.decimals ?? 6,
+      loanDecimals: loanToken?.decimals ?? 6,
+      initialPriceUsd: 0,
+      lltv: market.lltv,
+      feeBps: market.feeBps,
+      attester: registry.attester ?? "",
+    };
+  }
+  return {
+    cluster: registry.cluster,
+    generatedAt: registry.generatedAt,
+    programId: registry.programId,
+    attester: registry.attester ?? "",
+    markets,
+  };
+}
+
+function loadDeployment(): DevnetDeploymentFile {
+  const deployment = readJsonFile<DevnetDeploymentFile>(DEVNET_DEPLOYMENT_PATH);
+  if (deployment) return deployment;
+
+  const registry = readJsonFile<RegistryFile>(APP_MARKET_REGISTRY_PATH);
+  if (!registry) {
+    throw new Error(
+      "Missing deployment metadata. Provide scripts/devnet-deployment.json or app/src/lib/market-registry.json."
+    );
+  }
+  return deploymentFromRegistry(registry);
+}
 
 async function tick(
   program: ReturnType<typeof makeProgram>,
@@ -111,25 +226,10 @@ async function tick(
 
 async function main(): Promise<void> {
   const cluster = parseClusterArg();
-  const { connection, provider } = makeProvider(cluster);
+  const attester = loadAttesterKeypair();
+  const { connection, provider } = makeProviderWithKeypair(cluster, attester);
   const program = makeProgram(provider);
-
-  const attesterFile = readJsonFile<DevnetAttesterFile>(DEVNET_ATTESTER_PATH);
-  if (!attesterFile) {
-    throw new Error(
-      "Missing devnet-attester.json — run scripts/setup-devnet-markets.ts first."
-    );
-  }
-  const attester = Keypair.fromSecretKey(
-    Uint8Array.from(attesterFile.secretKey)
-  );
-
-  const deployment = readJsonFile<DevnetDeploymentFile>(DEVNET_DEPLOYMENT_PATH);
-  if (!deployment) {
-    throw new Error(
-      "Missing devnet-deployment.json — run scripts/setup-devnet-markets.ts first."
-    );
-  }
+  const deployment = loadDeployment();
 
   console.log(`\n📡 Paralend attester daemon`);
   console.log(`   Cluster:   ${cluster}`);

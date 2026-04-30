@@ -5,6 +5,10 @@ import { Buffer } from "buffer";
 import { useConnection } from "@solana/wallet-adapter-react";
 
 import { getRegistryMarket, resolveTokenSymbol } from "@/lib/market-registry";
+import {
+  fetchLiveDflowMarketMeta,
+  liveDflowDisplayName,
+} from "@/lib/live-market-client";
 import { computeEffectiveLltvBps } from "@/lib/decay";
 import { marketPhase, marketPhaseRank } from "@/lib/copy";
 import {
@@ -44,8 +48,10 @@ export interface MarketRow {
   outcomeBit: number;
   /** Human-readable Kalshi ticker decoded from the on-chain bytes (trimmed). */
   kalshiTicker: string;
-  /** True when this market is in the frontend market registry. */
+  /** True when this market is in the frontend deployment registry. */
   isRegistryMarket: boolean;
+  /** True when DFlow returned live metadata for this ticker during this poll. */
+  hasLiveMetadata: boolean;
 }
 
 let pendingFetch: Promise<MarketRow[]> | null = null;
@@ -96,13 +102,8 @@ async function fetchAllMarkets(
         Math.floor(Date.now() / 1000)
       );
 
-      const marketMeta = getRegistryMarket(publicKey);
       const collateralMint = market.collateralMint.toBase58();
       const loanMint = market.loanMint.toBase58();
-      const collateralSymbol =
-        marketMeta?.collateralSymbol ?? resolveTokenSymbol(collateralMint);
-      const loanSymbol = marketMeta?.loanSymbol ?? resolveTokenSymbol(loanMint);
-      const oracleLabel = marketMeta?.oracle ?? "DFlow live bid (attested EMA)";
 
       // Decode the on-chain Kalshi ticker bytes — trim NUL padding.
       const tickerBytes = Buffer.from(market.kalshiTicker as number[]);
@@ -114,6 +115,15 @@ async function fetchAllMarkets(
         })()
       );
       const kalshiTicker = trimmed.toString("utf-8");
+      const marketMeta = getRegistryMarket(publicKey);
+      const liveMeta = kalshiTicker
+        ? await fetchLiveDflowMarketMeta(kalshiTicker)
+        : null;
+      const collateralSymbol =
+        marketMeta?.collateralSymbol ?? resolveTokenSymbol(collateralMint);
+      const loanSymbol = marketMeta?.loanSymbol ?? resolveTokenSymbol(loanMint);
+      const oracleLabel = marketMeta?.oracle ?? "DFlow live bid (attested EMA)";
+      const liveName = liveDflowDisplayName(liveMeta, collateralSymbol);
 
       return {
         publicKey,
@@ -133,6 +143,7 @@ async function fetchAllMarkets(
         loanSymbol,
         oracleLabel,
         name:
+          liveName ??
           marketMeta?.name ??
           (kalshiTicker || `${collateralSymbol} / ${loanSymbol}`),
         id: publicKey,
@@ -141,18 +152,25 @@ async function fetchAllMarkets(
         outcomeBit: Number(market.outcomeBit),
         kalshiTicker,
         isRegistryMarket: Boolean(marketMeta),
+        hasLiveMetadata: Boolean(liveMeta),
       } satisfies MarketRow;
     })
   );
 
   const now = Math.floor(Date.now() / 1000);
-  return rows.filter((row) => row.isRegistryMarket).sort((a, b) => {
-    const phaseDelta =
-      marketPhaseRank(marketPhase(a.resolutionTimestamp, a.marketStatus, now)) -
-      marketPhaseRank(marketPhase(b.resolutionTimestamp, b.marketStatus, now));
-    if (phaseDelta !== 0) return phaseDelta;
-    return a.resolutionTimestamp - b.resolutionTimestamp;
-  });
+  return rows
+    .filter((row) => row.hasLiveMetadata || row.isRegistryMarket)
+    .sort((a, b) => {
+      const phaseDelta =
+        marketPhaseRank(
+          marketPhase(a.resolutionTimestamp, a.marketStatus, now)
+        ) -
+        marketPhaseRank(
+          marketPhase(b.resolutionTimestamp, b.marketStatus, now)
+        );
+      if (phaseDelta !== 0) return phaseDelta;
+      return a.resolutionTimestamp - b.resolutionTimestamp;
+    });
 }
 
 export function useMarkets(pollMs = 30_000) {

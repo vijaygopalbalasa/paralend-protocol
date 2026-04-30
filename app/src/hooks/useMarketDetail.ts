@@ -10,6 +10,10 @@ import {
   resolveTokenIcon,
   resolveTokenSymbol,
 } from "@/lib/market-registry";
+import {
+  fetchLiveDflowMarketMeta,
+  liveDflowDisplayName,
+} from "@/lib/live-market-client";
 import { computeEffectiveLltvBps } from "@/lib/decay";
 import {
   annualizedPercent,
@@ -89,10 +93,7 @@ export interface MarketDetail {
   };
 }
 
-export function useMarketDetail(
-  marketAddress: string | null,
-  pollMs = 15_000
-) {
+export function useMarketDetail(marketAddress: string | null, pollMs = 15_000) {
   const { connection } = useConnection();
   const { publicKey } = useWallet();
   const [market, setMarket] = useState<MarketDetail | null>(null);
@@ -121,7 +122,9 @@ export function useMarketDetail(
       const collateralOracleFeedId = Buffer.from(
         account.collateralOracleFeedId as number[]
       );
-      const loanOracleFeedId = Buffer.from(account.loanOracleFeedId as number[]);
+      const loanOracleFeedId = Buffer.from(
+        account.loanOracleFeedId as number[]
+      );
       const collateralMintStr = collateralMint.toBase58();
       const loanMintStr = loanMint.toBase58();
       const collateralSymbol = resolveTokenSymbol(collateralMintStr);
@@ -139,7 +142,10 @@ export function useMarketDetail(
         Number(account.resolutionTimestamp ?? 0),
         Math.floor(Date.now() / 1000)
       );
-      const utilization = calculateUtilization(totalBorrowAssets, totalSupplyAssets);
+      const utilization = calculateUtilization(
+        totalBorrowAssets,
+        totalSupplyAssets
+      );
       const borrowRate = irmBorrowRatePerSecond(
         utilization,
         bnToBigInt(irm.baseRate),
@@ -188,7 +194,9 @@ export function useMarketDetail(
         const positionPda = derivePositionPDA(marketId, publicKey);
         const positionInfo = await connection.getAccountInfo(positionPda);
         if (positionInfo) {
-          const positionAccount = await program.account.position.fetch(positionPda);
+          const positionAccount = await program.account.position.fetch(
+            positionPda
+          );
           const supplyShares = bnToBigInt(positionAccount.supplyShares);
           const borrowShares = bnToBigInt(positionAccount.borrowShares);
           const collateralAmount = bnToBigInt(positionAccount.collateral);
@@ -239,10 +247,15 @@ export function useMarketDetail(
         const idx = buf.indexOf(0);
         return buf.slice(0, idx === -1 ? buf.length : idx).toString("utf-8");
       })();
+      const liveMeta = kalshiTicker
+        ? await fetchLiveDflowMarketMeta(kalshiTicker)
+        : null;
+      const liveName = liveDflowDisplayName(liveMeta, collateralSymbol);
 
       setMarket({
         publicKey: marketAddress,
         name:
+          liveName ??
           marketMeta?.name ??
           (kalshiTicker || `${collateralSymbol} / ${loanSymbol}`),
         marketId,
@@ -281,7 +294,8 @@ export function useMarketDetail(
         collateralPriceWad,
         loanPriceWad,
         collateralPriceUsd:
-          Number(collateralPriceWad * 10n ** BigInt(collateralDecimals)) / Number(WAD),
+          Number(collateralPriceWad * 10n ** BigInt(collateralDecimals)) /
+          Number(WAD),
         loanPriceUsd:
           Number(loanPriceWad * 10n ** BigInt(loanDecimals)) / Number(WAD),
         position,
