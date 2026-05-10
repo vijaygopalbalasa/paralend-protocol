@@ -111,7 +111,10 @@ export function makeProgram(
   wallet?: AnchorWalletLike,
   programId: PublicKey = getProgramId()
 ): Program<Paralend> {
-  const provider = makeAnchorProvider(connection, wallet ?? makeReadonlyWallet());
+  const provider = makeAnchorProvider(
+    connection,
+    wallet ?? makeReadonlyWallet()
+  );
   return new Program<Paralend>(withProgramAddress(programId) as any, provider);
 }
 
@@ -122,7 +125,9 @@ export function makeReadonlyProgram(
   return makeProgram(connection, undefined, programId);
 }
 
-export function bnToBigInt(value: { toString(): string } | bigint | number): bigint {
+export function bnToBigInt(
+  value: { toString(): string } | bigint | number
+): bigint {
   if (typeof value === "bigint") return value;
   if (typeof value === "number") return BigInt(value);
   return BigInt(value.toString());
@@ -175,7 +180,10 @@ export function deriveProtocolStatePDA(programId = getProgramId()): PublicKey {
   )[0];
 }
 
-export function deriveMarketPDA(marketId: Buffer, programId = getProgramId()): PublicKey {
+export function deriveMarketPDA(
+  marketId: Buffer,
+  programId = getProgramId()
+): PublicKey {
   return PublicKey.findProgramAddressSync(
     [SEED_PREFIX, SEED_MARKET, marketId],
     programId
@@ -344,14 +352,22 @@ export function calculateHealthFactor(params: {
   return Number(collateralUsd * lltv) / Number(debtUsd * BPS);
 }
 
-export function parseTokenAmount(value: string, decimals: number): bigint | null {
+export function parseTokenAmount(
+  value: string,
+  decimals: number
+): bigint | null {
   const trimmed = value.trim();
   if (!trimmed) return null;
   if (!/^\d+(\.\d+)?$/.test(trimmed)) return null;
 
   const [whole, fraction = ""] = trimmed.split(".");
-  const normalizedFraction = `${fraction}${"0".repeat(decimals)}`.slice(0, decimals);
-  return BigInt(whole) * 10n ** BigInt(decimals) + BigInt(normalizedFraction || "0");
+  const normalizedFraction = `${fraction}${"0".repeat(decimals)}`.slice(
+    0,
+    decimals
+  );
+  return (
+    BigInt(whole) * 10n ** BigInt(decimals) + BigInt(normalizedFraction || "0")
+  );
 }
 
 export function parseHex32(value: string): Buffer | null {
@@ -388,8 +404,10 @@ export function shortAddressLabel(address: string): string {
   return `${address.slice(0, 4)}...${address.slice(-4)}`;
 }
 
-export function tokenUsdValue(amount: bigint, decimals: number, priceWad: bigint): number {
-  return (
-    Number((amount * priceWad) / WAD) / Number(10n ** BigInt(Math.max(0, 18 - decimals)))
-  );
+export function tokenUsdValue(
+  amount: bigint,
+  _decimals: number,
+  priceWad: bigint
+): number {
+  return Number((amount * priceWad) / WAD);
 }

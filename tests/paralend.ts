@@ -6,12 +6,8 @@
 //   - register_price_cache + attest_price (deviation band) + poke_price
 //   - supply / supply_collateral / borrow / repay
 //   - Pre-resolution borrow cutoff (POST_BORROW_CUTOFF_SECONDS)
+//   - liquidation with collateral seizure capped to remaining debt
 //   - force_close_position in the final 2-hour window
-//
-// Additional coverage (liquidate, handle_resolution)
-// is planned behind a test-only feature flag that lets `create_market`
-// accept past timestamps for deterministic time-warp scenarios. See the
-// "Open items" section in DEPLOYMENT.md.
 
 import * as anchor from "@coral-xyz/anchor";
 import { Program, BN } from "@coral-xyz/anchor";
@@ -19,6 +15,7 @@ import { Keypair, PublicKey, SystemProgram } from "@solana/web3.js";
 import {
   createMint,
   createAccount,
+  getOrCreateAssociatedTokenAccount,
   mintTo,
   TOKEN_PROGRAM_ID,
 } from "@solana/spl-token";
@@ -716,6 +713,260 @@ describe("Paralend", () => {
     );
   });
 
+  it("caps liquidation collateral when remaining debt is smaller than requested seizure", async () => {
+    const liqFeedId = Buffer.alloc(32);
+    liqFeedId.write("KALSHI-LIQ-CAP-TEST", "utf-8");
+    const liqMarketId = computeMarketId({
+      collateralMint,
+      loanMint,
+      collateralFeedId: liqFeedId,
+      loanFeedId: LOAN_FEED_ID,
+      irm: irmPda,
+      lltv: LLTV,
+    });
+    const [liqMarketPda] = deriveMarketPda(liqMarketId, program.programId);
+    const [liqCollateralVault] = deriveCollateralVault(
+      liqMarketId,
+      program.programId
+    );
+    const [liqLoanVault] = deriveLoanVault(liqMarketId, program.programId);
+    const [liqPriceCache] = derivePriceCache(liqMarketId, program.programId);
+    const resolutionTs = Math.floor(Date.now() / 1000) + 14 * 24 * 3600;
+    const ticker = Buffer.alloc(48);
+    ticker.write("LIQ-CAP-TEST", "utf-8");
+
+    await program.methods
+      .createMarket(
+        Array.from(liqMarketId) as unknown as number[] & { length: 32 },
+        Array.from(liqFeedId) as unknown as number[] & { length: 32 },
+        Array.from(LOAN_FEED_ID) as unknown as number[] & { length: 32 },
+        irmPda,
+        new BN(LLTV.toString()),
+        new BN(FEE_BPS.toString()),
+        new BN(resolutionTs),
+        Array.from(ticker) as unknown as number[] & { length: 48 }
+      )
+      // @ts-ignore
+      .accountsPartial({
+        payer: payer.publicKey,
+        protocolState,
+        collateralMint,
+        loanMint,
+        irmAccount: irmPda,
+        market: liqMarketPda,
+        collateralVault: liqCollateralVault,
+        loanVault: liqLoanVault,
+        tokenProgram: TOKEN_PROGRAM_ID,
+        systemProgram: SystemProgram.programId,
+      })
+      .rpc();
+
+    await program.methods
+      .registerPriceCache(
+        Array.from(liqMarketId) as unknown as number[] & { length: 32 },
+        attester.publicKey,
+        new BN(PRICE_WAD_INITIAL.toString())
+      )
+      // @ts-ignore
+      .accountsPartial({
+        payer: payer.publicKey,
+        protocolState,
+        market: liqMarketPda,
+        priceCache: liqPriceCache,
+        systemProgram: SystemProgram.programId,
+      })
+      .rpc();
+
+    const [liqSupplierPosition] = derivePosition(
+      liqMarketId,
+      payer.publicKey,
+      program.programId
+    );
+    await program.methods
+      .createPosition(
+        Array.from(liqMarketId) as unknown as number[] & { length: 32 }
+      )
+      // @ts-ignore
+      .accountsPartial({
+        payer: payer.publicKey,
+        owner: payer.publicKey,
+        market: liqMarketPda,
+        position: liqSupplierPosition,
+        systemProgram: SystemProgram.programId,
+      })
+      .rpc();
+
+    await program.methods
+      .supply(
+        Array.from(liqMarketId) as unknown as number[] & { length: 32 },
+        new BN(150_000_000), // 150 USDC
+        new BN(0)
+      )
+      // @ts-ignore
+      .accountsPartial({
+        supplier: payer.publicKey,
+        protocolState,
+        market: liqMarketPda,
+        irm: irmPda,
+        position: liqSupplierPosition,
+        supplierLoanAta,
+        loanVault: liqLoanVault,
+        tokenProgram: TOKEN_PROGRAM_ID,
+      })
+      .rpc();
+
+    const liqBorrower = Keypair.generate();
+    await connection.confirmTransaction(
+      await connection.requestAirdrop(liqBorrower.publicKey, 2e9)
+    );
+    const liqBorrowerCollateralAta = await createAccount(
+      connection,
+      payer,
+      collateralMint,
+      liqBorrower.publicKey
+    );
+    await mintTo(
+      connection,
+      payer,
+      collateralMint,
+      liqBorrowerCollateralAta,
+      payer.publicKey,
+      500_000_000 // 500 YES tokens
+    );
+    const liqBorrowerLoanAta = await createAccount(
+      connection,
+      payer,
+      loanMint,
+      liqBorrower.publicKey
+    );
+    const liqLiquidatorLoanAccount = Keypair.generate();
+    const liqLiquidatorLoanAta = await createAccount(
+      connection,
+      payer,
+      loanMint,
+      payer.publicKey,
+      liqLiquidatorLoanAccount
+    );
+    await mintTo(
+      connection,
+      payer,
+      loanMint,
+      liqLiquidatorLoanAta,
+      payer.publicKey,
+      200_000_000 // dedicated liquidator balance for this scenario
+    );
+    const liqLiquidatorCollateralAta = await createAccount(
+      connection,
+      payer,
+      collateralMint,
+      payer.publicKey
+    );
+    const [liqBorrowerPosition] = derivePosition(
+      liqMarketId,
+      liqBorrower.publicKey,
+      program.programId
+    );
+
+    await program.methods
+      .createPosition(
+        Array.from(liqMarketId) as unknown as number[] & { length: 32 }
+      )
+      // @ts-ignore
+      .accountsPartial({
+        payer: liqBorrower.publicKey,
+        owner: liqBorrower.publicKey,
+        market: liqMarketPda,
+        position: liqBorrowerPosition,
+        systemProgram: SystemProgram.programId,
+      })
+      .signers([liqBorrower])
+      .rpc();
+
+    await program.methods
+      .supplyCollateral(
+        Array.from(liqMarketId) as unknown as number[] & { length: 32 },
+        new BN(500_000_000)
+      )
+      // @ts-ignore
+      .accountsPartial({
+        depositor: liqBorrower.publicKey,
+        protocolState,
+        market: liqMarketPda,
+        position: liqBorrowerPosition,
+        depositorCollateralAta: liqBorrowerCollateralAta,
+        collateralVault: liqCollateralVault,
+        tokenProgram: TOKEN_PROGRAM_ID,
+      })
+      .signers([liqBorrower])
+      .rpc();
+
+    await program.methods
+      .borrow(
+        Array.from(liqMarketId) as unknown as number[] & { length: 32 },
+        new BN(125_500_000), // initially healthy, then unhealthy after a 0.5% EMA move
+        new BN(0)
+      )
+      // @ts-ignore
+      .accountsPartial({
+        borrower: liqBorrower.publicKey,
+        protocolState,
+        market: liqMarketPda,
+        irm: irmPda,
+        position: liqBorrowerPosition,
+        loanVault: liqLoanVault,
+        receiverLoanAta: liqBorrowerLoanAta,
+        priceCache: liqPriceCache,
+        tokenProgram: TOKEN_PROGRAM_ID,
+      })
+      .signers([liqBorrower])
+      .rpc();
+
+    const lowerSpot = (PRICE_WAD_INITIAL * 95n) / 100n;
+    await program.methods
+      .attestPrice(
+        Array.from(liqMarketId) as unknown as number[] & { length: 32 },
+        new BN(lowerSpot.toString())
+      )
+      // @ts-ignore
+      .accountsPartial({
+        attester: attester.publicKey,
+        market: liqMarketPda,
+        priceCache: liqPriceCache,
+      })
+      .signers([attester])
+      .rpc();
+
+    await program.methods
+      .liquidate(
+        Array.from(liqMarketId) as unknown as number[] & { length: 32 },
+        new BN(500_000_000)
+      )
+      // @ts-ignore
+      .accountsPartial({
+        liquidator: payer.publicKey,
+        market: liqMarketPda,
+        irm: irmPda,
+        borrowerPosition: liqBorrowerPosition,
+        borrower: liqBorrower.publicKey,
+        liquidatorLoanAta: liqLiquidatorLoanAta,
+        loanVault: liqLoanVault,
+        collateralVault: liqCollateralVault,
+        liquidatorCollateralAta: liqLiquidatorCollateralAta,
+        priceCache: liqPriceCache,
+        tokenProgram: TOKEN_PROGRAM_ID,
+      })
+      .rpc();
+
+    const liquidatedPosition = await program.account.position.fetch(
+      liqBorrowerPosition
+    );
+    assert.equal(liquidatedPosition.borrowShares.toString(), "0");
+    assert.isTrue(
+      BigInt(liquidatedPosition.collateral.toString()) > 0n,
+      "collateral seizure should be capped when debt is fully repaid"
+    );
+  });
+
   it("force-closes an unhealthy near-resolution position", async () => {
     const nearFeedId = Buffer.alloc(32);
     nearFeedId.write("KALSHI-FORCE-CLOSE-TEST", "utf-8");
@@ -804,7 +1055,7 @@ describe("Paralend", () => {
     await program.methods
       .supply(
         Array.from(nearMarketId) as unknown as number[] & { length: 32 },
-        new BN(300_000_000), // 300 USDC
+        new BN(150_000_000), // 150 USDC
         new BN(0)
       )
       // @ts-ignore
@@ -845,12 +1096,30 @@ describe("Paralend", () => {
       loanMint,
       nearBorrower.publicKey
     );
-    const nearLiquidatorCollateralAta = await createAccount(
+    const nearLiquidatorLoanAccount = Keypair.generate();
+    const nearLiquidatorLoanAta = await createAccount(
       connection,
       payer,
-      collateralMint,
-      payer.publicKey
+      loanMint,
+      payer.publicKey,
+      nearLiquidatorLoanAccount
     );
+    await mintTo(
+      connection,
+      payer,
+      loanMint,
+      nearLiquidatorLoanAta,
+      payer.publicKey,
+      200_000_000 // dedicated force-close repayment balance
+    );
+    const nearLiquidatorCollateralAta = (
+      await getOrCreateAssociatedTokenAccount(
+        connection,
+        payer,
+        collateralMint,
+        payer.publicKey
+      )
+    ).address;
 
     const [nearBorrowerPosition] = derivePosition(
       nearMarketId,
@@ -941,7 +1210,7 @@ describe("Paralend", () => {
         irm: irmPda,
         borrowerPosition: nearBorrowerPosition,
         borrower: nearBorrower.publicKey,
-        liquidatorLoanAta: supplierLoanAta,
+        liquidatorLoanAta: nearLiquidatorLoanAta,
         loanVault: nearLoanVault,
         collateralVault: nearCollateralVault,
         liquidatorCollateralAta: nearLiquidatorCollateralAta,
@@ -950,10 +1219,13 @@ describe("Paralend", () => {
       })
       .rpc();
 
-    const closedPosition = await program.account.position.fetch(
+    const forceClosedPosition = await program.account.position.fetch(
       nearBorrowerPosition
     );
-    assert.equal(closedPosition.collateral.toString(), "0");
-    assert.equal(closedPosition.borrowShares.toString(), "0");
+    assert.equal(forceClosedPosition.borrowShares.toString(), "0");
+    assert.isTrue(
+      BigInt(forceClosedPosition.collateral.toString()) > 0n,
+      "force close should not seize excess collateral once debt is cleared"
+    );
   });
 });

@@ -4,7 +4,8 @@
 tokenized Kalshi YES/NO positions at a time-decayed LLTV; repay or let
 the force-close window settle the position before resolution.
 
-[Program on devnet](https://explorer.solana.com/address/2kZNrHd7QkUemYCLFw5dYGQWeKieAUNb5C1FvTjTYiC8?cluster=devnet)
+[Live app](https://paralend-frontier.vercel.app)
+· [Program on devnet](https://explorer.solana.com/address/2kZNrHd7QkUemYCLFw5dYGQWeKieAUNb5C1FvTjTYiC8?cluster=devnet)
 · [Deployment runbook](./DEPLOYMENT.md)
 · [Testing guide](./TESTING.md)
 
@@ -28,7 +29,8 @@ Kamino or Jupiter Lend:
 2. **Force-close window** — any liquidator can close unhealthy
    positions in `[T−2h, T)` for a bounty that scales 0.5 % → 3 %.
 3. **Resolution handler** — attester flips the market to Resolved with
-   the Kalshi outcome bit; interest freezes; bad debt socialized.
+   the Kalshi outcome bit and pauses the market; position-level settlement
+   remains explicit future work.
 4. **Crank-attested PriceCache** — per-market PDA, EMA-smoothed,
    ±5 % deviation band bound against both `last_spot` and `ema` to
    prevent ratcheted manipulation; `rotate_attester` for key recovery.
@@ -41,9 +43,10 @@ Kamino or Jupiter Lend:
 | -------------------------------- | --------------------------------------------------------------------------- |
 | Anchor program (25 instructions) | Deployed on Solana **devnet**                                               |
 | Rust unit tests                  | 37 / 37 passing                                                             |
-| Integration tests                | 10 / 10 passing                                                             |
+| Integration tests                | 12 / 12 passing                                                             |
 | TypeScript SDK                   | 25 methods (1:1 parity with program)                                        |
 | Frontend (Next.js 14)            | Landing, markets list, market detail with live decay chart + countdown      |
+| Production URL                   | https://paralend-frontier.vercel.app                                        |
 | Operator scripts                 | setup · fund · attester · force-close bot · resolve-market · mint-to-wallet |
 | Live seeded markets              | 3 DFlow/Kalshi markets mirrored on devnet                                   |
 
@@ -74,7 +77,7 @@ Source: `programs/paralend/src/`. Full module tree in [DEPLOYMENT.md](./DEPLOYME
 # Build program + run the full test suite
 anchor build
 cargo test --manifest-path programs/paralend/Cargo.toml --lib   # 37/37
-anchor test                                                      # 10/10
+anchor test                                                      # 12/12
 
 # Ship it to devnet (needs ~5 SOL in the upgrade-authority wallet)
 anchor deploy --provider.cluster devnet

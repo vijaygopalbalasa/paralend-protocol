@@ -187,20 +187,27 @@ pub fn handle_liquidate(
     let raw_lif = mul_div_up(bps * bps, 1, denom)?;
     let lif = raw_lif.min(MAX_LIF as u128);
 
-    // repaid_assets = seized_collateral * collateral_price / loan_price * BPS / lif
+    // max_repaid_assets = seized_collateral * collateral_price / loan_price * BPS / lif
     // Step 1: value_ratio = collateral_price / loan_price (WAD-scaled)
     let value_ratio = mul_div_down(collateral_price_wad, WAD, loan_price_wad)?;
     // Step 2: collateral_value_in_loan = seized_collateral * value_ratio / WAD
     let collateral_value = mul_div_down(seized_collateral as u128, value_ratio, WAD)?;
     // Step 3: repaid = collateral_value * BPS / lif
-    let repaid_assets = mul_div_down(collateral_value, bps, lif)?;
+    let max_repaid_assets = mul_div_down(collateral_value, bps, lif)?;
 
-    require!(repaid_assets > 0, ParalendError::ZeroAmount);
+    require!(max_repaid_assets > 0, ParalendError::ZeroAmount);
+
+    let debt_assets = to_assets_up(
+        position.borrow_shares,
+        market.total_borrow_assets,
+        market.total_borrow_shares,
+    )?;
+    let target_repaid_assets = max_repaid_assets.min(debt_assets);
 
     // repaid_shares = how many borrow shares correspond to repaid_assets (round DOWN)
     // (fewer shares burned = slight protocol advantage, but can't over-clear)
     let repaid_shares = to_shares_down(
-        repaid_assets,
+        target_repaid_assets,
         market.total_borrow_assets,
         market.total_borrow_shares,
     )?;
@@ -217,6 +224,17 @@ pub fn handle_liquidate(
         market.total_borrow_shares,
     )?;
     require!(repaid_assets > 0, ParalendError::ZeroAmount);
+
+    // If the position's remaining debt caps repayment, cap collateral seizure
+    // too. Otherwise a liquidator could request all collateral, repay only the
+    // remaining debt after share capping, and receive a bonus far above `lif`.
+    let actual_seized_collateral = if max_repaid_assets >= debt_assets {
+        let collateral_value_for_repay = mul_div_up(repaid_assets, lif, bps)?;
+        mul_div_up(collateral_value_for_repay, WAD, value_ratio)?.min(seized_collateral as u128)
+    } else {
+        seized_collateral as u128
+    };
+    require!(actual_seized_collateral > 0, ParalendError::ZeroAmount);
 
     // ── Update market state ───────────────────────────────────────────────────
 
@@ -236,7 +254,7 @@ pub fn handle_liquidate(
     let position = &mut ctx.accounts.borrower_position;
     position.collateral = position
         .collateral
-        .checked_sub(seized_collateral as u128)
+        .checked_sub(actual_seized_collateral)
         .ok_or_else(|| error!(ParalendError::MathOverflow))?;
     position.borrow_shares = position
         .borrow_shares
@@ -289,7 +307,7 @@ pub fn handle_liquidate(
             },
             signer_seeds,
         ),
-        seized_collateral,
+        safe_u128_to_u64(actual_seized_collateral)?,
     )?;
 
     // ── Transfer loan tokens from liquidator to vault (debt repayment) ────────
@@ -314,7 +332,7 @@ pub fn handle_liquidate(
         borrower: borrower_key,
         repaid_assets,
         repaid_shares,
-        seized_collateral: seized_collateral as u128,
+        seized_collateral: actual_seized_collateral,
         bad_debt_assets,
         bad_debt_shares,
     });

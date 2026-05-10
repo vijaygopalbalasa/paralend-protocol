@@ -64,7 +64,10 @@ export function usePositions(pollMs = 15_000) {
         },
       ]);
 
-      const marketCache = new Map<string, Awaited<ReturnType<typeof program.account.market.fetch>>>();
+      const marketCache = new Map<
+        string,
+        Awaited<ReturnType<typeof program.account.market.fetch>>
+      >();
       const oracleCache = new Map<string, bigint>();
 
       const rows = await Promise.all(
@@ -107,9 +110,9 @@ export function usePositions(pollMs = 15_000) {
           let collateralPriceWad = oracleCache.get(cacheKey);
           if (collateralPriceWad === undefined) {
             try {
-              const cacheAccount = await (program.account as any).priceCache.fetch(
-                priceCachePda
-              );
+              const cacheAccount = await (
+                program.account as any
+              ).priceCache.fetch(priceCachePda);
               collateralPriceWad = bnToBigInt(cacheAccount.emaPriceWad);
             } catch {
               collateralPriceWad = 0n;
@@ -120,13 +123,11 @@ export function usePositions(pollMs = 15_000) {
           // USDC-only loan side: $1 per full token.
           const loanPriceWad = WAD / 10n ** BigInt(loanDecimals);
 
-          const supplyAssetsUsd =
-            Number((supplyAssets * loanPriceWad) / WAD) / 10 ** loanDecimals;
-          const borrowAssetsUsd =
-            Number((borrowAssets * loanPriceWad) / WAD) / 10 ** loanDecimals;
-          const collateralValueUsd =
-            Number((collateralAmount * collateralPriceWad) / WAD) /
-            10 ** collateralDecimals;
+          const supplyAssetsUsd = Number((supplyAssets * loanPriceWad) / WAD);
+          const borrowAssetsUsd = Number((borrowAssets * loanPriceWad) / WAD);
+          const collateralValueUsd = Number(
+            (collateralAmount * collateralPriceWad) / WAD
+          );
           const effectiveLltvBps = computeEffectiveLltvBps(
             Number(market.baseLltv ?? market.lltv),
             Number(market.resolutionTimestamp ?? 0),

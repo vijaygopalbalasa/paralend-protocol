@@ -217,9 +217,9 @@ export function useMarketDetail(marketAddress: string | null, pollMs = 15_000) {
             borrowShares,
             borrowAssets,
             collateralAmount,
-            collateralValueUsd:
-              Number((collateralAmount * collateralPriceWad) / WAD) /
-              10 ** collateralDecimals,
+            collateralValueUsd: Number(
+              (collateralAmount * collateralPriceWad) / WAD
+            ),
             healthFactor: calculateHealthFactor({
               collateral: collateralAmount,
               borrowShares,

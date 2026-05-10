@@ -8,7 +8,7 @@ use crate::interfaces::oracle::{get_loan_price, is_position_healthy, read_price_
 use crate::math::interest::accrue_interest_on_market;
 use crate::math::safe_math::safe_u128_to_u64;
 use crate::math::shares::{to_assets_up, to_shares_down};
-use crate::math::wad::mul_div_down;
+use crate::math::wad::{mul_div_down, mul_div_up};
 use crate::state::irm::LinearIrm;
 use crate::state::market::Market;
 use crate::state::oracle::PriceCache;
@@ -24,12 +24,12 @@ use crate::state::position::Position;
 ///   1. Require the market has a scheduled resolution (`resolution_timestamp > 0`)
 ///      and we're inside the force-close window.
 ///   2. Require the position is unhealthy at the current effective LLTV.
-///   3. Seize ALL of the position's collateral (binary outcome → granular
-///      partial-liquidations don't help once we're near the cliff).
+///   3. Seize up to all collateral, capped when the remaining debt can be
+///      cleared with less collateral at the configured bounty.
 ///   4. Liquidator pays back `collateral_value_in_loan / (1 + bounty_bps/BPS)`
 ///      where bounty scales from LIQUIDATOR_BOUNTY_MIN_BPS at window-start
 ///      to LIQUIDATOR_BOUNTY_MAX_BPS at window-end.
-///   5. Any remaining debt is socialized (existing bad-debt path).
+///   5. Any debt left after all collateral is seized is socialized.
 ///
 /// Note: this is the MVP design. Post-hackathon we can add partial seizures,
 /// per-liquidator rate limits, and DFlow-CPI redemption.
@@ -121,8 +121,8 @@ pub fn handle_force_close_position(
 
     // Window = [T_resolution - FORCE_CLOSE_WINDOW, T_resolution).
     // Before T_resolution - FORCE_CLOSE_WINDOW the regular `liquidate` path
-    // handles unhealthy positions; at or past T_resolution, only
-    // `handle_resolution` settles debts.
+    // handles unhealthy positions; at or past T_resolution, handle_resolution
+    // marks the market resolved and pauses further position changes.
     let window_open = market_resolution_ts
         .checked_sub(FORCE_CLOSE_WINDOW_SECONDS)
         .ok_or_else(|| error!(ParalendError::MathOverflow))?;
@@ -154,8 +154,11 @@ pub fn handle_force_close_position(
     )?;
     require!(!healthy, ParalendError::PositionHealthy);
 
-    let seized_collateral = position.collateral;
-    require!(seized_collateral > 0, ParalendError::InsufficientCollateral);
+    let max_seized_collateral = position.collateral;
+    require!(
+        max_seized_collateral > 0,
+        ParalendError::InsufficientCollateral
+    );
 
     // Bounty scales linearly across the force-close window:
     //   bounty_bps = MIN + (MAX - MIN) * (now - window_open) / WINDOW_SECONDS
@@ -167,20 +170,26 @@ pub fn handle_force_close_position(
 
     // collateral_value_in_loan = seized_collateral * collateral_price / loan_price
     let value_ratio = mul_div_down(collateral_price_wad, WAD, loan_price_wad)?;
-    let collateral_value_loan = mul_div_down(seized_collateral, value_ratio, WAD)?;
+    let collateral_value_loan = mul_div_down(max_seized_collateral, value_ratio, WAD)?;
 
     // repaid_assets = collateral_value / (1 + bounty_bps / BPS)
     //               = collateral_value * BPS / (BPS + bounty_bps)
     let denom = (BPS as u128)
         .checked_add(bounty_bps as u128)
         .ok_or_else(|| error!(ParalendError::MathOverflow))?;
-    let repaid_assets = mul_div_down(collateral_value_loan, BPS as u128, denom)?;
+    let market_ro = &ctx.accounts.market;
+    let max_repaid_assets = mul_div_down(collateral_value_loan, BPS as u128, denom)?;
+    let debt_assets = to_assets_up(
+        position.borrow_shares,
+        market_ro.total_borrow_assets,
+        market_ro.total_borrow_shares,
+    )?;
+    let target_repaid_assets = max_repaid_assets.min(debt_assets);
 
     // Cap repaid shares at what the position owes.
-    let market_ro = &ctx.accounts.market;
     let position = &ctx.accounts.borrower_position;
     let repaid_shares_naive = to_shares_down(
-        repaid_assets,
+        target_repaid_assets,
         market_ro.total_borrow_assets,
         market_ro.total_borrow_shares,
     )?;
@@ -192,6 +201,18 @@ pub fn handle_force_close_position(
         market_ro.total_borrow_shares,
     )?;
     require!(repaid_assets > 0, ParalendError::ZeroAmount);
+
+    // If the remaining debt caps repayment, seize only the collateral needed
+    // to honor the configured bounty. Without this, a near-resolution position
+    // with tiny debt could lose all collateral to a liquidator paying only that
+    // tiny debt.
+    let seized_collateral = if max_repaid_assets >= debt_assets {
+        let collateral_value_for_repay = mul_div_up(repaid_assets, denom, BPS as u128)?;
+        mul_div_up(collateral_value_for_repay, WAD, value_ratio)?.min(max_seized_collateral)
+    } else {
+        max_seized_collateral
+    };
+    require!(seized_collateral > 0, ParalendError::ZeroAmount);
 
     // ── Apply state updates ──────────────────────────────────────────────────
     let market = &mut ctx.accounts.market;
@@ -205,7 +226,10 @@ pub fn handle_force_close_position(
         .ok_or_else(|| error!(ParalendError::MathOverflow))?;
 
     let position = &mut ctx.accounts.borrower_position;
-    position.collateral = 0;
+    position.collateral = position
+        .collateral
+        .checked_sub(seized_collateral)
+        .ok_or_else(|| error!(ParalendError::MathOverflow))?;
     position.borrow_shares = position
         .borrow_shares
         .checked_sub(repaid_shares)
@@ -214,7 +238,7 @@ pub fn handle_force_close_position(
     // Bad-debt socialization if residual debt remains after full seizure.
     let mut bad_debt_assets: u128 = 0;
     let mut bad_debt_shares: u128 = 0;
-    if position.borrow_shares > 0 {
+    if position.collateral == 0 && position.borrow_shares > 0 {
         bad_debt_shares = position.borrow_shares;
         bad_debt_assets = to_assets_up(
             bad_debt_shares,
@@ -283,18 +307,10 @@ pub fn handle_force_close_position(
 
 /// Called after `resolution_timestamp`. The attester submits the Kalshi
 /// outcome bit (1 = YES won, 2 = NO won). The handler flips
-/// `market_status = Resolved` and `outcome_bit` accordingly. All positions
-/// then settle deterministically:
-///   - Winning side's YES/NO tokens redeem 1:1 for USDC (off-chain via DFlow
-///     CLP; this instruction doesn't do the redemption, it just marks the
-///     market so consumers know to stop running price-based health checks).
-///   - Losing side's collateral value is zero. Any outstanding debt becomes
-///     bad debt. Lenders must wait for the next `force_close_position` call
-///     (which after T_resolution falls through to this path) or a dedicated
-///     `liquidate_resolved` (future) to realize the loss.
-///
-/// For MVP, handle_resolution does the market-level accounting only. Position
-/// settlement happens on first post-resolution interaction with each position.
+/// `market_status = Resolved` and `outcome_bit` accordingly. Source-venue
+/// token redemption and position-level settlement are intentionally not handled
+/// here yet; this instruction only stops price-based lending activity and
+/// records the outcome for consumers.
 #[derive(Accounts)]
 #[instruction(market_id: [u8; 32])]
 pub struct HandleResolution<'info> {
