@@ -29,6 +29,9 @@ scripts/devnet-peers-*.json
 .runtime/
 .playwright-mcp/
 paralend-*.png
+SUBMISSION_PACKET.md
+demo-video/
+app/public/demo/
 
 # Legacy generated keypairs / deployment artifacts
 scripts/demo-peers-*.json
@@ -47,6 +50,7 @@ scripts/demo-wallets.json
 # AI assistant files (not part of submission)
 CLAUDE.md
 AGENTS.md
+MISTAKES.md
 .claude/
 .cursor/
 .aider*

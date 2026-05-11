@@ -170,8 +170,8 @@ export function usePositions(pollMs = 15_000) {
       setPositions(
         rows.filter(
           (row) =>
-            row.supplyShares > 0n ||
-            row.borrowShares > 0n ||
+            row.supplyAssetsUsd > 0 ||
+            row.borrowAssetsUsd > 0 ||
             row.collateralAmount > 0n
         )
       );

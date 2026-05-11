@@ -50,6 +50,16 @@ function errorMessage(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
 }
 
+function debtLabel(amount: bigint, decimals: number, symbol: string): string {
+  if (amount === 0n) return `<0.${"0".repeat(Math.max(0, decimals - 1))}1 ${symbol}`;
+  return `${formatTokenAmount(amount, decimals, 4)} ${symbol}`;
+}
+
+function positionAssetLabel(amount: bigint, decimals: number, symbol: string): string {
+  if (amount === 0n) return `<0.${"0".repeat(Math.max(0, decimals - 1))}1 ${symbol}`;
+  return `${formatTokenAmount(amount, decimals, 4)} ${symbol}`;
+}
+
 function MarketDetailPageInner() {
   const params = useParams();
   const searchParams = useSearchParams();
@@ -152,8 +162,11 @@ function MarketDetailPageInner() {
       const methods = program.methods as any;
       const tx = new Transaction();
       const { address, instruction } = ensureAtaIx(market.loanMint, owner, owner);
+      const withdrawAll = market.position.supplyShares > 0n && amt >= market.position.supplyAssets;
+      const withdrawAssets = withdrawAll ? 0n : amt;
+      const withdrawShares = withdrawAll ? market.position.supplyShares : 0n;
       tx.add(instruction);
-      tx.add(await methods.withdraw(Array.from(market.marketId), new BN(amt.toString()), new BN(0), new BN(0), new BN(0)).accountsPartial({ owner, market: market.publicKey, irm: market.irm, position: positionPda, loanVault, receiverLoanAta: address, tokenProgram: TOKEN_PROGRAM_ID }).instruction());
+      tx.add(await methods.withdraw(Array.from(market.marketId), new BN(withdrawAssets.toString()), new BN(withdrawShares.toString()), new BN(0), new BN(0)).accountsPartial({ owner, market: market.publicKey, irm: market.irm, position: positionPda, loanVault, receiverLoanAta: address, tokenProgram: TOKEN_PROGRAM_ID }).instruction());
       return tx;
     });
     setWithdrawEarnAmount("");
@@ -185,8 +198,11 @@ function MarketDetailPageInner() {
       const methods = program.methods as any;
       const tx = new Transaction();
       const { address, instruction } = ensureAtaIx(market.loanMint, owner, owner);
+      const repayAll = market.position.borrowShares > 0n && amt >= market.position.borrowAssets;
+      const repayAssets = repayAll ? 0n : amt;
+      const repayShares = repayAll ? market.position.borrowShares : 0n;
       tx.add(instruction);
-      tx.add(await methods.repay(Array.from(market.marketId), new BN(amt.toString()), new BN(0)).accountsPartial({ repayer: owner, market: market.publicKey, irm: market.irm, position: positionPda, borrower: owner, repayerLoanAta: address, loanVault, tokenProgram: TOKEN_PROGRAM_ID }).instruction());
+      tx.add(await methods.repay(Array.from(market.marketId), new BN(repayAssets.toString()), new BN(repayShares.toString())).accountsPartial({ repayer: owner, market: market.publicKey, irm: market.irm, position: positionPda, borrower: owner, repayerLoanAta: address, loanVault, tokenProgram: TOKEN_PROGRAM_ID }).instruction());
       return tx;
     });
     setRepayAmount("");
@@ -412,7 +428,7 @@ function MarketDetailPageInner() {
                   <div className="grid grid-cols-2 gap-3 my-5 py-4 border-y border-border">
                     <MiniStat
                       label="Current debt"
-                      value={position.borrowAssets > 0n ? `${formatTokenAmount(position.borrowAssets, market.loanDecimals, 4)} ${market.loanSymbol}` : "—"}
+                      value={position.borrowShares > 0n ? debtLabel(position.borrowAssets, market.loanDecimals, market.loanSymbol) : "—"}
                     />
                     <MiniStat
                       label="Safety"
@@ -439,15 +455,15 @@ function MarketDetailPageInner() {
                     value={repayAmount}
                     onChange={(e) => setRepayAmount(e.target.value)}
                     suffix={market.loanSymbol}
-                    onMax={() => setRepayAmount(formatTokenAmount(position.borrowAssets, market.loanDecimals, 6))}
-                    hint={position.borrowAssets > 0n ? `Owe ${formatTokenAmount(position.borrowAssets, market.loanDecimals, 4)} ${market.loanSymbol}` : "No debt right now."}
+                    onMax={() => setRepayAmount(formatTokenAmount(position.borrowAssets > 0n ? position.borrowAssets : 1n, market.loanDecimals, market.loanDecimals))}
+                    hint={position.borrowShares > 0n ? `Owe ${debtLabel(position.borrowAssets, market.loanDecimals, market.loanSymbol)}` : "No debt right now."}
                   />
                   <Button
                     size="lg"
                     variant="secondary"
                     fullWidth
                     loading={pendingAction === "Repay"}
-                    disabled={!repayAmount || position.borrowAssets === 0n}
+                    disabled={!repayAmount || position.borrowShares === 0n}
                     onClick={handleRepay}
                     className="mt-5"
                   >
@@ -470,7 +486,7 @@ function MarketDetailPageInner() {
                     hint={`Wallet balance ${loanBalanceLabel}`}
                   />
                   <div className="grid grid-cols-2 gap-3 my-5 py-4 border-y border-border">
-                    <MiniStat label="Currently earning" value={position.supplyAssets > 0n ? `${formatTokenAmount(position.supplyAssets, market.loanDecimals, 4)} ${market.loanSymbol}` : "—"} />
+                    <MiniStat label="Currently earning" value={position.supplyShares > 0n ? positionAssetLabel(position.supplyAssets, market.loanDecimals, market.loanSymbol) : "—"} />
                     <MiniStat label="APY" value={formatAPY(market.supplyApyPct)} tone="mint" />
                   </div>
                   <Button size="lg" variant="primary" fullWidth loading={pendingAction === "Lend"} disabled={!earnAmount} onClick={handleEarn}>
@@ -485,10 +501,10 @@ function MarketDetailPageInner() {
                     value={withdrawEarnAmount}
                     onChange={(e) => setWithdrawEarnAmount(e.target.value)}
                     suffix={market.loanSymbol}
-                    onMax={() => setWithdrawEarnAmount(formatTokenAmount(position.supplyAssets, market.loanDecimals, 6))}
-                    hint={position.supplyAssets > 0n ? `Available ${formatTokenAmount(position.supplyAssets, market.loanDecimals, 4)} ${market.loanSymbol}` : "Nothing lent here yet."}
+                    onMax={() => setWithdrawEarnAmount(formatTokenAmount(position.supplyAssets > 0n ? position.supplyAssets : 1n, market.loanDecimals, market.loanDecimals))}
+                    hint={position.supplyShares > 0n ? `Available ${positionAssetLabel(position.supplyAssets, market.loanDecimals, market.loanSymbol)}` : "Nothing lent here yet."}
                   />
-                  <Button size="lg" variant="secondary" fullWidth loading={pendingAction === "Withdraw"} disabled={!withdrawEarnAmount || position.supplyAssets === 0n} onClick={handleWithdrawEarn} className="mt-5">
+                  <Button size="lg" variant="secondary" fullWidth loading={pendingAction === "Withdraw"} disabled={!withdrawEarnAmount || position.supplyShares === 0n} onClick={handleWithdrawEarn} className="mt-5">
                     Withdraw
                   </Button>
                 </ActionCard>
